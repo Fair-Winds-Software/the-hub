@@ -1,9 +1,9 @@
 // Authorized by HUB-50 — integration tests for core schema: tenants, products, product_registrations
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
-import { MAVERICK_LAUNCH_TENANT_ID } from '../../constants';
-import { getProductRegistrationByClientId } from '../queries/product_registrations';
-import { getPool, closePool } from '../pool';
+import { MAVERICK_LAUNCH_TENANT_ID } from '../../constants.js';
+import { getProductRegistrationByClientId } from '../queries/product_registrations.js';
+import { getPool, closePool } from '../pool.js';
 
 const CONNECTION_STRING =
   process.env.DATABASE_URL ?? 'postgresql://hub:hub@localhost:5432/hub_dev';

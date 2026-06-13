@@ -1,4 +1,5 @@
 # Authorized by HUB-71 — CI pipeline: migrate + test against live PostgreSQL on every PR and push
+# Authorized by HUB-77 — Redis service added; JWT_SECRET + REDIS_URL added to CI env
 name: CI
 
 on:
@@ -29,11 +30,23 @@ jobs:
         ports:
           - 5432:5432
 
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
     env:
       DATABASE_URL: postgresql://hub:hub_test@localhost:5432/hub_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: hub-ci-jwt-secret-not-for-production
       DB_POOL_SIZE: 5
       DB_IDLE_TIMEOUT_MS: 5000
-      # DATABASE_URL is intentionally not echoed in any step — treat CI logs as public
+      # DATABASE_URL, REDIS_URL, JWT_SECRET are intentionally not echoed in any step — treat CI logs as public
 
     steps:
       - name: Checkout

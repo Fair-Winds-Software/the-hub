@@ -1,10 +1,11 @@
 // Authorized by HUB-71 — CI workflow YAML structure validation (HUB-76)
+// Authorized by HUB-77 — Redis service assertions added
 import { describe, it, expect } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
 
-const WORKFLOW_PATH = path.resolve(__dirname, '../../.github/workflows/ci.yml');
-const workflow = fs.readFileSync(WORKFLOW_PATH, 'utf8');
+const WORKFLOW_PATH = fileURLToPath(new URL('../../.github/workflows/ci.yml', import.meta.url));
+const workflow = readFileSync(WORKFLOW_PATH, 'utf8');
 
 describe('CI workflow structure (HUB-76)', () => {
   it('workflow file exists and is non-empty', () => {
@@ -41,5 +42,19 @@ describe('CI workflow structure (HUB-76)', () => {
     expect(migrateIdx).toBeGreaterThan(-1);
     expect(testIdx).toBeGreaterThan(-1);
     expect(migrateIdx).toBeLessThan(testIdx);
+  });
+
+  it('redis service uses redis:7-alpine image', () => {
+    expect(workflow).toContain('image: redis:7-alpine');
+  });
+
+  it('REDIS_URL is set in CI env and not echoed', () => {
+    expect(workflow).toContain('REDIS_URL:');
+    expect(workflow).not.toMatch(/echo\s+.*REDIS_URL/i);
+  });
+
+  it('JWT_SECRET is set in CI env and not echoed', () => {
+    expect(workflow).toContain('JWT_SECRET:');
+    expect(workflow).not.toMatch(/echo\s+.*JWT_SECRET/i);
   });
 });

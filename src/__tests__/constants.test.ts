@@ -1,6 +1,6 @@
 // Authorized by HUB-50 — unit tests for HUB service constants
 import { describe, it, expect } from 'vitest';
-import { MAVERICK_LAUNCH_TENANT_ID } from '../constants';
+import { MAVERICK_LAUNCH_TENANT_ID } from '../constants.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

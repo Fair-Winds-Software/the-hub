@@ -4,7 +4,7 @@ import { Client } from 'pg';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { runMigrations } from '../migrate';
+import { runMigrations } from '../migrate.js';
 
 const CONNECTION_STRING =
   process.env.DATABASE_URL ?? 'postgresql://hub:hub@localhost:5432/hub_dev';

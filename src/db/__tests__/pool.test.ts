@@ -1,6 +1,6 @@
 // Authorized by HUB-49 — unit tests for pg pool singleton
 import { describe, it, expect, afterEach } from 'vitest';
-import { getPool, closePool } from '../pool';
+import { getPool, closePool } from '../pool.js';
 
 afterEach(async () => {
   await closePool();

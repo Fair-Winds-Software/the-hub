@@ -1,7 +1,7 @@
 // Authorized by HUB-51 — integration tests for universal_delta_tracker trigger function
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
-import { getPool, closePool } from '../pool';
+import { getPool, closePool } from '../pool.js';
 
 const CONNECTION_STRING =
   process.env.DATABASE_URL ?? 'postgresql://hub:hub@localhost:5432/hub_dev';

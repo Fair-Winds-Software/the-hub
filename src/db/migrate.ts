@@ -2,8 +2,9 @@
 import { Client } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import 'dotenv/config';
-import logger from '../lib/logger';
+import logger from '../lib/logger.js';
 
 const BOOTSTRAP_SQL = `
   CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -73,7 +74,7 @@ export async function runMigrations(migrationsDir?: string): Promise<void> {
 }
 
 // CLI entrypoint
-if (require.main === module) {
+if (path.resolve(process.argv[1] ?? '') === path.resolve(fileURLToPath(import.meta.url))) {
   runMigrations().catch((err) => {
     logger.error({ err }, 'migration runner failed');
     process.exit(1);
