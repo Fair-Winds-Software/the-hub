@@ -16,6 +16,7 @@ import rateLimitPlugin from './plugins/rateLimit.js';
 import authPlugin from './plugins/auth.js';
 import operatorAuthPlugin from './plugins/operatorAuth.js';
 import healthPlugin from './plugins/health.js';
+import pricingRoutes from './pricing/routes.js';
 
 export async function buildApp(dest?: DestinationStream) {
   validateEnv();
@@ -39,6 +40,7 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(authPlugin);
   await fastify.register(operatorAuthPlugin);
   await fastify.register(healthPlugin);
+  await fastify.register(pricingRoutes);
 
   return fastify;
 }
