@@ -1,10 +1,10 @@
 // Authorized by HUB-79 — Global error handler plugin; slot 2 in app.ts plugin chain
 import fp from 'fastify-plugin';
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyError, FastifyPluginAsync } from 'fastify';
 import { AppError } from '../errors/AppError.js';
 
 const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
-  fastify.setErrorHandler((error, request, reply) => {
+  fastify.setErrorHandler<FastifyError>((error, request, reply) => {
     if (error instanceof AppError) {
       return reply.status(error.statusCode).send({
         error: { code: error.statusCode, message: error.message },
