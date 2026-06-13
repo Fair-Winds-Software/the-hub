@@ -1,0 +1,55 @@
+# Authorized by HUB-71 — CI pipeline: migrate + test against live PostgreSQL on every PR and push
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20, 22]
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: hub_test
+          POSTGRES_USER: hub
+          POSTGRES_PASSWORD: hub_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://hub:hub_test@localhost:5432/hub_test
+      DB_POOL_SIZE: 5
+      DB_IDLE_TIMEOUT_MS: 5000
+      # DATABASE_URL is intentionally not echoed in any step — treat CI logs as public
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run migrations
+        run: npm run migrate
+
+      - name: Run tests
+        run: npm test

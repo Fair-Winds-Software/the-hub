@@ -1,0 +1,31 @@
+{
+  "name": "@maverick-launch/hub-service",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Maverick Launch HUB — Central control plane for billing, licensing, entitlements, and usage",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "migrate": "ts-node src/db/migrate.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "pg": "^8.11.3",
+    "pino": "^9.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.11.6",
+    "@vitest/coverage-v8": "^1.6.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0",
+    "vitest": "^1.6.0"
+  }
+}
