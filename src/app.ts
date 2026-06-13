@@ -2,6 +2,7 @@
 // Authorized by HUB-78 — loggerPlugin registered first; createServerOptions() replaces static serverOptions
 // Authorized by HUB-79 — errorHandlerPlugin registered second; AppError + canonical {error:{code,message}} format
 // Authorized by HUB-99 — rateLimitPlugin registered third; Redis-backed rate limiting with fail-open
+// Authorized by HUB-98 — authPlugin registered fourth; service JWT issuance + authenticate decorator
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';
@@ -9,6 +10,7 @@ import { validateEnv } from './config/env.js';
 import loggerPlugin from './plugins/logger.js';
 import errorHandlerPlugin from './plugins/errorHandler.js';
 import rateLimitPlugin from './plugins/rateLimit.js';
+import authPlugin from './plugins/auth.js';
 import healthPlugin from './plugins/health.js';
 
 export async function buildApp(dest?: DestinationStream) {
@@ -20,7 +22,7 @@ export async function buildApp(dest?: DestinationStream) {
   // 1. Pino logger plugin         — HUB-78  ✅
   // 2. Error handler plugin        — HUB-79  ✅
   // 3. Rate-limit plugin           — HUB-99  ✅
-  // 4. Service auth plugin         — HUB-98
+  // 4. Service auth plugin         — HUB-98  ✅
   // 5. Operator auth plugin        — HUB-112
   // 6. CORS plugin                 — HUB-113
   // 7. Health routes (unprotected) — HUB-77
@@ -28,6 +30,7 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(loggerPlugin);
   await fastify.register(errorHandlerPlugin);
   await fastify.register(rateLimitPlugin);
+  await fastify.register(authPlugin);
   await fastify.register(healthPlugin);
 
   return fastify;
