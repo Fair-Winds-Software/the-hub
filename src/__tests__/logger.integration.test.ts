@@ -44,6 +44,7 @@ beforeAll(() => {
   process.env.DATABASE_URL ??= 'postgresql://hub:hub@localhost:5432/hub_dev';
   process.env.REDIS_URL ??= 'redis://localhost:6379';
   process.env.JWT_SECRET ??= 'test-jwt-secret-hub78';
+  process.env.OPERATOR_JWT_SECRET ??= 'test-operator-jwt-secret-hub112';
   // Ensure raw JSON output (no pino-pretty) so lines are parseable
   process.env.NODE_ENV = 'test';
 });

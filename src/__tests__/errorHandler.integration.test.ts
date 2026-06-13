@@ -9,6 +9,7 @@ beforeAll(() => {
   process.env.DATABASE_URL ??= 'postgresql://hub:hub@localhost:5432/hub_dev';
   process.env.REDIS_URL ??= 'redis://localhost:6379';
   process.env.JWT_SECRET ??= 'test-jwt-secret-hub79';
+  process.env.OPERATOR_JWT_SECRET ??= 'test-operator-jwt-secret-hub112';
   process.env.NODE_ENV = 'test';
 });
 

@@ -19,6 +19,7 @@ beforeAll(async () => {
   process.env.DATABASE_URL ??= 'postgresql://hub:hub@localhost:5432/hub_dev';
   process.env.REDIS_URL ??= 'redis://localhost:6379';
   process.env.JWT_SECRET ??= 'test-jwt-secret-hub98';
+  process.env.OPERATOR_JWT_SECRET ??= 'test-operator-jwt-secret-hub112';
   process.env.JWT_EXPIRES_IN = '900';
   // Use 1 bcrypt round in tests so buildApp() (which pre-hashes a dummy) is fast
   process.env.BCRYPT_ROUNDS = '1';

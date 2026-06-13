@@ -13,6 +13,7 @@ beforeAll(async () => {
   process.env.DATABASE_URL ??= 'postgresql://hub:hub@localhost:5432/hub_dev';
   process.env.REDIS_URL ??= 'redis://localhost:6379';
   process.env.JWT_SECRET ??= 'test-jwt-secret-hub77';
+  process.env.OPERATOR_JWT_SECRET ??= 'test-operator-jwt-secret-hub112';
 
   // Probe Redis so tests that need it can be skipped locally when it isn't running.
   // In CI the redis:7-alpine service container is always present; locally it may not be.
