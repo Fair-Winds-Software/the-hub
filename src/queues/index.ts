@@ -1,5 +1,6 @@
 // Authorized by HUB-127 — queue registry; getAllQueueDefinitions() consumed by worker scaffold
 // Authorized by HUB-146 — queue factory pattern; concrete queue definitions registered here
+// Authorized by HUB-189 — stripe-event queue for webhook dispatch
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -59,6 +60,14 @@ const DLQ_DEF: QueueDefinition = {
   concurrency: 0,
 };
 
+const STRIPE_EVENT_DEF: QueueDefinition = {
+  name: 'queue:stripe-event',
+  concurrency: 5,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 500 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+};
+
 const BATCH_SWEEP_DEF: QueueDefinition = {
   name: 'queue:batch-sweep',
   concurrency: 2,
@@ -77,6 +86,10 @@ const LICENSE_CHECK_DEF: QueueDefinition = {
 
 // ── Queue Factories ─────────────────────────────────────────────────────────
 
+export function getStripeEventQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(STRIPE_EVENT_DEF.name, connection);
+}
+
 export function getBatchSweepQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(BATCH_SWEEP_DEF.name, connection);
 }
@@ -90,6 +103,7 @@ export function getDlqQueue(connection?: ConnectionOptions): Queue {
 }
 
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
+registerQueue(STRIPE_EVENT_DEF);
 registerQueue(BATCH_SWEEP_DEF);
 registerQueue(LICENSE_CHECK_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually

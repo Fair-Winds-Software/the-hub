@@ -1,8 +1,11 @@
 // Authorized by HUB-188 — POST /webhooks/stripe; HMAC signature verification; raw body preservation
+// Authorized by HUB-189 — idempotency enforcement; INSERT-on-conflict deduplication; status lifecycle
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { Readable } from 'stream';
 import { getStripeClient } from '../stripe/client.js';
+import { getStripeEventQueue } from '../queues/index.js';
+import { getPool } from '../db/pool.js';
 import logger from '../lib/logger.js';
 
 // Augment FastifyRequest with rawBody captured before body parsing
@@ -64,8 +67,59 @@ const stripeWebhookPlugin: FastifyPluginAsync = async (fastify) => {
           .send({ error: { code: 400, message: 'Invalid signature' } });
       }
 
-      // Verified — event routed to handler (FR-004 dispatch implemented in HUB-189)
-      logger.info({ eventType: event.type, eventId: event.id }, 'Stripe webhook received');
+      // ── Idempotency: INSERT-on-conflict (no pre-check SELECT — eliminates TOCTOU race) ─────
+      const pool = getPool();
+
+      // Extract product_id from Stripe metadata (nullable — not an error if absent)
+      // Double cast needed: Stripe's data.object is a wide union type with no index signature
+      const dataObj = event.data.object as unknown as Record<string, unknown> | undefined;
+      const productId =
+        (dataObj?.metadata as Record<string, string> | undefined)?.product_id ?? null;
+
+      const { rows: inserted } = await pool.query<{ id: string }>(
+        `INSERT INTO stripe_webhook_events (event_id, event_type, product_id, raw_event)
+         VALUES ($1, $2, $3, $4::jsonb)
+         ON CONFLICT (event_id) DO NOTHING
+         RETURNING id`,
+        [event.id, event.type, productId, JSON.stringify(event)],
+      );
+
+      if (inserted.length === 0) {
+        // Duplicate Stripe delivery — acknowledge without re-processing
+        logger.info({ event_id: event.id }, 'duplicate event received');
+        return reply.status(200).send({ received: true, type: event.type });
+      }
+
+      const rowId = inserted[0].id;
+
+      // ── Enqueue job; update status based on enqueue outcome ─────────────────
+      try {
+        const queue = getStripeEventQueue();
+        await queue.add('process-stripe-event', {
+          webhookEventId: rowId,
+          eventType: event.type,
+          eventId: event.id,
+          productId,
+        });
+
+        await pool.query(
+          `UPDATE stripe_webhook_events SET status = 'dispatched', processed_at = NOW() WHERE id = $1`,
+          [rowId],
+        );
+
+        logger.info({ eventType: event.type, eventId: event.id }, 'Stripe webhook received');
+      } catch (err) {
+        // Enqueue failure: record status but still return 200 to prevent Stripe retry storm
+        await pool
+          .query(
+            `UPDATE stripe_webhook_events SET status = 'failed', processed_at = NOW() WHERE id = $1`,
+            [rowId],
+          )
+          .catch(() => {});
+
+        logger.error({ eventType: event.type, eventId: event.id, err }, 'Stripe webhook dispatch failed');
+      }
+
       return reply.status(200).send({ received: true, type: event.type });
     },
   );
