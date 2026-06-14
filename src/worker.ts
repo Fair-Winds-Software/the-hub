@@ -6,6 +6,7 @@ import type { ConnectionOptions } from 'bullmq';
 import { fileURLToPath } from 'url';
 import { getRedisClient } from './redis/client.js';
 import { getAllQueueDefinitions, getDlqQueue } from './queues/index.js';
+import { registerAllCronJobs } from './queues/cron.js';
 import { sanitizePayload } from './utils/sanitize.js';
 import logger from './lib/logger.js';
 
@@ -98,6 +99,11 @@ if (isEntryPoint) {
     logger.error({ err }, 'Worker startup failed — Redis unreachable or queue configuration error');
     process.exit(1);
   }
+
+  // Register CRON jobs after workers are running
+  registerAllCronJobs().catch((err) => {
+    logger.error({ err }, 'CRON registration error — worker continuing');
+  });
 
   process.on('SIGTERM', () => {
     gracefulShutdown(workers).catch(() => process.exit(1));

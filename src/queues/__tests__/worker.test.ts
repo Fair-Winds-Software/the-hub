@@ -30,6 +30,11 @@ vi.mock('../../utils/sanitize.js', () => ({
   sanitizePayload: vi.fn((obj: unknown) => obj),
 }));
 
+// cron mock — entry-point only; not exercised in unit tests
+vi.mock('../cron.js', () => ({
+  registerAllCronJobs: vi.fn().mockResolvedValue(undefined),
+}));
+
 beforeEach(() => {
   mockDefinitions.length = 0;
   vi.clearAllMocks();
