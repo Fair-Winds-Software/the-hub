@@ -1,11 +1,12 @@
 // Authorized by HUB-188 — POST /webhooks/stripe; HMAC signature verification; raw body preservation
 // Authorized by HUB-189 — idempotency enforcement; INSERT-on-conflict deduplication; status lifecycle
-// Authorized by HUB-202 — event-type fan-out routing; DLQ fallback for null product_id / unknown types
+// Authorized by HUB-202 — event-type fan-out routing; DLQ fallback for null product_id
+// Authorized by HUB-203 — pre-INSERT recognized-type gate; unrecognized events not stored
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { Readable } from 'stream';
 import { getStripeClient } from '../stripe/client.js';
-import { getQueueForEventType, hasQueueForEventType, getDlqQueue } from '../queues/index.js';
+import { getQueueForEventType, isRecognizedEventType, getDlqQueue } from '../queues/index.js';
 import { getPool } from '../db/pool.js';
 import logger from '../lib/logger.js';
 
@@ -68,6 +69,13 @@ const stripeWebhookPlugin: FastifyPluginAsync = async (fastify) => {
           .send({ error: { code: 400, message: 'Invalid signature' } });
       }
 
+      // ── Recognized-type gate (HUB-203) — unrecognized types acknowledged without DB write ──
+      // Set of recognized types is implicitly defined by registered queue factories (E10–E12).
+      if (!isRecognizedEventType(event.type)) {
+        logger.info({ event_id: event.id, event_type: event.type }, 'unrecognized event type — acknowledged without storing');
+        return reply.status(200).send({ received: true, type: event.type });
+      }
+
       // ── Idempotency: INSERT-on-conflict (no pre-check SELECT — eliminates TOCTOU race) ─────
       const pool = getPool();
 
@@ -93,15 +101,14 @@ const stripeWebhookPlugin: FastifyPluginAsync = async (fastify) => {
 
       const { id: rowId, received_at: receivedAt } = inserted[0];
 
-      // ── Route to event-type queue or DLQ; update status based on enqueue outcome ──
-      // product_id=null and unrecognized event types both fall back to DLQ (AC3, AC4)
-      const specificRoute = productId !== null && hasQueueForEventType(event.type);
-      if (productId === null) {
+      // ── Route to event-type queue or DLQ (HUB-202) ────────────────────────────────────────
+      // Event type is recognized at this point (pre-INSERT gate passed above).
+      // Only remaining DLQ case: recognized type with null product_id.
+      const useDlq = productId === null;
+      if (useDlq) {
         logger.warn({ event_id: event.id, event_type: event.type }, 'product_id absent — routing to DLQ');
-      } else if (!specificRoute) {
-        logger.warn({ event_id: event.id, event_type: event.type }, 'unrecognized event type — routing to DLQ');
       }
-      const queue = specificRoute ? getQueueForEventType(event.type) : getDlqQueue();
+      const queue = useDlq ? getDlqQueue() : getQueueForEventType(event.type);
 
       try {
         await queue.add('process-stripe-event', {

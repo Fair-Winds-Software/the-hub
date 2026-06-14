@@ -38,7 +38,9 @@ vi.mock('../../queues/index.js', () => ({
   getQueueForEventType: vi.fn().mockReturnValue(mockQueue),
   hasQueueForEventType: vi.fn().mockReturnValue(false), // no specific queues registered by default
   getDlqQueue: vi.fn().mockReturnValue(mockQueue),
-  // Legacy / other queues (kept for compat — stripe.ts no longer imports getStripeEventQueue)
+  // HUB-203 pre-INSERT recognized-type gate — default true so most tests reach the INSERT path
+  isRecognizedEventType: vi.fn().mockReturnValue(true),
+  // Legacy / other queues (kept for compat)
   getStripeEventQueue: vi.fn().mockReturnValue(mockQueue),
   getBatchSweepQueue: vi.fn(),
   getLicenseCheckQueue: vi.fn(),
@@ -337,38 +339,40 @@ describe('POST /webhooks/stripe — event routing (HUB-202)', () => {
     await app.close();
   });
 
-  it('routes unrecognized event type to DLQ and emits warn when product_id is present', async () => {
+  it('routes recognized type with null product_id to DLQ (unrecognized types handled by HUB-203)', async () => {
+    // product_id is null on a RECOGNIZED type → DLQ route (HUB-202 AC3)
+    // Unrecognized types now return early before INSERT — see HUB-203 tests below
     const logger = await import('../../lib/logger.js');
     const warnSpy = vi.spyOn(logger.default, 'warn');
 
     mockConstructEvent.mockReturnValue({
-      id: 'evt_dlq_type',
-      type: 'unknown.event.type',
-      data: { object: { metadata: { product_id: 'prod-abc' } } },
+      id: 'evt_dlq_null_recognized',
+      type: 'invoice.payment_succeeded', // recognized (isRecognizedEventType default=true)
+      data: { object: {} }, // no metadata → product_id = null
     });
-    // hasQueueForEventType returns false by default (no factories registered in tests)
 
     const app = await buildTestApp();
 
-    await app.inject({
+    const res = await app.inject({
       method: 'POST',
       url: '/webhooks/stripe',
       payload: '{}',
       headers: { 'content-type': 'application/json', 'stripe-signature': 'valid' },
     });
 
+    expect(res.statusCode).toBe(200);
     const { getDlqQueue } = await import('../../queues/index.js');
     expect(getDlqQueue).toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ event_id: 'evt_dlq_type' }),
-      expect.stringContaining('unrecognized event type'),
+      expect.objectContaining({ event_id: 'evt_dlq_null_recognized' }),
+      expect.stringContaining('product_id absent'),
     );
     await app.close();
   });
 
   it('routes to specific queue when hasQueueForEventType returns true', async () => {
     const { hasQueueForEventType, getQueueForEventType } = await import('../../queues/index.js');
-    vi.mocked(hasQueueForEventType).mockReturnValue(true);
+    vi.mocked(hasQueueForEventType).mockReturnValueOnce(true);
 
     mockConstructEvent.mockReturnValue({
       id: 'evt_specific',
@@ -417,6 +421,93 @@ describe('POST /webhooks/stripe — event routing (HUB-202)', () => {
     // raw_event must NOT be in the payload
     const payload = mockQueueAdd.mock.calls[0][1] as Record<string, unknown>;
     expect(payload).not.toHaveProperty('raw_event');
+    await app.close();
+  });
+});
+
+// ── Recognized-type gate (HUB-203) ───────────────────────────────────────────
+
+describe('POST /webhooks/stripe — recognized-type gate (HUB-203)', () => {
+  it('returns 200 without INSERT when event type is unrecognized', async () => {
+    const { isRecognizedEventType } = await import('../../queues/index.js');
+    vi.mocked(isRecognizedEventType).mockReturnValueOnce(false);
+
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_unknown',
+      type: 'balance.available',
+      data: { object: {} },
+    });
+
+    const app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/webhooks/stripe',
+      payload: '{}',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 'valid' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // No DB INSERT attempted
+    const insertCall = mockQuery.mock.calls.find(
+      (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('ON CONFLICT'),
+    );
+    expect(insertCall).toBeUndefined();
+    // No queue job dispatched
+    expect(mockQueueAdd).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('emits info log (not warn) for unrecognized event type', async () => {
+    const { isRecognizedEventType } = await import('../../queues/index.js');
+    vi.mocked(isRecognizedEventType).mockReturnValueOnce(false);
+
+    const loggerModule = await import('../../lib/logger.js');
+    const infoSpy = vi.spyOn(loggerModule.default, 'info');
+
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_unknown_log',
+      type: 'radar.early_fraud_warning.created',
+      data: { object: {} },
+    });
+
+    const app = await buildTestApp();
+
+    await app.inject({
+      method: 'POST',
+      url: '/webhooks/stripe',
+      payload: '{}',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 'valid' },
+    });
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ event_id: 'evt_unknown_log', event_type: 'radar.early_fraud_warning.created' }),
+      expect.stringContaining('unrecognized event type'),
+    );
+    await app.close();
+  });
+
+  it('proceeds to INSERT when event type is recognized', async () => {
+    // isRecognizedEventType defaults to true — recognized types reach INSERT
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_recognized',
+      type: 'invoice.payment_succeeded',
+      data: { object: { metadata: { product_id: 'prod-abc' } } },
+    });
+
+    const app = await buildTestApp();
+
+    await app.inject({
+      method: 'POST',
+      url: '/webhooks/stripe',
+      payload: '{}',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 'valid' },
+    });
+
+    const insertCall = mockQuery.mock.calls.find(
+      (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('ON CONFLICT'),
+    );
+    expect(insertCall).toBeDefined();
     await app.close();
   });
 });

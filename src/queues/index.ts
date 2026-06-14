@@ -2,6 +2,7 @@
 // Authorized by HUB-146 — queue factory pattern; concrete queue definitions registered here
 // Authorized by HUB-189 — stripe-event queue for webhook dispatch
 // Authorized by HUB-202 — event-type-specific queue routing; hasQueueForEventType / getQueueForEventType
+// Authorized by HUB-203 — isRecognizedEventType() pre-INSERT gate; unrecognized events not stored
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -107,6 +108,13 @@ export function getDlqQueue(connection?: ConnectionOptions): Queue {
 // E10–E12 billing Epics call registerQueue() to make their event-type queues discoverable here.
 export function hasQueueForEventType(eventType: string): boolean {
   return _queues.some((q) => q.name === `queue:stripe:${eventType}`);
+}
+
+// Semantic alias for the pre-INSERT recognized-type gate (HUB-203).
+// Distinguishes "does this event type have ANY registered factory" from the routing
+// decision in getQueueForEventType (which is about specific vs DLQ queue selection).
+export function isRecognizedEventType(eventType: string): boolean {
+  return hasQueueForEventType(eventType);
 }
 
 // Returns the registered event-type queue, or the DLQ if no factory is registered.
