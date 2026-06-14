@@ -3,6 +3,7 @@
 // Authorized by HUB-189 — stripe-event queue for webhook dispatch
 // Authorized by HUB-202 — event-type-specific queue routing; hasQueueForEventType / getQueueForEventType
 // Authorized by HUB-203 — isRecognizedEventType() pre-INSERT gate; unrecognized events not stored
+// Authorized by HUB-272 — license-check queue processor; routes promote_staged_license_changes jobs
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -84,6 +85,14 @@ const LICENSE_CHECK_DEF: QueueDefinition = {
   maxAttempts: 5,
   backoff: { type: 'exponential', delay: 500 },
   deadLetterQueue: DLQ_QUEUE_NAME,
+  // Dynamic import avoids loading the full service layer at module evaluation time;
+  // only loaded when the worker actually picks up a job.
+  processor: async (job: Job) => {
+    if (job.name === 'promote_staged_license_changes') {
+      const { promoteStagedLicenseChanges } = await import('../services/license.js');
+      await promoteStagedLicenseChanges();
+    }
+  },
 };
 
 // ── Queue Factories ─────────────────────────────────────────────────────────

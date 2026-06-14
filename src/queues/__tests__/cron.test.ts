@@ -1,4 +1,5 @@
 // Authorized by HUB-161 — unit tests for CRON job registry
+// Authorized by HUB-272 — promote_staged_license_changes CRON added; count updated to 3
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mock queue factories ──────────────────────────────────────────────────────
@@ -13,6 +14,11 @@ vi.mock('../index.js', () => ({
   getAllQueueDefinitions: vi.fn().mockReturnValue([]),
   registerQueue: vi.fn(),
   getDlqQueue: vi.fn(),
+}));
+
+vi.mock('../../config/decisions.js', () => ({
+  TODO_D_DEF_001_INTERVAL: '7 days',
+  D_002_PROMOTION_CRON: '0 0 * * *',
 }));
 
 beforeEach(() => {
@@ -37,13 +43,18 @@ describe('registerAllCronJobs()', () => {
     const { registerAllCronJobs } = await import('../cron.js');
     await registerAllCronJobs();
 
-    // One removeRepeatable per CRON definition (before each add)
-    expect(mockRemoveRepeatable).toHaveBeenCalledTimes(2);
-    expect(mockAdd).toHaveBeenCalledTimes(2);
+    // One removeRepeatable per CRON definition (before each add) — now 3 definitions
+    expect(mockRemoveRepeatable).toHaveBeenCalledTimes(3);
+    expect(mockAdd).toHaveBeenCalledTimes(3);
 
-    // Verify the cron pattern is passed to removeRepeatable
+    // Verify the cron pattern is passed to removeRepeatable for batch-sweep
     expect(mockRemoveRepeatable).toHaveBeenCalledWith(
       'batch-sweep-daily',
+      expect.objectContaining({ pattern: '0 0 * * *' }),
+    );
+    // Verify promote_staged_license_changes is also registered
+    expect(mockRemoveRepeatable).toHaveBeenCalledWith(
+      'promote_staged_license_changes',
       expect.objectContaining({ pattern: '0 0 * * *' }),
     );
   });
@@ -66,14 +77,14 @@ describe('registerAllCronJobs()', () => {
     const { registerAllCronJobs } = await import('../cron.js');
     await expect(registerAllCronJobs()).resolves.toBeUndefined();
 
-    // Second CRON was still attempted despite first failing
-    expect(mockAdd).toHaveBeenCalledTimes(1);
+    // 2 remaining CRONs were still attempted despite first failing
+    expect(mockAdd).toHaveBeenCalledTimes(2);
   });
 
   it('registers all defined CRONs when CRON_ENABLED is not set', async () => {
     const { registerAllCronJobs } = await import('../cron.js');
     await registerAllCronJobs();
-    // 2 CRON definitions: batch-sweep + license-check
-    expect(mockAdd).toHaveBeenCalledTimes(2);
+    // 3 CRON definitions: batch-sweep + license-check-hourly + promote_staged_license_changes
+    expect(mockAdd).toHaveBeenCalledTimes(3);
   });
 });

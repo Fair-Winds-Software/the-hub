@@ -1,6 +1,8 @@
 // Authorized by HUB-161 — CRON job registry; idempotent BullMQ repeatable job registration
+// Authorized by HUB-272 — promote_staged_license_changes CRON entry; D-002 billing cycle boundary
 import type { Queue } from 'bullmq';
 import { getBatchSweepQueue, getLicenseCheckQueue } from './index.js';
+import { D_002_PROMOTION_CRON } from '../config/decisions.js';
 import logger from '../lib/logger.js';
 
 interface CronDefinition {
@@ -23,6 +25,12 @@ const CRON_DEFINITIONS: CronDefinition[] = [
     queueFactory: getLicenseCheckQueue,
     name: 'license-check-hourly',
     cron: '0 * * * *',
+    payload: { triggered: 'scheduled' },
+  },
+  {
+    queueFactory: getLicenseCheckQueue,
+    name: 'promote_staged_license_changes',
+    cron: D_002_PROMOTION_CRON,
     payload: { triggered: 'scheduled' },
   },
 ];
