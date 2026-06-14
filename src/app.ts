@@ -5,6 +5,7 @@
 // Authorized by HUB-98 — authPlugin registered fifth; service JWT issuance + authenticate decorator
 // Authorized by HUB-112 — operatorAuthPlugin registered sixth; operator JWT issuance + authenticateOperator decorator
 // Authorized by HUB-113 — corsPlugin registered first (locked E2 order); CORS_ORIGINS env-configurable
+// Authorized by HUB-188 — stripeWebhookPlugin registered after auth; no JWT, HMAC-only auth
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';
@@ -17,6 +18,7 @@ import authPlugin from './plugins/auth.js';
 import operatorAuthPlugin from './plugins/operatorAuth.js';
 import healthPlugin from './plugins/health.js';
 import pricingRoutes from './pricing/routes.js';
+import stripeWebhookPlugin from './webhooks/stripe.js';
 
 export async function buildApp(dest?: DestinationStream) {
   validateEnv();
@@ -40,6 +42,7 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(authPlugin);
   await fastify.register(operatorAuthPlugin);
   await fastify.register(healthPlugin);
+  await fastify.register(stripeWebhookPlugin);
   await fastify.register(pricingRoutes);
 
   return fastify;

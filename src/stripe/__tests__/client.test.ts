@@ -1,4 +1,5 @@
 // Authorized by HUB-174 — unit tests for Stripe SDK singleton and fail-fast validation
+// Authorized by HUB-188 — updated to cover STRIPE_WEBHOOK_SIGNING_SECRET validation
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('stripe', () => ({
@@ -15,6 +16,7 @@ vi.mock('../../lib/logger.js', () => ({
 beforeEach(async () => {
   vi.clearAllMocks();
   delete process.env.STRIPE_SECRET_KEY;
+  delete process.env.STRIPE_WEBHOOK_SIGNING_SECRET;
   // Reset singleton between tests
   const { _resetStripeClient } = await import('../client.js');
   _resetStripeClient();
@@ -51,14 +53,27 @@ describe('validateStripeEnv()', () => {
     exitSpy.mockRestore();
   });
 
-  it('does not exit when STRIPE_SECRET_KEY is present', async () => {
+  it('does not exit when both STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SIGNING_SECRET are present', async () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_valid';
+    process.env.STRIPE_WEBHOOK_SIGNING_SECRET = 'whsec_test_valid';
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
 
     const { validateStripeEnv } = await import('../client.js');
     validateStripeEnv();
 
     expect(exitSpy).not.toHaveBeenCalled();
+    exitSpy.mockRestore();
+  });
+
+  it('exits with 1 when STRIPE_WEBHOOK_SIGNING_SECRET is absent', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_test_valid';
+    // STRIPE_WEBHOOK_SIGNING_SECRET intentionally absent
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+
+    const { validateStripeEnv } = await import('../client.js');
+    validateStripeEnv();
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
     exitSpy.mockRestore();
   });
 });
