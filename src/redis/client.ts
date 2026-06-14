@@ -30,7 +30,10 @@ export function getRedisClient(): Redis {
       if (closing) return null;
       if (times > 5) {
         logger.error({ attempts: times }, 'Redis connection failed after 5 attempts — aborting');
-        process.exit(1);
+        // In test environments Vitest intercepts process.exit as an uncaught exception
+        // and disrupts unrelated test files. Return null to stop retrying instead.
+        if (process.env.NODE_ENV !== 'test') process.exit(1);
+        return null;
       }
       const delay = Math.min(100 * 2 ** (times - 1), 1600);
       logger.warn({ attempt: times, delayMs: delay }, 'Redis connection failed — retrying');
