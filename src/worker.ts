@@ -1,19 +1,15 @@
 // Authorized by HUB-127 — BullMQ worker process; separate from Fastify, graceful SIGTERM drain
+// Authorized by HUB-147 — DLQ listener; failed-job capture with PII-safe structured logging
 import 'dotenv/config';
 import { Worker as BullWorker, type Job } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
 import { fileURLToPath } from 'url';
 import { getRedisClient } from './redis/client.js';
-import { getAllQueueDefinitions } from './queues/index.js';
+import { getAllQueueDefinitions, getDlqQueue } from './queues/index.js';
+import { sanitizePayload } from './utils/sanitize.js';
 import logger from './lib/logger.js';
 
 const DRAIN_TIMEOUT_MS = 30_000;
-
-// Stub processor used when a queue definition provides no custom processor.
-// Downstream Epics replace this per-queue with business-specific processors.
-const stubProcessor = async (job: Job): Promise<void> => {
-  logger.info({ jobId: job.id, queue: job.queueName }, 'Job received');
-};
 
 export function createWorkers(): BullWorker[] {
   // Cast required: BullMQ bundles its own ioredis version, causing structural
@@ -21,14 +17,49 @@ export function createWorkers(): BullWorker[] {
   const connection = getRedisClient() as unknown as ConnectionOptions;
   const definitions = getAllQueueDefinitions();
 
-  return definitions.map((def) => {
-    // WORKER_CONCURRENCY_<QUEUE_NAME_UPPER_SNAKE> overrides the default
-    const envKey = `WORKER_CONCURRENCY_${def.name.replace(/-/g, '_').toUpperCase()}`;
-    const concurrency = parseInt(process.env[envKey] ?? String(def.concurrency), 10);
+  // Skip processor-less entries (e.g. DLQ sentinel) — they have no active worker
+  return definitions
+    .filter((def) => def.processor !== undefined)
+    .map((def) => {
+      // WORKER_CONCURRENCY_<QUEUE_NAME_UPPER_SNAKE> overrides the default
+      const envKey = `WORKER_CONCURRENCY_${def.name.replace(/-/g, '_').toUpperCase()}`;
+      const concurrency = parseInt(process.env[envKey] ?? String(def.concurrency), 10);
 
-    logger.info({ queue: def.name, concurrency }, 'Worker watching queue');
-    return new BullWorker(def.name, def.processor ?? stubProcessor, { connection, concurrency });
-  });
+      logger.info({ queue: def.name, concurrency }, 'Worker watching queue');
+      const worker = new BullWorker(def.name, def.processor!, { connection, concurrency });
+
+      // Move permanently failed jobs to DLQ with PII-safe structured logging
+      if (def.deadLetterQueue) {
+        worker.on('failed', async (job: Job | undefined, err: Error) => {
+          if (!job) return;
+          // Only act on final failure (all attempts exhausted)
+          const isExhausted = !job.opts.attempts || job.attemptsMade >= job.opts.attempts;
+          if (!isExhausted) return;
+
+          const sanitized = sanitizePayload(job.data);
+          const payloadSummary = JSON.stringify(sanitized).slice(0, 200);
+
+          logger.error(
+            { jobId: job.id, queue: def.name, payloadSummary, failureReason: err.message, attemptsMade: job.attemptsMade },
+            'Job permanently failed — moving to DLQ',
+          );
+
+          try {
+            const dlq = getDlqQueue(connection);
+            await dlq.add('dead-letter', {
+              originalQueue: def.name,
+              originalJobId: job.id,
+              failedReason: err.message,
+              payload: sanitized,
+            });
+          } catch (dlqErr) {
+            logger.error({ err: dlqErr }, 'Failed to enqueue job to DLQ');
+          }
+        });
+      }
+
+      return worker;
+    });
 }
 
 export async function gracefulShutdown(workers: BullWorker[]): Promise<void> {

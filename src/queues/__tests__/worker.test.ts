@@ -1,4 +1,5 @@
 // Authorized by HUB-127 — unit tests for worker scaffold: createWorkers, gracefulShutdown
+// Authorized by HUB-147 — processor-less filter and DLQ routing
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { QueueDefinition } from '../index.js';
 
@@ -7,6 +8,7 @@ vi.mock('bullmq', () => ({
   Worker: vi.fn().mockImplementation((name: string) => ({
     name,
     close: vi.fn().mockResolvedValue(undefined),
+    on: vi.fn(),
   })),
 }));
 
@@ -20,6 +22,12 @@ const mockDefinitions: QueueDefinition[] = [];
 vi.mock('../index.js', () => ({
   getAllQueueDefinitions: vi.fn(() => [...mockDefinitions]),
   registerQueue: vi.fn((def: QueueDefinition) => mockDefinitions.push(def)),
+  getDlqQueue: vi.fn().mockReturnValue({ add: vi.fn().mockResolvedValue(undefined) }),
+}));
+
+// sanitize mock — pure fn, no need for real implementation in worker tests
+vi.mock('../../utils/sanitize.js', () => ({
+  sanitizePayload: vi.fn((obj: unknown) => obj),
 }));
 
 beforeEach(() => {
@@ -46,11 +54,23 @@ describe('createWorkers()', () => {
     expect(workers).toHaveLength(0);
   });
 
-  it('creates one BullMQ Worker per queue definition', async () => {
+  it('skips processor-less definitions (DLQ sentinel)', async () => {
     const { getAllQueueDefinitions } = await import('../index.js');
     vi.mocked(getAllQueueDefinitions).mockReturnValue([
-      { name: 'alpha', concurrency: 2 },
-      { name: 'beta', concurrency: 5 },
+      { name: 'alpha', concurrency: 2 },           // no processor — skipped
+      { name: 'beta', concurrency: 5, processor: vi.fn() }, // has processor — included
+    ]);
+
+    const { createWorkers } = await import('../../worker.js');
+    const workers = createWorkers();
+    expect(workers).toHaveLength(1);
+  });
+
+  it('creates one BullMQ Worker per queue definition that has a processor', async () => {
+    const { getAllQueueDefinitions } = await import('../index.js');
+    vi.mocked(getAllQueueDefinitions).mockReturnValue([
+      { name: 'alpha', concurrency: 2, processor: vi.fn() },
+      { name: 'beta', concurrency: 5, processor: vi.fn() },
     ]);
 
     const { createWorkers } = await import('../../worker.js');
@@ -61,7 +81,9 @@ describe('createWorkers()', () => {
   it('respects WORKER_CONCURRENCY_<QUEUE> env override', async () => {
     const { Worker } = await import('bullmq');
     const { getAllQueueDefinitions } = await import('../index.js');
-    vi.mocked(getAllQueueDefinitions).mockReturnValue([{ name: 'test-queue', concurrency: 2 }]);
+    vi.mocked(getAllQueueDefinitions).mockReturnValue([
+      { name: 'test-queue', concurrency: 2, processor: vi.fn() },
+    ]);
     process.env.WORKER_CONCURRENCY_TEST_QUEUE = '10';
 
     const { createWorkers } = await import('../../worker.js');

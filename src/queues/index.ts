@@ -11,6 +11,7 @@ export interface QueueDefinition {
   concurrency: number;
   maxAttempts?: number;
   backoff?: BackoffOptions;
+  deadLetterQueue?: string;
   processor?: JobProcessor;
 }
 
@@ -50,11 +51,20 @@ function getOrCreateQueue(name: string, connection?: ConnectionOptions): Queue {
 // Names are prefixed `queue:` so Redis keys become `hub:queue:<name>:*` via
 // the `hub:` keyPrefix already set on the ioredis client (HUB-125).
 
+export const DLQ_QUEUE_NAME = 'queue:dlq';
+
+// Sentinel entry — no processor; worker skips it. Jobs land here via failed-event handler.
+const DLQ_DEF: QueueDefinition = {
+  name: DLQ_QUEUE_NAME,
+  concurrency: 0,
+};
+
 const BATCH_SWEEP_DEF: QueueDefinition = {
   name: 'queue:batch-sweep',
   concurrency: 2,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 1000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
 };
 
 const LICENSE_CHECK_DEF: QueueDefinition = {
@@ -62,6 +72,7 @@ const LICENSE_CHECK_DEF: QueueDefinition = {
   concurrency: 5,
   maxAttempts: 5,
   backoff: { type: 'exponential', delay: 500 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
 };
 
 // ── Queue Factories ─────────────────────────────────────────────────────────
@@ -74,6 +85,12 @@ export function getLicenseCheckQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(LICENSE_CHECK_DEF.name, connection);
 }
 
+export function getDlqQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(DLQ_DEF.name, connection);
+}
+
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
 registerQueue(BATCH_SWEEP_DEF);
 registerQueue(LICENSE_CHECK_DEF);
+// DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
+registerQueue(DLQ_DEF);
