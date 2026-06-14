@@ -1,4 +1,5 @@
 // Authorized by HUB-78 — Pino structured logger plugin: trace_id, fields, redaction, log-level
+// Authorized by HUB-216 — trace_id now from traceparent header (null without header); span_id added to schema
 import { describe, it, expect, beforeAll, afterEach, beforeEach } from 'vitest';
 import { Writable } from 'stream';
 import { buildApp } from '../app.js';
@@ -6,8 +7,6 @@ import { closePool } from '../db/pool.js';
 import { closeRedis } from '../redis/client.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * Returns a Pino-compatible DestinationStream that buffers every JSON line.
@@ -54,10 +53,10 @@ afterEach(async () => {
   await closeRedis();
 });
 
-// ── AC1: trace_id is UUID v4 ─────────────────────────────────────────────────
+// ── AC1: trace_id comes from W3C traceparent header (HUB-216) ────────────────
 
-describe('AC1 — trace_id', () => {
-  it('every request log line carries a UUID v4 trace_id', async () => {
+describe('AC1 — trace_id / span_id correlation', () => {
+  it('trace_id is null when no traceparent header is sent', async () => {
     const { dest, lines } = makeCapture();
     const fastify = await buildApp(dest);
     try {
@@ -65,20 +64,49 @@ describe('AC1 — trace_id', () => {
     } finally {
       await fastify.close();
     }
-    // At minimum the onResponse hook emits one line per request
     const requestLines = lines().filter((l) => l.msg === 'request completed');
     expect(requestLines.length).toBeGreaterThanOrEqual(1);
     for (const line of requestLines) {
-      expect(line.trace_id).toMatch(UUID_V4);
+      expect(line.trace_id).toBeNull();
     }
   });
 
-  it('each request gets a distinct trace_id', async () => {
+  it('trace_id and span_id are populated from a valid traceparent header', async () => {
+    const traceId = 'a'.repeat(32);
+    const spanId = 'b'.repeat(16);
     const { dest, lines } = makeCapture();
     const fastify = await buildApp(dest);
     try {
-      await fastify.inject({ method: 'GET', url: '/health' });
-      await fastify.inject({ method: 'GET', url: '/health' });
+      await fastify.inject({
+        method: 'GET',
+        url: '/health',
+        headers: { traceparent: `00-${traceId}-${spanId}-01` },
+      });
+    } finally {
+      await fastify.close();
+    }
+    const requestLines = lines().filter((l) => l.msg === 'request completed');
+    expect(requestLines.length).toBeGreaterThanOrEqual(1);
+    for (const line of requestLines) {
+      expect(line.trace_id).toBe(traceId);
+      expect(line.span_id).toBe(spanId);
+    }
+  });
+
+  it('different traceparent headers produce different trace_ids', async () => {
+    const { dest, lines } = makeCapture();
+    const fastify = await buildApp(dest);
+    try {
+      await fastify.inject({
+        method: 'GET',
+        url: '/health',
+        headers: { traceparent: `00-${'1'.repeat(32)}-${'a'.repeat(16)}-00` },
+      });
+      await fastify.inject({
+        method: 'GET',
+        url: '/health',
+        headers: { traceparent: `00-${'2'.repeat(32)}-${'b'.repeat(16)}-00` },
+      });
     } finally {
       await fastify.close();
     }
@@ -93,7 +121,7 @@ describe('AC1 — trace_id', () => {
 // ── AC2: all 6 required fields present ───────────────────────────────────────
 
 describe('AC2 — required log fields', () => {
-  it('every request log line has {level, time, trace_id, tenant_id, product_id, msg}', async () => {
+  it('every request log line has {level, time, trace_id, span_id, tenant_id, product_id, msg}', async () => {
     const { dest, lines } = makeCapture();
     const fastify = await buildApp(dest);
     try {
@@ -107,6 +135,7 @@ describe('AC2 — required log fields', () => {
       expect(line).toHaveProperty('level');
       expect(line).toHaveProperty('time');
       expect(line).toHaveProperty('trace_id');
+      expect(line).toHaveProperty('span_id');
       expect(line).toHaveProperty('tenant_id');
       expect(line).toHaveProperty('product_id');
       expect(line).toHaveProperty('msg');
@@ -286,6 +315,7 @@ describe('AC6 — request.log in route handlers', () => {
 
     const handlerLines = lines().filter((l) => l.msg === 'handler reached');
     expect(handlerLines.length).toBe(1);
-    expect(handlerLines[0].trace_id).toMatch(UUID_V4);
+    // trace_id is null when no traceparent header is sent (HUB-216)
+    expect(handlerLines[0].trace_id).toBeNull();
   });
 });

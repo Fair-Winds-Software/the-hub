@@ -1,5 +1,6 @@
 // Authorized by HUB-127 — BullMQ worker process; separate from Fastify, graceful SIGTERM drain
 // Authorized by HUB-147 — DLQ listener; failed-job capture with PII-safe structured logging
+// Authorized by HUB-216 — worker uses createLogger() from src/logging/index.ts; structured log schema applied
 import 'dotenv/config';
 import { Worker as BullWorker, type Job } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
@@ -8,7 +9,9 @@ import { getRedisClient } from './redis/client.js';
 import { getAllQueueDefinitions, getDlqQueue } from './queues/index.js';
 import { registerAllCronJobs } from './queues/cron.js';
 import { sanitizePayload } from './utils/sanitize.js';
-import logger from './lib/logger.js';
+import { createLogger } from './logging/index.js';
+
+const logger = createLogger();
 
 const DRAIN_TIMEOUT_MS = 30_000;
 

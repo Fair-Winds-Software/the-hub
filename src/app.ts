@@ -6,11 +6,13 @@
 // Authorized by HUB-112 — operatorAuthPlugin registered sixth; operator JWT issuance + authenticateOperator decorator
 // Authorized by HUB-113 — corsPlugin registered first (locked E2 order); CORS_ORIGINS env-configurable
 // Authorized by HUB-188 — stripeWebhookPlugin registered after auth; no JWT, HMAC-only auth
+// Authorized by HUB-216 — traceparentPlugin registered before loggerPlugin; W3C trace correlation on every request
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';
 import { validateEnv } from './config/env.js';
 import corsPlugin from './plugins/cors.js';
+import traceparentPlugin from './logging/plugin.js';
 import loggerPlugin from './plugins/logger.js';
 import errorHandlerPlugin from './plugins/errorHandler.js';
 import rateLimitPlugin from './plugins/rateLimit.js';
@@ -27,15 +29,17 @@ export async function buildApp(dest?: DestinationStream) {
 
   // Locked E2 plugin registration order (HUB-113 finalises this chain):
   // 1. CORS plugin              — HUB-113 ✅
-  // 2. Pino logger plugin       — HUB-78  ✅
-  // 3. Error handler plugin     — HUB-79  ✅
-  // 4. Rate-limit plugin        — HUB-99  ✅
-  // 5. Service auth plugin      — HUB-98  ✅
-  // 6. Operator auth plugin     — HUB-112 ✅
-  // 7. Health routes            — HUB-77  ✅
-  // 8. Business routes          — downstream Epics
-  // 9. Operator routes          — downstream Epics
+  // 2. Traceparent plugin       — HUB-216 ✅ (must precede loggerPlugin; sets trace_id/span_id first)
+  // 3. Pino logger plugin       — HUB-78  ✅ (adds tenant_id/product_id; onResponse request logging)
+  // 4. Error handler plugin     — HUB-79  ✅
+  // 5. Rate-limit plugin        — HUB-99  ✅
+  // 6. Service auth plugin      — HUB-98  ✅
+  // 7. Operator auth plugin     — HUB-112 ✅
+  // 8. Health routes            — HUB-77  ✅
+  // 9. Business routes          — downstream Epics
+  // 10. Operator routes         — downstream Epics
   await fastify.register(corsPlugin);
+  await fastify.register(traceparentPlugin);
   await fastify.register(loggerPlugin);
   await fastify.register(errorHandlerPlugin);
   await fastify.register(rateLimitPlugin);
