@@ -1,16 +1,19 @@
 // Authorized by HUB-77 — HUB service entry point; SIGTERM graceful shutdown
 // Authorized by HUB-174 — Stripe env validation before server accepts requests
+// Authorized by HUB-237 — validateObservabilityEnv() called before buildApp() so invalid log config is caught at startup
 import 'dotenv/config';
 import { buildApp } from './app.js';
 import { closePool } from './db/pool.js';
 import { closeRedis } from './redis/client.js';
 import { validateStripeEnv } from './stripe/client.js';
+import { validateObservabilityEnv } from './logging/env.js';
 import logger from './lib/logger.js';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 const HOST = process.env.HOST ?? '0.0.0.0';
 
 async function main() {
+  validateObservabilityEnv();
   validateStripeEnv();
 
   const fastify = await buildApp();

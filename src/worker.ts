@@ -1,6 +1,7 @@
 // Authorized by HUB-127 — BullMQ worker process; separate from Fastify, graceful SIGTERM drain
 // Authorized by HUB-147 — DLQ listener; failed-job capture with PII-safe structured logging
 // Authorized by HUB-216 — worker uses createLogger() from src/logging/index.ts; structured log schema applied
+// Authorized by HUB-237 — validateObservabilityEnv() at startup; per-job child logger with tenant_id/product_id
 import 'dotenv/config';
 import { Worker as BullWorker, type Job } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
@@ -9,8 +10,10 @@ import { getRedisClient } from './redis/client.js';
 import { getAllQueueDefinitions, getDlqQueue } from './queues/index.js';
 import { registerAllCronJobs } from './queues/cron.js';
 import { sanitizePayload } from './utils/sanitize.js';
+import { validateObservabilityEnv } from './logging/env.js';
 import { createLogger } from './logging/index.js';
 
+validateObservabilityEnv();
 const logger = createLogger();
 
 const DRAIN_TIMEOUT_MS = 30_000;
@@ -43,7 +46,13 @@ export function createWorkers(): BullWorker[] {
           const sanitized = sanitizePayload(job.data);
           const payloadSummary = JSON.stringify(sanitized).slice(0, 200);
 
-          logger.error(
+          // Per-job child logger binds tenant_id/product_id from job.data (AC2, HUB-237)
+          const jobLog = logger.child({
+            tenant_id: (job.data as { tenant_id?: string }).tenant_id ?? null,
+            product_id: (job.data as { product_id?: string }).product_id ?? null,
+          });
+
+          jobLog.error(
             { jobId: job.id, queue: def.name, payloadSummary, failureReason: err.message, attemptsMade: job.attemptsMade },
             'Job permanently failed — moving to DLQ',
           );
@@ -57,7 +66,7 @@ export function createWorkers(): BullWorker[] {
               payload: sanitized,
             });
           } catch (dlqErr) {
-            logger.error({ err: dlqErr }, 'Failed to enqueue job to DLQ');
+            jobLog.error({ err: dlqErr }, 'Failed to enqueue job to DLQ');
           }
         });
       }
