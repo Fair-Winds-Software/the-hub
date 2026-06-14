@@ -1,4 +1,5 @@
 // Authorized by HUB-77 — Fastify server bootstrap: health routes, env validation, graceful shutdown
+// Authorized by HUB-230 — GET /health updated: probe-backed response shape {status, checks}
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import { Redis } from 'ioredis';
 import { buildApp } from '../app.js';
@@ -14,6 +15,8 @@ beforeAll(async () => {
   process.env.REDIS_URL ??= 'redis://localhost:6379';
   process.env.JWT_SECRET ??= 'test-jwt-secret-hub77';
   process.env.OPERATOR_JWT_SECRET ??= 'test-operator-jwt-secret-hub112';
+  // Disable stripe probe so /health only depends on pg + Redis (no Stripe credentials in test)
+  process.env.HEALTH_CHECK_STRIPE_ENABLED ??= 'false';
 
   // Probe Redis so tests that need it can be skipped locally when it isn't running.
   // In CI the redis:7-alpine service container is always present; locally it may not be.
@@ -40,24 +43,45 @@ afterEach(async () => {
 // ── AC2: GET /health ─────────────────────────────────────────────────────────
 
 describe('GET /health', () => {
-  it('returns 200 with status:ok and ISO-8601 timestamp', async () => {
+  it('returns probe-backed JSON with {status, checks} shape and stripe:"disabled"', async () => {
     const fastify = await buildApp();
     try {
       const res = await fastify.inject({ method: 'GET', url: '/health' });
-      expect(res.statusCode).toBe(200);
-      const body = res.json<{ status: string; timestamp: string }>();
-      expect(body.status).toBe('ok');
-      expect(body.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+      // 200 when all dependencies reachable; 503 when pg/redis unavailable — both valid locally
+      expect([200, 503]).toContain(res.statusCode);
+      const body = res.json<{ status: string; checks: Record<string, string> }>();
+      expect(['ok', 'degraded']).toContain(body.status);
+      expect(body.checks).toHaveProperty('pg');
+      expect(body.checks).toHaveProperty('redis');
+      // stripe probe disabled in test environment — always 'disabled'
+      expect(body.checks.stripe).toBe('disabled');
     } finally {
       await fastify.close();
     }
   });
 
-  it('is reachable without any auth header', async () => {
+  it('returns HTTP 200 with status:"ok" when pg and Redis are both healthy', async (ctx) => {
+    // Requires both services — skipped locally when Redis isn't running; always runs in CI
+    if (!redisAvailable) ctx.skip();
     const fastify = await buildApp();
     try {
       const res = await fastify.inject({ method: 'GET', url: '/health' });
       expect(res.statusCode).toBe(200);
+      const body = res.json<{ status: string; checks: Record<string, string> }>();
+      expect(body.status).toBe('ok');
+      expect(body.checks.pg).toBe('ok');
+      expect(body.checks.redis).toBe('ok');
+    } finally {
+      await fastify.close();
+    }
+  });
+
+  it('is reachable without any auth header — not 401 or 403', async () => {
+    const fastify = await buildApp();
+    try {
+      const res = await fastify.inject({ method: 'GET', url: '/health' });
+      expect(res.statusCode).not.toBe(401);
+      expect(res.statusCode).not.toBe(403);
     } finally {
       await fastify.close();
     }

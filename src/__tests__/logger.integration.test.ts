@@ -59,8 +59,9 @@ describe('AC1 — trace_id / span_id correlation', () => {
   it('trace_id is null when no traceparent header is sent', async () => {
     const { dest, lines } = makeCapture();
     const fastify = await buildApp(dest);
+    fastify.get('/test-ping', async (_req, reply) => reply.status(200).send({ ok: true }));
     try {
-      await fastify.inject({ method: 'GET', url: '/health' });
+      await fastify.inject({ method: 'GET', url: '/test-ping' });
     } finally {
       await fastify.close();
     }
@@ -76,10 +77,11 @@ describe('AC1 — trace_id / span_id correlation', () => {
     const spanId = 'b'.repeat(16);
     const { dest, lines } = makeCapture();
     const fastify = await buildApp(dest);
+    fastify.get('/test-ping', async (_req, reply) => reply.status(200).send({ ok: true }));
     try {
       await fastify.inject({
         method: 'GET',
-        url: '/health',
+        url: '/test-ping',
         headers: { traceparent: `00-${traceId}-${spanId}-01` },
       });
     } finally {
@@ -96,15 +98,16 @@ describe('AC1 — trace_id / span_id correlation', () => {
   it('different traceparent headers produce different trace_ids', async () => {
     const { dest, lines } = makeCapture();
     const fastify = await buildApp(dest);
+    fastify.get('/test-ping', async (_req, reply) => reply.status(200).send({ ok: true }));
     try {
       await fastify.inject({
         method: 'GET',
-        url: '/health',
+        url: '/test-ping',
         headers: { traceparent: `00-${'1'.repeat(32)}-${'a'.repeat(16)}-00` },
       });
       await fastify.inject({
         method: 'GET',
-        url: '/health',
+        url: '/test-ping',
         headers: { traceparent: `00-${'2'.repeat(32)}-${'b'.repeat(16)}-00` },
       });
     } finally {
@@ -124,8 +127,9 @@ describe('AC2 — required log fields', () => {
   it('every request log line has {level, time, trace_id, span_id, tenant_id, product_id, msg}', async () => {
     const { dest, lines } = makeCapture();
     const fastify = await buildApp(dest);
+    fastify.get('/test-ping', async (_req, reply) => reply.status(200).send({ ok: true }));
     try {
-      await fastify.inject({ method: 'GET', url: '/health' });
+      await fastify.inject({ method: 'GET', url: '/test-ping' });
     } finally {
       await fastify.close();
     }
@@ -145,8 +149,9 @@ describe('AC2 — required log fields', () => {
   it('tenant_id and product_id are null before auth resolves', async () => {
     const { dest, lines } = makeCapture();
     const fastify = await buildApp(dest);
+    fastify.get('/test-ping', async (_req, reply) => reply.status(200).send({ ok: true }));
     try {
-      await fastify.inject({ method: 'GET', url: '/health' });
+      await fastify.inject({ method: 'GET', url: '/test-ping' });
     } finally {
       await fastify.close();
     }
@@ -160,8 +165,9 @@ describe('AC2 — required log fields', () => {
   it('pid and hostname are absent (base:null removes them)', async () => {
     const { dest, lines } = makeCapture();
     const fastify = await buildApp(dest);
+    fastify.get('/test-ping', async (_req, reply) => reply.status(200).send({ ok: true }));
     try {
-      await fastify.inject({ method: 'GET', url: '/health' });
+      await fastify.inject({ method: 'GET', url: '/test-ping' });
     } finally {
       await fastify.close();
     }
@@ -192,8 +198,9 @@ describe('AC3 — LOG_LEVEL', () => {
     process.env.LOG_LEVEL = 'warn';
     const { dest, lines } = makeCapture();
     const fastify = await buildApp(dest);
+    fastify.get('/test-ping', async (_req, reply) => reply.status(200).send({ ok: true }));
     try {
-      await fastify.inject({ method: 'GET', url: '/health' });
+      await fastify.inject({ method: 'GET', url: '/test-ping' });
     } finally {
       await fastify.close();
     }
@@ -206,8 +213,9 @@ describe('AC3 — LOG_LEVEL', () => {
     delete process.env.LOG_LEVEL;
     const { dest, lines } = makeCapture();
     const fastify = await buildApp(dest);
+    fastify.get('/test-ping', async (_req, reply) => reply.status(200).send({ ok: true }));
     try {
-      await fastify.inject({ method: 'GET', url: '/health' });
+      await fastify.inject({ method: 'GET', url: '/test-ping' });
     } finally {
       await fastify.close();
     }

@@ -7,6 +7,7 @@
 // Authorized by HUB-113 — corsPlugin registered first (locked E2 order); CORS_ORIGINS env-configurable
 // Authorized by HUB-188 — stripeWebhookPlugin registered after auth; no JWT, HMAC-only auth
 // Authorized by HUB-216 — traceparentPlugin registered before loggerPlugin; W3C trace correlation on every request
+// Authorized by HUB-230 — healthRoutes registered at position 8; GET /health probe-backed; no auth; no rate-limit
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';
@@ -18,6 +19,7 @@ import errorHandlerPlugin from './plugins/errorHandler.js';
 import rateLimitPlugin from './plugins/rateLimit.js';
 import authPlugin from './plugins/auth.js';
 import operatorAuthPlugin from './plugins/operatorAuth.js';
+import healthRoutes from './routes/health.js';
 import healthPlugin from './plugins/health.js';
 import pricingRoutes from './pricing/routes.js';
 import stripeWebhookPlugin from './webhooks/stripe.js';
@@ -28,16 +30,18 @@ export async function buildApp(dest?: DestinationStream) {
   const fastify = Fastify(createServerOptions(dest));
 
   // Locked E2 plugin registration order (HUB-113 finalises this chain):
-  // 1. CORS plugin              — HUB-113 ✅
-  // 2. Traceparent plugin       — HUB-216 ✅ (must precede loggerPlugin; sets trace_id/span_id first)
-  // 3. Pino logger plugin       — HUB-78  ✅ (adds tenant_id/product_id; onResponse request logging)
-  // 4. Error handler plugin     — HUB-79  ✅
-  // 5. Rate-limit plugin        — HUB-99  ✅
-  // 6. Service auth plugin      — HUB-98  ✅
-  // 7. Operator auth plugin     — HUB-112 ✅
-  // 8. Health routes            — HUB-77  ✅
-  // 9. Business routes          — downstream Epics
-  // 10. Operator routes         — downstream Epics
+  // 1.  CORS plugin              — HUB-113 ✅
+  // 2.  Traceparent plugin       — HUB-216 ✅ (must precede loggerPlugin; sets trace_id/span_id first)
+  // 3.  Pino logger plugin       — HUB-78  ✅ (adds tenant_id/product_id; onResponse request logging)
+  // 4.  Error handler plugin     — HUB-79  ✅
+  // 5.  Rate-limit plugin        — HUB-99  ✅
+  // 6.  Service auth plugin      — HUB-98  ✅
+  // 7.  Operator auth plugin     — HUB-112 ✅
+  // 8.  Health check route       — HUB-230 ✅ (GET /health; probe-backed; no auth; no rate-limit)
+  // 9.  Health liveness plugin   — HUB-77  ✅ (GET /health/ready; pg+Redis liveness)
+  // 10. Stripe webhook           — HUB-188 ✅
+  // 11. Business routes          — downstream Epics
+  // 12. Operator routes          — downstream Epics
   await fastify.register(corsPlugin);
   await fastify.register(traceparentPlugin);
   await fastify.register(loggerPlugin);
@@ -45,6 +49,7 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(rateLimitPlugin);
   await fastify.register(authPlugin);
   await fastify.register(operatorAuthPlugin);
+  await fastify.register(healthRoutes);
   await fastify.register(healthPlugin);
   await fastify.register(stripeWebhookPlugin);
   await fastify.register(pricingRoutes);
