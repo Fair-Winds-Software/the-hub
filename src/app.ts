@@ -8,6 +8,8 @@
 // Authorized by HUB-188 — stripeWebhookPlugin registered after auth; no JWT, HMAC-only auth
 // Authorized by HUB-216 — traceparentPlugin registered before loggerPlugin; W3C trace correlation on every request
 // Authorized by HUB-230 — healthRoutes registered at position 8; GET /health probe-backed; no auth; no rate-limit
+// Authorized by HUB-349 — sdkRoutes registered in business routes slot; POST /api/v1/sdk/version-report
+// Authorized by HUB-350 — versionsRoutes registered in operator routes slot; GET /api/v1/products/:productId/versions
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';
@@ -23,6 +25,8 @@ import healthRoutes from './routes/health.js';
 import healthPlugin from './plugins/health.js';
 import pricingRoutes from './pricing/routes.js';
 import stripeWebhookPlugin from './webhooks/stripe.js';
+import sdkRoutes from './routes/sdk.js';
+import versionsRoutes from './routes/versions.js';
 
 export async function buildApp(dest?: DestinationStream) {
   validateEnv();
@@ -53,6 +57,8 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(healthPlugin);
   await fastify.register(stripeWebhookPlugin);
   await fastify.register(pricingRoutes);
+  await fastify.register(sdkRoutes);
+  await fastify.register(versionsRoutes);
 
   return fastify;
 }

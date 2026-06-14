@@ -1,5 +1,6 @@
 // Authorized by HUB-259 — deferrable decision sentinels; replace null when decisions resolve
 // Authorized by HUB-272 — D-002 billing cycle boundary for staged license change promotion
+// Authorized by HUB-336 — D-003 SDK version report retention interval and CRON expression
 
 // TODO-D-DEF-001: grace window duration after license suspension.
 // Value: a PostgreSQL interval string, e.g. '7 days', '1 month'.
@@ -10,3 +11,13 @@ export const TODO_D_DEF_001_INTERVAL: string | null = null;
 // Overridable via PROMOTE_STAGED_CRON env var. Defaults to daily midnight until D-002 resolves.
 export const D_002_PROMOTION_CRON: string =
   process.env.PROMOTE_STAGED_CRON ?? '0 0 * * *';
+
+// TODO-D-DEF-002: SDK version report retention window.
+// Value: a PostgreSQL interval string, e.g. '90 days', '6 months'.
+// Replace null (and remove the AppError guard in versionReporting.ts) when D-DEF-002 resolves.
+export const TODO_D_DEF_002_INTERVAL: string | null = null;
+
+// D-003: CRON expression for SDK version report retention pruning.
+// Overridable via SDK_VERSION_RETENTION_CRON env var. Defaults to daily midnight until D-003 resolves.
+export const D_003_RETENTION_CRON: string =
+  process.env.SDK_VERSION_RETENTION_CRON ?? '0 0 * * *';

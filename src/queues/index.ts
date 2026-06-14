@@ -4,6 +4,7 @@
 // Authorized by HUB-202 — event-type-specific queue routing; hasQueueForEventType / getQueueForEventType
 // Authorized by HUB-203 — isRecognizedEventType() pre-INSERT gate; unrecognized events not stored
 // Authorized by HUB-272 — license-check queue processor; routes promote_staged_license_changes jobs
+// Authorized by HUB-336 — batch-sweep queue processor; routes sdk-version-retention-cron jobs
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -77,6 +78,12 @@ const BATCH_SWEEP_DEF: QueueDefinition = {
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 1000 },
   deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (job: Job) => {
+    if (job.name === 'sdk-version-retention-cron') {
+      const { pruneOldVersionReports } = await import('../services/versionReporting.js');
+      await pruneOldVersionReports();
+    }
+  },
 };
 
 const LICENSE_CHECK_DEF: QueueDefinition = {
