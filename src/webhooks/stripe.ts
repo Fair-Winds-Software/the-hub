@@ -1,10 +1,11 @@
 // Authorized by HUB-188 — POST /webhooks/stripe; HMAC signature verification; raw body preservation
 // Authorized by HUB-189 — idempotency enforcement; INSERT-on-conflict deduplication; status lifecycle
+// Authorized by HUB-202 — event-type fan-out routing; DLQ fallback for null product_id / unknown types
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { Readable } from 'stream';
 import { getStripeClient } from '../stripe/client.js';
-import { getStripeEventQueue } from '../queues/index.js';
+import { getQueueForEventType, hasQueueForEventType, getDlqQueue } from '../queues/index.js';
 import { getPool } from '../db/pool.js';
 import logger from '../lib/logger.js';
 
@@ -76,11 +77,11 @@ const stripeWebhookPlugin: FastifyPluginAsync = async (fastify) => {
       const productId =
         (dataObj?.metadata as Record<string, string> | undefined)?.product_id ?? null;
 
-      const { rows: inserted } = await pool.query<{ id: string }>(
+      const { rows: inserted } = await pool.query<{ id: string; received_at: Date }>(
         `INSERT INTO stripe_webhook_events (event_id, event_type, product_id, raw_event)
          VALUES ($1, $2, $3, $4::jsonb)
          ON CONFLICT (event_id) DO NOTHING
-         RETURNING id`,
+         RETURNING id, received_at`,
         [event.id, event.type, productId, JSON.stringify(event)],
       );
 
@@ -90,16 +91,24 @@ const stripeWebhookPlugin: FastifyPluginAsync = async (fastify) => {
         return reply.status(200).send({ received: true, type: event.type });
       }
 
-      const rowId = inserted[0].id;
+      const { id: rowId, received_at: receivedAt } = inserted[0];
 
-      // ── Enqueue job; update status based on enqueue outcome ─────────────────
+      // ── Route to event-type queue or DLQ; update status based on enqueue outcome ──
+      // product_id=null and unrecognized event types both fall back to DLQ (AC3, AC4)
+      const specificRoute = productId !== null && hasQueueForEventType(event.type);
+      if (productId === null) {
+        logger.warn({ event_id: event.id, event_type: event.type }, 'product_id absent — routing to DLQ');
+      } else if (!specificRoute) {
+        logger.warn({ event_id: event.id, event_type: event.type }, 'unrecognized event type — routing to DLQ');
+      }
+      const queue = specificRoute ? getQueueForEventType(event.type) : getDlqQueue();
+
       try {
-        const queue = getStripeEventQueue();
         await queue.add('process-stripe-event', {
-          webhookEventId: rowId,
-          eventType: event.type,
-          eventId: event.id,
-          productId,
+          event_id: event.id,
+          event_type: event.type,
+          product_id: productId,
+          received_at: receivedAt.toISOString(),
         });
 
         await pool.query(

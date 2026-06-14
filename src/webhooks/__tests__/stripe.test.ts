@@ -1,5 +1,6 @@
 // Authorized by HUB-188 — unit tests for POST /webhooks/stripe HMAC verification
 // Authorized by HUB-189 — idempotency: INSERT-on-conflict deduplication; status lifecycle
+// Authorized by HUB-202 — event-type fan-out routing; DLQ fallback for null product_id / unknown types
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ── Stripe mock ───────────────────────────────────────────────────────────────
@@ -29,13 +30,18 @@ vi.mock('../../db/pool.js', () => ({
   closePool: vi.fn(),
 }));
 
-// ── Stripe event queue mock ───────────────────────────────────────────────────
+// ── Queue mocks (HUB-202: fan-out routing) ───────────────────────────────────
 const mockQueueAdd = vi.fn().mockResolvedValue({ id: 'job-1' });
+const mockQueue = { add: mockQueueAdd };
 vi.mock('../../queues/index.js', () => ({
-  getStripeEventQueue: vi.fn().mockReturnValue({ add: mockQueueAdd }),
+  // HUB-202 routing helpers
+  getQueueForEventType: vi.fn().mockReturnValue(mockQueue),
+  hasQueueForEventType: vi.fn().mockReturnValue(false), // no specific queues registered by default
+  getDlqQueue: vi.fn().mockReturnValue(mockQueue),
+  // Legacy / other queues (kept for compat — stripe.ts no longer imports getStripeEventQueue)
+  getStripeEventQueue: vi.fn().mockReturnValue(mockQueue),
   getBatchSweepQueue: vi.fn(),
   getLicenseCheckQueue: vi.fn(),
-  getDlqQueue: vi.fn(),
   getAllQueueDefinitions: vi.fn().mockReturnValue([]),
   registerQueue: vi.fn(),
 }));
@@ -50,7 +56,7 @@ vi.mock('../../lib/logger.js', () => ({
 function mockDbNewEvent() {
   mockQuery.mockReset();
   mockQuery
-    .mockResolvedValueOnce({ rows: [{ id: 'webhook-row-1' }] }) // INSERT RETURNING id
+    .mockResolvedValueOnce({ rows: [{ id: 'webhook-row-1', received_at: new Date('2026-01-01T00:00:00Z') }] }) // INSERT RETURNING id, received_at
     .mockResolvedValue({ rows: [] }); // UPDATE status
 }
 
@@ -188,10 +194,10 @@ describe('POST /webhooks/stripe — idempotency', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json<{ received: boolean }>().received).toBe(true);
-    // Queue job was dispatched
+    // Queue job was dispatched with snake_case payload (HUB-202 AC2)
     expect(mockQueueAdd).toHaveBeenCalledWith(
       'process-stripe-event',
-      expect.objectContaining({ eventId: 'evt_new_1', eventType: 'customer.subscription.created' }),
+      expect.objectContaining({ event_id: 'evt_new_1', event_type: 'customer.subscription.created' }),
     );
     await app.close();
   });
@@ -293,6 +299,124 @@ describe('POST /webhooks/stripe — idempotency', () => {
     );
     expect(insertCall).toBeDefined();
     expect(insertCall![1][2]).toBeNull();
+    await app.close();
+  });
+});
+
+// ── Event routing (HUB-202) ──────────────────────────────────────────────────
+
+describe('POST /webhooks/stripe — event routing (HUB-202)', () => {
+  it('routes null product_id to DLQ and emits warn', async () => {
+    const logger = await import('../../lib/logger.js');
+    const warnSpy = vi.spyOn(logger.default, 'warn');
+
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_dlq_null',
+      type: 'customer.created',
+      data: { object: {} }, // no metadata → product_id = null
+    });
+
+    const app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/webhooks/stripe',
+      payload: '{}',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 'valid' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // getDlqQueue should have been called, not getQueueForEventType
+    const { getDlqQueue } = await import('../../queues/index.js');
+    expect(getDlqQueue).toHaveBeenCalled();
+    // Warn emitted with event context
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ event_id: 'evt_dlq_null' }),
+      expect.stringContaining('product_id absent'),
+    );
+    await app.close();
+  });
+
+  it('routes unrecognized event type to DLQ and emits warn when product_id is present', async () => {
+    const logger = await import('../../lib/logger.js');
+    const warnSpy = vi.spyOn(logger.default, 'warn');
+
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_dlq_type',
+      type: 'unknown.event.type',
+      data: { object: { metadata: { product_id: 'prod-abc' } } },
+    });
+    // hasQueueForEventType returns false by default (no factories registered in tests)
+
+    const app = await buildTestApp();
+
+    await app.inject({
+      method: 'POST',
+      url: '/webhooks/stripe',
+      payload: '{}',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 'valid' },
+    });
+
+    const { getDlqQueue } = await import('../../queues/index.js');
+    expect(getDlqQueue).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ event_id: 'evt_dlq_type' }),
+      expect.stringContaining('unrecognized event type'),
+    );
+    await app.close();
+  });
+
+  it('routes to specific queue when hasQueueForEventType returns true', async () => {
+    const { hasQueueForEventType, getQueueForEventType } = await import('../../queues/index.js');
+    vi.mocked(hasQueueForEventType).mockReturnValue(true);
+
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_specific',
+      type: 'invoice.payment_succeeded',
+      data: { object: { metadata: { product_id: 'prod-abc' } } },
+    });
+
+    const app = await buildTestApp();
+
+    await app.inject({
+      method: 'POST',
+      url: '/webhooks/stripe',
+      payload: '{}',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 'valid' },
+    });
+
+    expect(getQueueForEventType).toHaveBeenCalledWith('invoice.payment_succeeded');
+    await app.close();
+  });
+
+  it('job payload is snake_case, includes received_at, excludes raw_event', async () => {
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_payload',
+      type: 'customer.subscription.created',
+      data: { object: { metadata: { product_id: 'prod-payload' } } },
+    });
+
+    const app = await buildTestApp();
+
+    await app.inject({
+      method: 'POST',
+      url: '/webhooks/stripe',
+      payload: '{}',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 'valid' },
+    });
+
+    expect(mockQueueAdd).toHaveBeenCalledWith(
+      'process-stripe-event',
+      expect.objectContaining({
+        event_id: 'evt_payload',
+        event_type: 'customer.subscription.created',
+        product_id: 'prod-payload',
+        received_at: expect.any(String),
+      }),
+    );
+    // raw_event must NOT be in the payload
+    const payload = mockQueueAdd.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('raw_event');
     await app.close();
   });
 });

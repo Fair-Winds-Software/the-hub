@@ -1,6 +1,7 @@
 // Authorized by HUB-127 — queue registry; getAllQueueDefinitions() consumed by worker scaffold
 // Authorized by HUB-146 — queue factory pattern; concrete queue definitions registered here
 // Authorized by HUB-189 — stripe-event queue for webhook dispatch
+// Authorized by HUB-202 — event-type-specific queue routing; hasQueueForEventType / getQueueForEventType
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -100,6 +101,19 @@ export function getLicenseCheckQueue(connection?: ConnectionOptions): Queue {
 
 export function getDlqQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(DLQ_DEF.name, connection);
+}
+
+// Returns true if a queue definition for hub:queue:stripe:[eventType] is registered.
+// E10–E12 billing Epics call registerQueue() to make their event-type queues discoverable here.
+export function hasQueueForEventType(eventType: string): boolean {
+  return _queues.some((q) => q.name === `queue:stripe:${eventType}`);
+}
+
+// Returns the registered event-type queue, or the DLQ if no factory is registered.
+// Callers are responsible for logging before invoking when they detect a fallback route.
+export function getQueueForEventType(eventType: string): Queue {
+  const queueName = `queue:stripe:${eventType}`;
+  return hasQueueForEventType(eventType) ? getOrCreateQueue(queueName) : getDlqQueue();
 }
 
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
