@@ -111,10 +111,12 @@ export async function createSubscription(
   return rows[0];
 }
 
-// Cancels a subscription at period end. Throws AppError(404) if no subscription found.
+// Cancels a subscription. immediate=false (default) schedules at period end;
+// immediate=true cancels now. Throws AppError(404) if no subscription found.
 export async function cancelSubscription(
   tenantId: string,
   productId: string,
+  immediate: boolean = false,
 ): Promise<StripeSubscriptionRow> {
   const pool = getPool();
   const { rows } = await pool.query<{ stripe_subscription_id: string }>(
@@ -127,6 +129,24 @@ export async function cancelSubscription(
   }
 
   const stripe = getStripe();
+  if (immediate) {
+    try {
+      await stripe.subscriptions.cancel(rows[0].stripe_subscription_id);
+    } catch (err) {
+      mapStripeError(err);
+    }
+
+    const { rows: updated } = await pool.query<StripeSubscriptionRow>(
+      `UPDATE stripe_subscriptions
+       SET status = 'canceled', cancelled_at = NOW()
+       WHERE tenant_id = $1 AND product_id = $2
+       RETURNING *`,
+      [tenantId, productId],
+    );
+
+    return updated[0];
+  }
+
   try {
     await stripe.subscriptions.update(rows[0].stripe_subscription_id, {
       cancel_at_period_end: true,

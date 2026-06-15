@@ -7,6 +7,8 @@
 // Authorized by HUB-336 — batch-sweep queue processor; routes sdk-version-retention-cron jobs
 // Authorized by HUB-429 — customer.subscription.updated/deleted event-type queues; E10 subscription processing
 // Authorized by HUB-475 — invoice event-type queues + billing-payment-failed queue; E11 invoice processing
+// Authorized by HUB-504 — billing-payment-failed processor; routes to billingFreezeService.handleBillingPaymentFailed
+// Authorized by HUB-517 — grace-period-expiry-scanner queue; CRON-driven expiry resolution
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -224,10 +226,31 @@ const BILLING_PAYMENT_FAILED_DEF: QueueDefinition = {
   maxAttempts: 5,
   backoff: { type: 'exponential', delay: 1000 },
   deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (job: Job) => {
+    const { handleBillingPaymentFailed } = await import('../services/billingFreezeService.js');
+    await handleBillingPaymentFailed(job.data.stripe_invoice_id as string);
+  },
 };
 
 export function getBillingPaymentFailedQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(BILLING_PAYMENT_FAILED_DEF.name, connection);
+}
+
+// Grace period expiry scanner: CRON-driven scan for expired open grace periods.
+const GRACE_PERIOD_EXPIRY_SCANNER_DEF: QueueDefinition = {
+  name: 'queue:grace-period-expiry-scanner',
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 1000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (_job: Job) => {
+    const { scanAndResolveExpiredGracePeriods } = await import('../services/billingFreezeService.js');
+    await scanAndResolveExpiredGracePeriods();
+  },
+};
+
+export function getGracePeriodExpiryScannerQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(GRACE_PERIOD_EXPIRY_SCANNER_DEF.name, connection);
 }
 
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
@@ -243,5 +266,7 @@ registerQueue(INVOICE_FINALIZED_DEF);
 registerQueue(INVOICE_PAYMENT_SUCCEEDED_DEF);
 registerQueue(INVOICE_PAYMENT_FAILED_DEF);
 registerQueue(BILLING_PAYMENT_FAILED_DEF);
+// E12 grace period expiry scanner
+registerQueue(GRACE_PERIOD_EXPIRY_SCANNER_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);

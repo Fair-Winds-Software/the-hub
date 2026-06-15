@@ -1,6 +1,7 @@
 // Authorized by HUB-259 — deferrable decision sentinels; replace null when decisions resolve
 // Authorized by HUB-272 — D-002 billing cycle boundary for staged license change promotion
 // Authorized by HUB-336 — D-003 SDK version report retention interval and CRON expression
+// Authorized by HUB-517 — D-004 grace period expiry scanner CRON expression
 
 // TODO-D-DEF-001: grace window duration after license suspension.
 // Value: a PostgreSQL interval string, e.g. '7 days', '1 month'.
@@ -27,3 +28,8 @@ export const D_003_RETENTION_CRON: string =
 // Replace null (and remove the placeholder computation in leaseService.ts) when the decision resolves.
 // While null, renewsAt is set equal to expiresAt (conservative: SDK renews only when expired).
 export const TODO_D_LEASE_RENEWAL_DAYS: number | null = null;
+
+// D-004: CRON expression for billing grace period expiry scanning.
+// Overridable via GRACE_PERIOD_SCANNER_CRON env var. Defaults to hourly until D-004 resolves.
+export const D_004_GRACE_PERIOD_SCANNER_CRON: string =
+  process.env.GRACE_PERIOD_SCANNER_CRON ?? '0 * * * *';

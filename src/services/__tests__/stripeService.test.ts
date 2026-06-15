@@ -1,6 +1,7 @@
 // Authorized by HUB-426 — unit tests: ensureStripeCustomer
 // Authorized by HUB-427 — unit tests: createSubscription, cancelSubscription, getSubscriptions
 // Authorized by HUB-428 — unit tests: handleSubscriptionUpdated, handleSubscriptionDeleted
+// Authorized by HUB-503 — unit tests: cancelSubscription immediate path
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mock setup ────────────────────────────────────────────────────────────────
@@ -11,6 +12,7 @@ vi.mock('../../db/pool.js', () => ({ getPool: () => ({ query: mockPoolQuery }) }
 const mockCustomersCreate = vi.hoisted(() => vi.fn());
 const mockSubscriptionsCreate = vi.hoisted(() => vi.fn());
 const mockSubscriptionsUpdate = vi.hoisted(() => vi.fn());
+const mockSubscriptionsCancel = vi.hoisted(() => vi.fn());
 const mockGetStripe = vi.hoisted(() => vi.fn());
 const mockStripeIdempotencyKey = vi.hoisted(() => vi.fn());
 const mockMapStripeError = vi.hoisted(() => vi.fn());
@@ -40,7 +42,7 @@ beforeEach(() => {
   mockStripeIdempotencyKey.mockReturnValue('idempotency-key');
   mockGetStripe.mockReturnValue({
     customers: { create: mockCustomersCreate },
-    subscriptions: { create: mockSubscriptionsCreate, update: mockSubscriptionsUpdate },
+    subscriptions: { create: mockSubscriptionsCreate, update: mockSubscriptionsUpdate, cancel: mockSubscriptionsCancel },
   });
 });
 
@@ -143,6 +145,21 @@ describe('cancelSubscription()', () => {
     const result = await cancelSubscription('tenant-1', 'product-1');
 
     expect(mockSubscriptionsUpdate).toHaveBeenCalledWith('sub_1', { cancel_at_period_end: true });
+    expect(result).toEqual(subRow);
+  });
+
+  it('immediate=true calls stripe.subscriptions.cancel and sets status=canceled', async () => {
+    const subRow = { id: 'row-1', status: 'canceled', cancelled_at: new Date() };
+    mockPoolQuery
+      .mockResolvedValueOnce({ rows: [{ stripe_subscription_id: 'sub_1' }] })
+      .mockResolvedValueOnce({ rows: [subRow] });
+    mockSubscriptionsCancel.mockResolvedValueOnce({});
+
+    const result = await cancelSubscription('tenant-1', 'product-1', true);
+
+    expect(mockSubscriptionsCancel).toHaveBeenCalledWith('sub_1');
+    expect(mockSubscriptionsUpdate).not.toHaveBeenCalled();
+    expect(mockPoolQuery.mock.calls[1]![0]).toMatch(/status = 'canceled'/);
     expect(result).toEqual(subRow);
   });
 });
