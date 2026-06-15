@@ -5,6 +5,7 @@
 // Authorized by HUB-203 — isRecognizedEventType() pre-INSERT gate; unrecognized events not stored
 // Authorized by HUB-272 — license-check queue processor; routes promote_staged_license_changes jobs
 // Authorized by HUB-336 — batch-sweep queue processor; routes sdk-version-retention-cron jobs
+// Authorized by HUB-429 — customer.subscription.updated/deleted event-type queues; E10 subscription processing
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -140,9 +141,36 @@ export function getQueueForEventType(eventType: string): Queue {
   return hasQueueForEventType(eventType) ? getOrCreateQueue(queueName) : getDlqQueue();
 }
 
+const SUBSCRIPTION_UPDATED_DEF: QueueDefinition = {
+  name: 'queue:stripe:customer.subscription.updated',
+  concurrency: 5,
+  maxAttempts: 5,
+  backoff: { type: 'exponential', delay: 500 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (job: Job) => {
+    const { handleSubscriptionUpdated } = await import('../services/stripeService.js');
+    await handleSubscriptionUpdated(job.data.event_id as string);
+  },
+};
+
+const SUBSCRIPTION_DELETED_DEF: QueueDefinition = {
+  name: 'queue:stripe:customer.subscription.deleted',
+  concurrency: 5,
+  maxAttempts: 5,
+  backoff: { type: 'exponential', delay: 500 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (job: Job) => {
+    const { handleSubscriptionDeleted } = await import('../services/stripeService.js');
+    await handleSubscriptionDeleted(job.data.event_id as string);
+  },
+};
+
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
 registerQueue(STRIPE_EVENT_DEF);
 registerQueue(BATCH_SWEEP_DEF);
 registerQueue(LICENSE_CHECK_DEF);
+// E10 subscription event queues — must be registered for isRecognizedEventType() to pass
+registerQueue(SUBSCRIPTION_UPDATED_DEF);
+registerQueue(SUBSCRIPTION_DELETED_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);

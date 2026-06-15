@@ -12,6 +12,7 @@
 // Authorized by HUB-350 — versionsRoutes registered in operator routes slot; GET /api/v1/products/:productId/versions
 // Authorized by HUB-552 — leasesRoutes registered in business routes slot; POST /api/v1/leases/issue and verify
 // Authorized by HUB-553 — leasesRoutes extended with operator lease lifecycle endpoints
+// Authorized by HUB-454 — billingRoutes registered in operator routes slot; GET /api/v1/billing/subscriptions/:tenantId
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';
@@ -30,6 +31,7 @@ import stripeWebhookPlugin from './webhooks/stripe.js';
 import sdkRoutes from './routes/sdk.js';
 import versionsRoutes from './routes/versions.js';
 import leasesRoutes from './routes/leases.js';
+import billingRoutes from './routes/billing.js';
 
 export async function buildApp(dest?: DestinationStream) {
   validateEnv();
@@ -63,6 +65,7 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(sdkRoutes);
   await fastify.register(versionsRoutes);
   await fastify.register(leasesRoutes);
+  await fastify.register(billingRoutes);
 
   return fastify;
 }
