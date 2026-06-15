@@ -6,6 +6,7 @@
 // Authorized by HUB-272 — license-check queue processor; routes promote_staged_license_changes jobs
 // Authorized by HUB-336 — batch-sweep queue processor; routes sdk-version-retention-cron jobs
 // Authorized by HUB-429 — customer.subscription.updated/deleted event-type queues; E10 subscription processing
+// Authorized by HUB-475 — invoice event-type queues + billing-payment-failed queue; E11 invoice processing
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -165,6 +166,70 @@ const SUBSCRIPTION_DELETED_DEF: QueueDefinition = {
   },
 };
 
+// ── E11 Invoice event queues ──────────────────────────────────────────────────
+
+const INVOICE_CREATED_DEF: QueueDefinition = {
+  name: 'queue:stripe:invoice.created',
+  concurrency: 5,
+  maxAttempts: 5,
+  backoff: { type: 'exponential', delay: 500 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (job: Job) => {
+    const { handleInvoiceCreated } = await import('../services/invoiceService.js');
+    await handleInvoiceCreated(job.data.event_id as string);
+  },
+};
+
+const INVOICE_FINALIZED_DEF: QueueDefinition = {
+  name: 'queue:stripe:invoice.finalized',
+  concurrency: 5,
+  maxAttempts: 5,
+  backoff: { type: 'exponential', delay: 500 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (job: Job) => {
+    const { handleInvoiceFinalized } = await import('../services/invoiceService.js');
+    await handleInvoiceFinalized(job.data.event_id as string);
+  },
+};
+
+const INVOICE_PAYMENT_SUCCEEDED_DEF: QueueDefinition = {
+  name: 'queue:stripe:invoice.payment_succeeded',
+  concurrency: 5,
+  maxAttempts: 5,
+  backoff: { type: 'exponential', delay: 500 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (job: Job) => {
+    const { handleInvoicePaymentSucceeded } = await import('../services/invoiceService.js');
+    await handleInvoicePaymentSucceeded(job.data.event_id as string);
+  },
+};
+
+const INVOICE_PAYMENT_FAILED_DEF: QueueDefinition = {
+  name: 'queue:stripe:invoice.payment_failed',
+  concurrency: 5,
+  maxAttempts: 5,
+  backoff: { type: 'exponential', delay: 500 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (job: Job) => {
+    const { handleInvoicePaymentFailed } = await import('../services/invoiceService.js');
+    await handleInvoicePaymentFailed(job.data.event_id as string);
+  },
+};
+
+// Downstream queue: receives billing_payment_failed jobs enqueued by handleInvoicePaymentFailed.
+// Not an event-type queue — not discoverable via isRecognizedEventType().
+const BILLING_PAYMENT_FAILED_DEF: QueueDefinition = {
+  name: 'queue:billing-payment-failed',
+  concurrency: 5,
+  maxAttempts: 5,
+  backoff: { type: 'exponential', delay: 1000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+};
+
+export function getBillingPaymentFailedQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(BILLING_PAYMENT_FAILED_DEF.name, connection);
+}
+
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
 registerQueue(STRIPE_EVENT_DEF);
 registerQueue(BATCH_SWEEP_DEF);
@@ -172,5 +237,11 @@ registerQueue(LICENSE_CHECK_DEF);
 // E10 subscription event queues — must be registered for isRecognizedEventType() to pass
 registerQueue(SUBSCRIPTION_UPDATED_DEF);
 registerQueue(SUBSCRIPTION_DELETED_DEF);
+// E11 invoice event queues — must be registered for isRecognizedEventType() to pass
+registerQueue(INVOICE_CREATED_DEF);
+registerQueue(INVOICE_FINALIZED_DEF);
+registerQueue(INVOICE_PAYMENT_SUCCEEDED_DEF);
+registerQueue(INVOICE_PAYMENT_FAILED_DEF);
+registerQueue(BILLING_PAYMENT_FAILED_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);
