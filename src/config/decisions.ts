@@ -21,3 +21,9 @@ export const TODO_D_DEF_002_INTERVAL: string | null = null;
 // Overridable via SDK_VERSION_RETENTION_CRON env var. Defaults to daily midnight until D-003 resolves.
 export const D_003_RETENTION_CRON: string =
   process.env.SDK_VERSION_RETENTION_CRON ?? '0 0 * * *';
+
+// Authorized by HUB-538 — D-DEF-LEASE-RENEWAL: lease renewal cadence sentinel
+// TODO-D-DEF-LEASE-RENEWAL: days before expiry at which a lease should be proactively renewed.
+// Replace null (and remove the placeholder computation in leaseService.ts) when the decision resolves.
+// While null, renewsAt is set equal to expiresAt (conservative: SDK renews only when expired).
+export const TODO_D_LEASE_RENEWAL_DAYS: number | null = null;
