@@ -33,3 +33,8 @@ export const TODO_D_LEASE_RENEWAL_DAYS: number | null = null;
 // Overridable via GRACE_PERIOD_SCANNER_CRON env var. Defaults to hourly until D-004 resolves.
 export const D_004_GRACE_PERIOD_SCANNER_CRON: string =
   process.env.GRACE_PERIOD_SCANNER_CRON ?? '0 * * * *';
+
+// Authorized by HUB-644 — D-005: CRON expression for daily margin review.
+// Overridable via MARGIN_REVIEW_CRON env var. Defaults to 02:00 UTC daily.
+export const D_005_MARGIN_REVIEW_CRON: string =
+  process.env.MARGIN_REVIEW_CRON ?? '0 2 * * *';

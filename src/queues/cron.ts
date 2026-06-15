@@ -2,9 +2,10 @@
 // Authorized by HUB-272 — promote_staged_license_changes CRON entry; D-002 billing cycle boundary
 // Authorized by HUB-336 — sdk-version-retention-cron CRON entry; D-003 retention interval
 // Authorized by HUB-517 — grace-period-expiry-scanner CRON entry; D-004 expiry scan interval
+// Authorized by HUB-644 — periodic_margin_review CRON entry; D-005 daily margin evaluation
 import type { Queue } from 'bullmq';
-import { getBatchSweepQueue, getLicenseCheckQueue, getGracePeriodExpiryScannerQueue } from './index.js';
-import { D_002_PROMOTION_CRON, D_003_RETENTION_CRON, D_004_GRACE_PERIOD_SCANNER_CRON } from '../config/decisions.js';
+import { getBatchSweepQueue, getLicenseCheckQueue, getGracePeriodExpiryScannerQueue, getMarginReviewQueue } from './index.js';
+import { D_002_PROMOTION_CRON, D_003_RETENTION_CRON, D_004_GRACE_PERIOD_SCANNER_CRON, D_005_MARGIN_REVIEW_CRON } from '../config/decisions.js';
 import logger from '../lib/logger.js';
 
 interface CronDefinition {
@@ -45,6 +46,12 @@ const CRON_DEFINITIONS: CronDefinition[] = [
     queueFactory: getGracePeriodExpiryScannerQueue,
     name: 'grace-period-expiry-scanner',
     cron: D_004_GRACE_PERIOD_SCANNER_CRON,
+    payload: { triggered: 'scheduled' },
+  },
+  {
+    queueFactory: getMarginReviewQueue,
+    name: 'periodic_margin_review',
+    cron: D_005_MARGIN_REVIEW_CRON,
     payload: { triggered: 'scheduled' },
   },
 ];

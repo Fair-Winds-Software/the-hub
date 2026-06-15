@@ -2,6 +2,7 @@
 // Authorized by HUB-272 — promote_staged_license_changes CRON added; count updated to 3
 // Authorized by HUB-336 — sdk-version-retention-cron CRON added; count updated to 4
 // Authorized by HUB-517 — grace-period-expiry-scanner CRON added; count updated to 5
+// Authorized by HUB-644 — periodic_margin_review CRON added; count updated to 6
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mock queue factories ──────────────────────────────────────────────────────
@@ -10,11 +11,13 @@ const mockAdd = vi.fn().mockResolvedValue({ id: 'job-1' });
 const mockQueue = { name: 'queue:batch-sweep', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
 const mockQueue2 = { name: 'queue:license-check', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
 const mockQueue3 = { name: 'queue:grace-period-expiry-scanner', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue4 = { name: 'queue:margin-review', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
 
 vi.mock('../index.js', () => ({
   getBatchSweepQueue: vi.fn().mockReturnValue(mockQueue),
   getLicenseCheckQueue: vi.fn().mockReturnValue(mockQueue2),
   getGracePeriodExpiryScannerQueue: vi.fn().mockReturnValue(mockQueue3),
+  getMarginReviewQueue: vi.fn().mockReturnValue(mockQueue4),
   getAllQueueDefinitions: vi.fn().mockReturnValue([]),
   registerQueue: vi.fn(),
   getDlqQueue: vi.fn(),
@@ -26,6 +29,7 @@ vi.mock('../../config/decisions.js', () => ({
   TODO_D_DEF_002_INTERVAL: null,
   D_003_RETENTION_CRON: '0 0 * * *',
   D_004_GRACE_PERIOD_SCANNER_CRON: '0 * * * *',
+  D_005_MARGIN_REVIEW_CRON: '0 2 * * *',
 }));
 
 beforeEach(() => {
@@ -50,9 +54,9 @@ describe('registerAllCronJobs()', () => {
     const { registerAllCronJobs } = await import('../cron.js');
     await registerAllCronJobs();
 
-    // One removeRepeatable per CRON definition (before each add) — now 5 definitions
-    expect(mockRemoveRepeatable).toHaveBeenCalledTimes(5);
-    expect(mockAdd).toHaveBeenCalledTimes(5);
+    // One removeRepeatable per CRON definition (before each add) — now 6 definitions
+    expect(mockRemoveRepeatable).toHaveBeenCalledTimes(6);
+    expect(mockAdd).toHaveBeenCalledTimes(6);
 
     // Verify the cron pattern is passed to removeRepeatable for batch-sweep
     expect(mockRemoveRepeatable).toHaveBeenCalledWith(
@@ -74,6 +78,11 @@ describe('registerAllCronJobs()', () => {
       'grace-period-expiry-scanner',
       expect.objectContaining({ pattern: '0 * * * *' }),
     );
+    // Verify periodic_margin_review is also registered
+    expect(mockRemoveRepeatable).toHaveBeenCalledWith(
+      'periodic_margin_review',
+      expect.objectContaining({ pattern: '0 2 * * *' }),
+    );
   });
 
   it('calls add() with repeat.pattern set to the cron expression', async () => {
@@ -94,14 +103,14 @@ describe('registerAllCronJobs()', () => {
     const { registerAllCronJobs } = await import('../cron.js');
     await expect(registerAllCronJobs()).resolves.toBeUndefined();
 
-    // 4 remaining CRONs were still attempted despite first failing
-    expect(mockAdd).toHaveBeenCalledTimes(4);
+    // 5 remaining CRONs were still attempted despite first failing
+    expect(mockAdd).toHaveBeenCalledTimes(5);
   });
 
   it('registers all defined CRONs when CRON_ENABLED is not set', async () => {
     const { registerAllCronJobs } = await import('../cron.js');
     await registerAllCronJobs();
-    // 5 CRON definitions: batch-sweep + license-check-hourly + promote_staged_license_changes + sdk-version-retention-cron + grace-period-expiry-scanner
-    expect(mockAdd).toHaveBeenCalledTimes(5);
+    // 6 CRON definitions: batch-sweep + license-check-hourly + promote_staged_license_changes + sdk-version-retention-cron + grace-period-expiry-scanner + periodic_margin_review
+    expect(mockAdd).toHaveBeenCalledTimes(6);
   });
 });

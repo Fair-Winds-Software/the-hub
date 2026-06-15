@@ -1,4 +1,6 @@
 // Authorized by HUB-127 — queue registry; getAllQueueDefinitions() consumed by worker scaffold
+// Authorized by HUB-644 — margin-review queue; periodic_margin_review CRON processor
+// Authorized by HUB-643 — alerts queue; below_floor BullMQ event publication
 // Authorized by HUB-146 — queue factory pattern; concrete queue definitions registered here
 // Authorized by HUB-189 — stripe-event queue for webhook dispatch
 // Authorized by HUB-202 — event-type-specific queue routing; hasQueueForEventType / getQueueForEventType
@@ -253,6 +255,33 @@ export function getGracePeriodExpiryScannerQueue(connection?: ConnectionOptions)
   return getOrCreateQueue(GRACE_PERIOD_EXPIRY_SCANNER_DEF.name, connection);
 }
 
+// Alerts queue: receives below_floor events from E15 evaluateMargin(); consumed by I-5 (E18+)
+const ALERTS_DEF: QueueDefinition = {
+  name: 'queue:alerts:below_floor',
+  concurrency: 0, // publisher only at E15; worker registered by I-5 (E18+)
+};
+
+export function getAlertsQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(ALERTS_DEF.name, connection);
+}
+
+// Margin review queue: daily CRON triggers evaluateMargin() for all enabled configs
+const MARGIN_REVIEW_DEF: QueueDefinition = {
+  name: 'queue:margin-review',
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 5000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (_job: Job) => {
+    const { runPeriodicMarginReview } = await import('./marginReviewJob.js');
+    await runPeriodicMarginReview();
+  },
+};
+
+export function getMarginReviewQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(MARGIN_REVIEW_DEF.name, connection);
+}
+
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
 registerQueue(STRIPE_EVENT_DEF);
 registerQueue(BATCH_SWEEP_DEF);
@@ -268,5 +297,8 @@ registerQueue(INVOICE_PAYMENT_FAILED_DEF);
 registerQueue(BILLING_PAYMENT_FAILED_DEF);
 // E12 grace period expiry scanner
 registerQueue(GRACE_PERIOD_EXPIRY_SCANNER_DEF);
+// E15 alerts publisher + margin review CRON
+registerQueue(ALERTS_DEF);
+registerQueue(MARGIN_REVIEW_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);
