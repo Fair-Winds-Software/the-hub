@@ -2,6 +2,7 @@
 // Authorized by HUB-272 — D-002 billing cycle boundary for staged license change promotion
 // Authorized by HUB-336 — D-003 SDK version report retention interval and CRON expression
 // Authorized by HUB-517 — D-004 grace period expiry scanner CRON expression
+// Authorized by HUB-672 — D-006: CRON expression for monthly billing period cost aggregation
 
 // TODO-D-DEF-001: grace window duration after license suspension.
 // Value: a PostgreSQL interval string, e.g. '7 days', '1 month'.
@@ -38,3 +39,8 @@ export const D_004_GRACE_PERIOD_SCANNER_CRON: string =
 // Overridable via MARGIN_REVIEW_CRON env var. Defaults to 02:00 UTC daily.
 export const D_005_MARGIN_REVIEW_CRON: string =
   process.env.MARGIN_REVIEW_CRON ?? '0 2 * * *';
+
+// D-006: CRON expression for monthly billing period cost aggregation (E16).
+// Overridable via PERIOD_COST_AGGREGATOR_CRON env var. Defaults to first of month midnight UTC.
+export const D_006_PERIOD_COST_AGGREGATOR_CRON: string =
+  process.env.PERIOD_COST_AGGREGATOR_CRON ?? '0 0 1 * *';

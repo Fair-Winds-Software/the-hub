@@ -1,6 +1,7 @@
 // Authorized by HUB-127 — queue registry; getAllQueueDefinitions() consumed by worker scaffold
 // Authorized by HUB-644 — margin-review queue; periodic_margin_review CRON processor
 // Authorized by HUB-643 — alerts queue; below_floor BullMQ event publication
+// Authorized by HUB-672 — period-cost-aggregation queue; monthly billing period cost aggregation
 // Authorized by HUB-146 — queue factory pattern; concrete queue definitions registered here
 // Authorized by HUB-189 — stripe-event queue for webhook dispatch
 // Authorized by HUB-202 — event-type-specific queue routing; hasQueueForEventType / getQueueForEventType
@@ -265,6 +266,23 @@ export function getAlertsQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(ALERTS_DEF.name, connection);
 }
 
+// Period cost aggregation queue: monthly CRON aggregates cost_ledger into billing_period_costs
+const PERIOD_COST_AGGREGATOR_DEF: QueueDefinition = {
+  name: 'queue:billing:period-aggregation',
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 5000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (_job: Job) => {
+    const { runPeriodCostAggregator } = await import('./periodCostAggregatorJob.js');
+    await runPeriodCostAggregator();
+  },
+};
+
+export function getPeriodCostAggregatorQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(PERIOD_COST_AGGREGATOR_DEF.name, connection);
+}
+
 // Margin review queue: daily CRON triggers evaluateMargin() for all enabled configs
 const MARGIN_REVIEW_DEF: QueueDefinition = {
   name: 'queue:margin-review',
@@ -300,5 +318,7 @@ registerQueue(GRACE_PERIOD_EXPIRY_SCANNER_DEF);
 // E15 alerts publisher + margin review CRON
 registerQueue(ALERTS_DEF);
 registerQueue(MARGIN_REVIEW_DEF);
+// E16 billing period cost aggregation CRON
+registerQueue(PERIOD_COST_AGGREGATOR_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);
