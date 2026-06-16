@@ -12,6 +12,8 @@
 // Authorized by HUB-475 — invoice event-type queues + billing-payment-failed queue; E11 invoice processing
 // Authorized by HUB-504 — billing-payment-failed processor; routes to billingFreezeService.handleBillingPaymentFailed
 // Authorized by HUB-517 — grace-period-expiry-scanner queue; CRON-driven expiry resolution
+// Authorized by HUB-719 — alert source queues for grace_period_expired, payment_failed, sdk_version_deprecated
+// Authorized by HUB-707 — notifications deliver queue; hub:queue:notifications:deliver; consumed by E19
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -266,6 +268,44 @@ export function getAlertsQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(ALERTS_DEF.name, connection);
 }
 
+// Alert source queues registered by E18 — consumed by registerAlertHandlers() workers (HUB-719)
+const GRACE_PERIOD_EXPIRED_ALERTS_DEF: QueueDefinition = {
+  name: 'queue:alerts:grace_period_expired',
+  concurrency: 0,
+};
+
+export function getGracePeriodExpiredAlertsQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(GRACE_PERIOD_EXPIRED_ALERTS_DEF.name, connection);
+}
+
+const PAYMENT_FAILED_ALERTS_DEF: QueueDefinition = {
+  name: 'queue:alerts:payment_failed',
+  concurrency: 0,
+};
+
+export function getPaymentFailedAlertsQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(PAYMENT_FAILED_ALERTS_DEF.name, connection);
+}
+
+const SDK_VERSION_DEPRECATED_ALERTS_DEF: QueueDefinition = {
+  name: 'queue:alerts:sdk_version_deprecated',
+  concurrency: 0,
+};
+
+export function getSdkVersionDeprecatedAlertsQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(SDK_VERSION_DEPRECATED_ALERTS_DEF.name, connection);
+}
+
+// Notifications delivery queue: receives jobs from ingestAlert(); consumed by E19 deliver worker (HUB-707)
+const NOTIFICATIONS_DELIVER_DEF: QueueDefinition = {
+  name: 'queue:notifications:deliver',
+  concurrency: 0,
+};
+
+export function getNotificationsDeliverQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(NOTIFICATIONS_DELIVER_DEF.name, connection);
+}
+
 // Period cost aggregation queue: monthly CRON aggregates cost_ledger into billing_period_costs
 const PERIOD_COST_AGGREGATOR_DEF: QueueDefinition = {
   name: 'queue:billing:period-aggregation',
@@ -318,6 +358,12 @@ registerQueue(GRACE_PERIOD_EXPIRY_SCANNER_DEF);
 // E15 alerts publisher + margin review CRON
 registerQueue(ALERTS_DEF);
 registerQueue(MARGIN_REVIEW_DEF);
+// E18 alert source queues (grace_period_expired, payment_failed, sdk_version_deprecated)
+registerQueue(GRACE_PERIOD_EXPIRED_ALERTS_DEF);
+registerQueue(PAYMENT_FAILED_ALERTS_DEF);
+registerQueue(SDK_VERSION_DEPRECATED_ALERTS_DEF);
+// E19 notifications deliver queue
+registerQueue(NOTIFICATIONS_DELIVER_DEF);
 // E16 billing period cost aggregation CRON
 registerQueue(PERIOD_COST_AGGREGATOR_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually

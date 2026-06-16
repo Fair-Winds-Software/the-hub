@@ -2,6 +2,7 @@
 // Authorized by HUB-147 — DLQ listener; failed-job capture with PII-safe structured logging
 // Authorized by HUB-216 — worker uses createLogger() from src/logging/index.ts; structured log schema applied
 // Authorized by HUB-237 — validateObservabilityEnv() at startup; per-job child logger with tenant_id/product_id
+// Authorized by HUB-719 — registerAlertHandlers() called at entry-point startup; 4 alert source workers
 import 'dotenv/config';
 import { Worker as BullWorker, type Job } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
@@ -9,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { getRedisClient } from './redis/client.js';
 import { getAllQueueDefinitions, getDlqQueue } from './queues/index.js';
 import { registerAllCronJobs } from './queues/cron.js';
+import { registerAlertHandlers } from './jobs/alertHandlers.js';
 import { sanitizePayload } from './utils/sanitize.js';
 import { validateObservabilityEnv } from './logging/env.js';
 import { createLogger } from './logging/index.js';
@@ -103,7 +105,7 @@ const isEntryPoint =
 if (isEntryPoint) {
   let workers: BullWorker[] = [];
   try {
-    workers = createWorkers();
+    workers = [...createWorkers(), ...registerAlertHandlers()];
     if (workers.length === 0) {
       logger.warn('No queues registered — worker process is idle. Register queues in src/queues/index.ts.');
     }
