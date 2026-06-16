@@ -21,6 +21,7 @@
 // Authorized by HUB-725 — alertRoutes registered in operator routes slot; POST acknowledge/resolve, GET paginated list
 // Authorized by HUB-766 — notificationChannelRoutes registered; full CRUD for notification_channels
 // Authorized by HUB-767 — inAppNotificationRoutes registered; GET paginated list + PATCH mark-read
+// Authorized by HUB-801 — escalationRuleRoutes registered; POST/GET/DELETE escalation rules
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';
@@ -48,6 +49,7 @@ import costQueryRoutes from './routes/costQueryRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
 import notificationChannelRoutes from './routes/notificationChannelRoutes.js';
 import inAppNotificationRoutes from './routes/inAppNotificationRoutes.js';
+import escalationRuleRoutes from './routes/escalationRuleRoutes.js';
 
 export async function buildApp(dest?: DestinationStream) {
   validateEnv();
@@ -90,6 +92,7 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(alertRoutes);
   await fastify.register(notificationChannelRoutes);
   await fastify.register(inAppNotificationRoutes);
+  await fastify.register(escalationRuleRoutes);
 
   return fastify;
 }

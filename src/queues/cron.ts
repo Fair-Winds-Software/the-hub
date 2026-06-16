@@ -4,9 +4,10 @@
 // Authorized by HUB-517 — grace-period-expiry-scanner CRON entry; D-004 expiry scan interval
 // Authorized by HUB-644 — periodic_margin_review CRON entry; D-005 daily margin evaluation
 // Authorized by HUB-672 — period_cost_aggregator CRON entry; D-006 monthly cost aggregation
+// Authorized by HUB-787 — escalation_scanner CRON entry; D-007 5-minute escalation scan interval
 import type { Queue } from 'bullmq';
-import { getBatchSweepQueue, getLicenseCheckQueue, getGracePeriodExpiryScannerQueue, getMarginReviewQueue, getPeriodCostAggregatorQueue } from './index.js';
-import { D_002_PROMOTION_CRON, D_003_RETENTION_CRON, D_004_GRACE_PERIOD_SCANNER_CRON, D_005_MARGIN_REVIEW_CRON, D_006_PERIOD_COST_AGGREGATOR_CRON } from '../config/decisions.js';
+import { getBatchSweepQueue, getLicenseCheckQueue, getGracePeriodExpiryScannerQueue, getMarginReviewQueue, getPeriodCostAggregatorQueue, getEscalationScannerQueue } from './index.js';
+import { D_002_PROMOTION_CRON, D_003_RETENTION_CRON, D_004_GRACE_PERIOD_SCANNER_CRON, D_005_MARGIN_REVIEW_CRON, D_006_PERIOD_COST_AGGREGATOR_CRON, D_007_ESCALATION_SCANNER_CRON } from '../config/decisions.js';
 import logger from '../lib/logger.js';
 
 interface CronDefinition {
@@ -59,6 +60,12 @@ const CRON_DEFINITIONS: CronDefinition[] = [
     queueFactory: getPeriodCostAggregatorQueue,
     name: 'period_cost_aggregator',
     cron: D_006_PERIOD_COST_AGGREGATOR_CRON,
+    payload: { triggered: 'scheduled' },
+  },
+  {
+    queueFactory: getEscalationScannerQueue,
+    name: 'escalation_scanner',
+    cron: D_007_ESCALATION_SCANNER_CRON,
     payload: { triggered: 'scheduled' },
   },
 ];

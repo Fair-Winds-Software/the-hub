@@ -44,3 +44,8 @@ export const D_005_MARGIN_REVIEW_CRON: string =
 // Overridable via PERIOD_COST_AGGREGATOR_CRON env var. Defaults to first of month midnight UTC.
 export const D_006_PERIOD_COST_AGGREGATOR_CRON: string =
   process.env.PERIOD_COST_AGGREGATOR_CRON ?? '0 0 1 * *';
+
+// Authorized by HUB-787 — D-007: CRON expression for escalation scanner (E20).
+// Overridable via ESCALATION_SCANNER_CRON env var. Defaults to every 5 minutes.
+export const D_007_ESCALATION_SCANNER_CRON: string =
+  process.env.ESCALATION_SCANNER_CRON ?? '*/5 * * * *';

@@ -14,6 +14,8 @@
 // Authorized by HUB-517 — grace-period-expiry-scanner queue; CRON-driven expiry resolution
 // Authorized by HUB-719 — alert source queues for grace_period_expired, payment_failed, sdk_version_deprecated
 // Authorized by HUB-707 — notifications deliver queue; hub:queue:notifications:deliver; consumed by E19
+// Authorized by HUB-787 — escalation scanner queue; CRON-driven scan every 5 minutes; consumed by E20
+// Authorized by HUB-808 — escalation deliver queue; contact fan-out; 3-retry DLQ policy
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -309,6 +311,29 @@ export function getNotificationsDeliverQueue(connection?: ConnectionOptions): Qu
   return getOrCreateQueue(NOTIFICATIONS_DELIVER_DEF.name, connection);
 }
 
+// Escalation scanner queue: receives CRON-triggered jobs; consumed by registerEscalationScannerJob() worker (HUB-787)
+const ESCALATION_SCANNER_DEF: QueueDefinition = {
+  name: 'queue:escalation:scanner',
+  concurrency: 0, // publisher only at CRON layer; worker registered externally via registerEscalationScannerJob()
+};
+
+export function getEscalationScannerQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(ESCALATION_SCANNER_DEF.name, connection);
+}
+
+// Escalation deliver queue: receives jobs from escalationService; consumed by registerEscalationDeliveryWorker() (HUB-808)
+const ESCALATION_DELIVER_DEF: QueueDefinition = {
+  name: 'queue:escalation:deliver',
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 2000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+};
+
+export function getEscalationDeliverQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(ESCALATION_DELIVER_DEF.name, connection);
+}
+
 // Period cost aggregation queue: monthly CRON aggregates cost_ledger into billing_period_costs
 const PERIOD_COST_AGGREGATOR_DEF: QueueDefinition = {
   name: 'queue:billing:period-aggregation',
@@ -367,6 +392,9 @@ registerQueue(PAYMENT_FAILED_ALERTS_DEF);
 registerQueue(SDK_VERSION_DEPRECATED_ALERTS_DEF);
 // E19 notifications deliver queue
 registerQueue(NOTIFICATIONS_DELIVER_DEF);
+// E20 escalation scanner CRON trigger + deliver queue
+registerQueue(ESCALATION_SCANNER_DEF);
+registerQueue(ESCALATION_DELIVER_DEF);
 // E16 billing period cost aggregation CRON
 registerQueue(PERIOD_COST_AGGREGATOR_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually

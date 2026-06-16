@@ -4,6 +4,8 @@
 // Authorized by HUB-237 — validateObservabilityEnv() at startup; per-job child logger with tenant_id/product_id
 // Authorized by HUB-719 — registerAlertHandlers() called at entry-point startup; 4 alert source workers
 // Authorized by HUB-732 — registerNotificationDeliveryWorker() called at entry-point startup; notification fanout
+// Authorized by HUB-787 — registerEscalationScannerJob() called at entry-point startup; 5-min CRON scan
+// Authorized by HUB-808 — registerEscalationDeliveryWorker() called at entry-point startup; escalation contact fanout
 import 'dotenv/config';
 import { Worker as BullWorker, type Job } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
@@ -13,6 +15,8 @@ import { getAllQueueDefinitions, getDlqQueue } from './queues/index.js';
 import { registerAllCronJobs } from './queues/cron.js';
 import { registerAlertHandlers } from './jobs/alertHandlers.js';
 import { registerNotificationDeliveryWorker } from './jobs/notificationDeliveryWorker.js';
+import { registerEscalationScannerJob } from './jobs/escalationScannerJob.js';
+import { registerEscalationDeliveryWorker } from './jobs/escalationDeliveryWorker.js';
 import { sanitizePayload } from './utils/sanitize.js';
 import { validateObservabilityEnv } from './logging/env.js';
 import { createLogger } from './logging/index.js';
@@ -107,7 +111,13 @@ const isEntryPoint =
 if (isEntryPoint) {
   let workers: BullWorker[] = [];
   try {
-    workers = [...createWorkers(), ...registerAlertHandlers(), registerNotificationDeliveryWorker()];
+    workers = [
+      ...createWorkers(),
+      ...registerAlertHandlers(),
+      registerNotificationDeliveryWorker(),
+      registerEscalationScannerJob(),
+      registerEscalationDeliveryWorker(),
+    ];
     if (workers.length === 0) {
       logger.warn('No queues registered — worker process is idle. Register queues in src/queues/index.ts.');
     }
