@@ -16,6 +16,8 @@
 // Authorized by HUB-594 — pricingModelRoutes registered in operator routes slot; pricing model activation and retrieval
 // Authorized by HUB-629 — usageRoutes registered in business routes slot; POST /api/v1/usage/events; service auth
 // Authorized by HUB-657 — marginRoutes registered in operator routes slot; POST + GET /api/v1/pricing/margin-config
+// Authorized by HUB-692 — pricingActiveModelRoutes registered in business routes slot; GET /api/v1/pricing/models/:productId/active; service auth
+// Authorized by HUB-699 — costQueryRoutes registered in operator routes slot; calculate, cost history, current-period, margin summary
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';
@@ -38,6 +40,8 @@ import billingRoutes from './routes/billing.js';
 import pricingModelRoutes from './routes/pricingModelRoutes.js';
 import usageRoutes from './routes/usageRoutes.js';
 import marginRoutes from './routes/marginRoutes.js';
+import pricingActiveModelRoutes from './routes/pricingActiveModelRoutes.js';
+import costQueryRoutes from './routes/costQueryRoutes.js';
 
 export async function buildApp(dest?: DestinationStream) {
   validateEnv();
@@ -75,6 +79,8 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(pricingModelRoutes);
   await fastify.register(usageRoutes);
   await fastify.register(marginRoutes);
+  await fastify.register(pricingActiveModelRoutes);
+  await fastify.register(costQueryRoutes);
 
   return fastify;
 }
