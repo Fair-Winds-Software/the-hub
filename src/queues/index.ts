@@ -299,7 +299,10 @@ export function getSdkVersionDeprecatedAlertsQueue(connection?: ConnectionOption
 // Notifications delivery queue: receives jobs from ingestAlert(); consumed by E19 deliver worker (HUB-707)
 const NOTIFICATIONS_DELIVER_DEF: QueueDefinition = {
   name: 'queue:notifications:deliver',
-  concurrency: 0,
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 2000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
 };
 
 export function getNotificationsDeliverQueue(connection?: ConnectionOptions): Queue {

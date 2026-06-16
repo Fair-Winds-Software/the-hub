@@ -19,6 +19,8 @@
 // Authorized by HUB-692 — pricingActiveModelRoutes registered in business routes slot; GET /api/v1/pricing/models/:productId/active; service auth
 // Authorized by HUB-699 — costQueryRoutes registered in operator routes slot; calculate, cost history, current-period, margin summary
 // Authorized by HUB-725 — alertRoutes registered in operator routes slot; POST acknowledge/resolve, GET paginated list
+// Authorized by HUB-766 — notificationChannelRoutes registered; full CRUD for notification_channels
+// Authorized by HUB-767 — inAppNotificationRoutes registered; GET paginated list + PATCH mark-read
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';
@@ -44,6 +46,8 @@ import marginRoutes from './routes/marginRoutes.js';
 import pricingActiveModelRoutes from './routes/pricingActiveModelRoutes.js';
 import costQueryRoutes from './routes/costQueryRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
+import notificationChannelRoutes from './routes/notificationChannelRoutes.js';
+import inAppNotificationRoutes from './routes/inAppNotificationRoutes.js';
 
 export async function buildApp(dest?: DestinationStream) {
   validateEnv();
@@ -84,6 +88,8 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(pricingActiveModelRoutes);
   await fastify.register(costQueryRoutes);
   await fastify.register(alertRoutes);
+  await fastify.register(notificationChannelRoutes);
+  await fastify.register(inAppNotificationRoutes);
 
   return fastify;
 }
