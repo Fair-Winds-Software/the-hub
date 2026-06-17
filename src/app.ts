@@ -24,6 +24,8 @@
 // Authorized by HUB-801 — escalationRuleRoutes registered; POST/GET/DELETE escalation rules
 // Authorized by HUB-844 — hookRoutes registered; POST/GET/DELETE hooks + GET execution history
 // Authorized by HUB-1034 — adminRoutesPlugin registered; operator admin auth + RBAC-protected routes
+// Authorized by HUB-1086 — adminTenantRoutes registered via adminRoutesPlugin; tenant CRUD
+// Authorized by HUB-1103 — adminProductRoutes registered via adminRoutesPlugin; product registration + credentials
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';

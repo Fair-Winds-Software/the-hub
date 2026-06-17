@@ -1,4 +1,5 @@
 // Authorized by HUB-98 — Service auth plugin; slot 4 in app.ts plugin chain
+// Authorized by HUB-1127 — auth/token validates product.active AND tenant.active; inactive → 401
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import jwt from 'jsonwebtoken';
@@ -58,7 +59,10 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         `SELECT pr.product_id, p.tenant_id, pr.client_secret_hash
            FROM product_registrations pr
            JOIN products p ON p.id = pr.product_id
-          WHERE pr.client_id = $1`,
+           JOIN tenants t ON t.id = p.tenant_id
+          WHERE pr.client_id = $1
+            AND p.active = true
+            AND t.active = true`,
         [client_id],
       );
 
