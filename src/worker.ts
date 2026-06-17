@@ -6,6 +6,7 @@
 // Authorized by HUB-732 — registerNotificationDeliveryWorker() called at entry-point startup; notification fanout
 // Authorized by HUB-787 — registerEscalationScannerJob() called at entry-point startup; 5-min CRON scan
 // Authorized by HUB-808 — registerEscalationDeliveryWorker() called at entry-point startup; escalation contact fanout
+// Authorized by HUB-829 — registerHookDeliveryWorker() called at entry-point startup; outbound webhook fanout
 import 'dotenv/config';
 import { Worker as BullWorker, type Job } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
@@ -17,6 +18,7 @@ import { registerAlertHandlers } from './jobs/alertHandlers.js';
 import { registerNotificationDeliveryWorker } from './jobs/notificationDeliveryWorker.js';
 import { registerEscalationScannerJob } from './jobs/escalationScannerJob.js';
 import { registerEscalationDeliveryWorker } from './jobs/escalationDeliveryWorker.js';
+import { registerHookDeliveryWorker } from './jobs/hookDeliveryWorker.js';
 import { sanitizePayload } from './utils/sanitize.js';
 import { validateObservabilityEnv } from './logging/env.js';
 import { createLogger } from './logging/index.js';
@@ -117,6 +119,7 @@ if (isEntryPoint) {
       registerNotificationDeliveryWorker(),
       registerEscalationScannerJob(),
       registerEscalationDeliveryWorker(),
+      registerHookDeliveryWorker(),
     ];
     if (workers.length === 0) {
       logger.warn('No queues registered — worker process is idle. Register queues in src/queues/index.ts.');

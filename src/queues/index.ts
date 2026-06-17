@@ -16,6 +16,7 @@
 // Authorized by HUB-707 — notifications deliver queue; hub:queue:notifications:deliver; consumed by E19
 // Authorized by HUB-787 — escalation scanner queue; CRON-driven scan every 5 minutes; consumed by E20
 // Authorized by HUB-808 — escalation deliver queue; contact fan-out; 3-retry DLQ policy
+// Authorized by HUB-829 — workflow hook delivery queue; event-driven; 3-retry DLQ policy
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -334,6 +335,19 @@ export function getEscalationDeliverQueue(connection?: ConnectionOptions): Queue
   return getOrCreateQueue(ESCALATION_DELIVER_DEF.name, connection);
 }
 
+// Workflow hook delivery queue: event-driven; consumed by registerHookDeliveryWorker() (HUB-829)
+const WORKFLOW_HOOK_DEF: QueueDefinition = {
+  name: 'queue:workflow:hook',
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 2000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+};
+
+export function getWorkflowHookQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(WORKFLOW_HOOK_DEF.name, connection);
+}
+
 // Period cost aggregation queue: monthly CRON aggregates cost_ledger into billing_period_costs
 const PERIOD_COST_AGGREGATOR_DEF: QueueDefinition = {
   name: 'queue:billing:period-aggregation',
@@ -397,5 +411,7 @@ registerQueue(ESCALATION_SCANNER_DEF);
 registerQueue(ESCALATION_DELIVER_DEF);
 // E16 billing period cost aggregation CRON
 registerQueue(PERIOD_COST_AGGREGATOR_DEF);
+// E21 workflow hook delivery queue
+registerQueue(WORKFLOW_HOOK_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);
