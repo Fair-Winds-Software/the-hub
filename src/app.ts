@@ -43,6 +43,10 @@
 // Authorized by HUB-1510 — portalDataRoutes: GET /api/v1/portal/invoices + /:invoiceId (D-005)
 // Authorized by HUB-1511 — portalDataRoutes: GET+PUT /api/v1/portal/notifications
 // Authorized by HUB-1512 — portalDataRoutes: GET /api/v1/portal/profile
+// Authorized by HUB-1019 — 030 migration: compliance_controls, compliance_product_registrations, product_control_bindings
+// Authorized by HUB-1020 — 030 migration: compliance_signal_evidence (immutable, content hash, signal_id dedup) + compliance_signal_rejections
+// Authorized by HUB-1021 — adminComplianceRoutes: control CRUD + product registration + burn-in promote + bindings
+// Authorized by HUB-1023 — complianceSignalPlugin: POST /api/v1/compliance/signals; HMAC-only auth; dedup; rejection log
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';
@@ -74,6 +78,7 @@ import escalationRuleRoutes from './routes/escalationRuleRoutes.js';
 import hookRoutes from './routes/hookRoutes.js';
 import adminRoutesPlugin from './plugins/adminRoutes.js';
 import portalRoutesPlugin from './plugins/portalRoutes.js';
+import complianceSignalPlugin from './routes/compliance/signals.js';
 
 export async function buildApp(dest?: DestinationStream) {
   validateEnv();
@@ -120,6 +125,7 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(hookRoutes);
   await fastify.register(adminRoutesPlugin);
   await fastify.register(portalRoutesPlugin);
+  await fastify.register(complianceSignalPlugin);
 
   return fastify;
 }
