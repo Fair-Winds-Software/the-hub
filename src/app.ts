@@ -51,6 +51,7 @@
 // Authorized by HUB-1036 — 031 migration: compliance_verdict_history (immutable) + compliance_posture_scores
 // Authorized by HUB-1043 — complianceEvaluationService: daily CRON evaluator; automated+human control verdicts
 // Authorized by HUB-1048 — complianceEvaluationService: human evaluator + posture aggregation + query API (posture/verdicts/history)
+// Authorized by HUB-1057 — adminComplianceDashboardRoutes: overview, product detail, posture trend (via adminRoutesPlugin)
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';

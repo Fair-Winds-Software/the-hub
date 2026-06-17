@@ -11,6 +11,7 @@
 // Authorized by HUB-1503 — adminNotificationsRoutes: escalation rule CRUD with 2-tier cap
 // Authorized by HUB-1504 — adminNotificationsRoutes: workflow hook CRUD with hmac_secret masking
 // Authorized by HUB-1021 — adminComplianceRoutes: control registry CRUD + product registration + burn-in + bindings
+// Authorized by HUB-1057 — adminComplianceDashboardRoutes: overview, product detail, posture trend
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { operatorRbacHook } from '../hooks/operatorRbac.js';
@@ -22,6 +23,7 @@ import adminProductRoutes from '../routes/admin/products.js';
 import adminBillingRoutes from '../routes/admin/billing.js';
 import adminNotificationsRoutes from '../routes/admin/notifications.js';
 import adminComplianceRoutes from '../routes/admin/compliance.js';
+import adminComplianceDashboardRoutes from '../routes/admin/complianceDashboard.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -38,6 +40,7 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminBillingRoutes);
     await scope.register(adminNotificationsRoutes);
     await scope.register(adminComplianceRoutes);
+    await scope.register(adminComplianceDashboardRoutes);
   });
 };
 
