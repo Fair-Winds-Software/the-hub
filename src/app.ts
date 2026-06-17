@@ -26,6 +26,10 @@
 // Authorized by HUB-1034 — adminRoutesPlugin registered; operator admin auth + RBAC-protected routes
 // Authorized by HUB-1086 — adminTenantRoutes registered via adminRoutesPlugin; tenant CRUD
 // Authorized by HUB-1103 — adminProductRoutes registered via adminRoutesPlugin; product registration + credentials
+// Authorized by HUB-1494 — adminBillingRoutes: GET+PUT /admin/tenants/:tenantId/products/:productId/pricing
+// Authorized by HUB-1495 — adminBillingRoutes: GET /admin/tenants/:tenantId/invoices (D-005) + /:invoiceId detail
+// Authorized by HUB-1496 — adminBillingRoutes: POST+DELETE /admin/tenants/:tenantId/products/:productId/freeze (D-006)
+// Authorized by HUB-1497 — adminBillingRoutes: GET /admin/tenants/:tenantId/stripe-customer (super_admin only)
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';

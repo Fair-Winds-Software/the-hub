@@ -2,6 +2,7 @@
 // Authorized by HUB-259 — suspendLicense, freezeLicense, cancelLicense; FSM transitions + D-001 alert
 // Authorized by HUB-272 — getLicenseStatus; promoteStagedLicenseChanges CRON handler
 // Authorized by HUB-279 — emitBelowFloorAlert; post-commit fire-and-forget side effect
+// Authorized by HUB-1496 — unfreezeProduct; admin override suspended→active; no Stripe involvement
 import { getPool } from '../db/pool.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../lib/logger.js';
@@ -169,6 +170,46 @@ export async function freezeLicense(
 ): Promise<void> {
   // D-006: per-product scope — only this (tenantId, productId) is affected; siblings unmodified
   return suspendLicense(tenantId, productId, 'FREEZE');
+}
+
+// ── unfreezeProduct ───────────────────────────────────────────────────────────
+// Admin override: transitions suspended → active without touching Stripe or grace periods.
+// Called by the admin console freeze DELETE endpoint (HUB-1496 / E27).
+
+export async function unfreezeProduct(tenantId: string, productId: string): Promise<void> {
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query<LicenseRow>(
+      `SELECT id, status FROM licenses
+       WHERE tenant_id = $1 AND product_id = $2
+       FOR UPDATE`,
+      [tenantId, productId],
+    );
+    if (rows.length === 0) throw new AppError(404, 'License not found');
+    if (rows[0]!.status !== 'suspended') throw new AppError(422, 'License is not suspended');
+
+    await client.query(
+      `UPDATE licenses
+       SET status = 'active',
+           reason = NULL,
+           suspended_at = NULL,
+           grace_expires_at = NULL,
+           updated_at = NOW()
+       WHERE tenant_id = $1 AND product_id = $2`,
+      [tenantId, productId],
+    );
+
+    await client.query('COMMIT');
+    logger.info({ tenant_id: tenantId, product_id: productId }, 'License unfrozen: suspended → active (admin override)');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // ── cancelLicense ─────────────────────────────────────────────────────────────
