@@ -30,6 +30,12 @@
 // Authorized by HUB-1495 — adminBillingRoutes: GET /admin/tenants/:tenantId/invoices (D-005) + /:invoiceId detail
 // Authorized by HUB-1496 — adminBillingRoutes: POST+DELETE /admin/tenants/:tenantId/products/:productId/freeze (D-006)
 // Authorized by HUB-1497 — adminBillingRoutes: GET /admin/tenants/:tenantId/stripe-customer (super_admin only)
+// Authorized by HUB-1499 — 028 migration: idx_alert_events_tenant_status_severity
+// Authorized by HUB-1500 — adminNotificationsRoutes: GET /admin/alerts/summary/:tenantId
+// Authorized by HUB-1501 — adminNotificationsRoutes: admin alert ack/resolve/list RBAC delegation
+// Authorized by HUB-1502 — adminNotificationsRoutes: admin notification channel CRUD
+// Authorized by HUB-1503 — adminNotificationsRoutes: admin escalation rule CRUD; 2-tier cap
+// Authorized by HUB-1504 — adminNotificationsRoutes: admin workflow hook CRUD; hmac_secret masking
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';

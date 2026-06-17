@@ -5,6 +5,11 @@
 // Authorized by HUB-1495 — adminBillingRoutes: invoice list + detail (D-005 per-product scope)
 // Authorized by HUB-1496 — adminBillingRoutes: product freeze/unfreeze (D-006 per-product scope)
 // Authorized by HUB-1497 — adminBillingRoutes: Stripe customer link (super_admin only)
+// Authorized by HUB-1500 — adminNotificationsRoutes: alert summary endpoint
+// Authorized by HUB-1501 — adminNotificationsRoutes: alert ack/resolve/list RBAC delegation
+// Authorized by HUB-1502 — adminNotificationsRoutes: notification channel CRUD
+// Authorized by HUB-1503 — adminNotificationsRoutes: escalation rule CRUD with 2-tier cap
+// Authorized by HUB-1504 — adminNotificationsRoutes: workflow hook CRUD with hmac_secret masking
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { operatorRbacHook } from '../hooks/operatorRbac.js';
@@ -14,6 +19,7 @@ import adminSettingsRoutes from '../routes/admin/settings.js';
 import adminTenantRoutes from '../routes/admin/tenants.js';
 import adminProductRoutes from '../routes/admin/products.js';
 import adminBillingRoutes from '../routes/admin/billing.js';
+import adminNotificationsRoutes from '../routes/admin/notifications.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -28,6 +34,7 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminTenantRoutes);
     await scope.register(adminProductRoutes);
     await scope.register(adminBillingRoutes);
+    await scope.register(adminNotificationsRoutes);
   });
 };
 
