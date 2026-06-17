@@ -1,4 +1,5 @@
 // Authorized by HUB-914 — vitest configuration for @maverick-launch/hub-sdk test suite
+// Authorized by HUB-1006 — per-directory coverage threshold for src/usage/
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -12,6 +13,7 @@ export default defineConfig({
       thresholds: {
         lines: 90,
         branches: 90,
+        'src/usage/': { lines: 90, branches: 90 },
       },
     },
   },

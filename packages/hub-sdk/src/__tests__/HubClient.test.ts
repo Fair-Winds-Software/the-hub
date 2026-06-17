@@ -1,11 +1,15 @@
 // Authorized by HUB-914 — unit tests: HubClient constructor; connect() idempotency; refresh threshold;
 //   concurrent refresh single promise; #refreshPromise cleared; 401 auto-retry; non-401 not retried
+// Updated for HUB-986 — connect() now calls #reportVersion(); fetch stubbed to prevent real network calls
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HubAuthError } from '../errors.js';
 
 const mockAcquireToken = vi.hoisted(() => vi.fn());
 vi.mock('../auth/acquireToken.js', () => ({ acquireToken: mockAcquireToken }));
+
+const mockFetch = vi.hoisted(() => vi.fn());
+vi.stubGlobal('fetch', mockFetch);
 
 import { HubClient } from '../HubClient.js';
 
@@ -22,7 +26,10 @@ function resolveToken(token = 'tok', ttlMs = 3_600_000): void {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers();
   resolveToken();
+  // Stub fetch so connect()'s #reportVersion() doesn't make real network calls
+  mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
 });
 
 afterEach(() => {

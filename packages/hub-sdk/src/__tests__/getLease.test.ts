@@ -1,5 +1,6 @@
 // Authorized by HUB-957 — integration tests: HubClient.getLease(); happy path; kill-switch; cache hit;
 //   inflight dedup; non-2xx response; missing encryption key; LEASE_ENCRYPTION_KEY validation in connect()
+// Updated for HUB-986 — connect() now awaits #reportVersion(); tests queue version report response first
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HubLeaseInvalidError, HubKillSwitchError } from '../errors.js';
@@ -29,6 +30,10 @@ function resolveToken(token = 'tok', ttlMs = 3_600_000): void {
   mockAcquireToken.mockResolvedValue({ token, expiresAt: Date.now() + ttlMs });
 }
 
+function resolveVersionReport(): void {
+  mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
+}
+
 function respondWithLease(token: string): void {
   mockFetch.mockResolvedValueOnce({
     ok: true,
@@ -38,12 +43,15 @@ function respondWithLease(token: string): void {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers();
   resolveToken();
   process.env.LEASE_ENCRYPTION_KEY = TEST_ENC_KEY.toString('base64');
+  resolveVersionReport(); // connect() awaits #reportVersion(); consume that response first
 });
 
 afterEach(() => {
   vi.resetAllMocks();
+  vi.useRealTimers();
   delete process.env.LEASE_ENCRYPTION_KEY;
 });
 
@@ -107,7 +115,8 @@ describe('HubClient getLease() — happy path', () => {
     await client.connect();
     await client.getLease('tenant-A', 'prod-B');
 
-    const [url, opts] = mockFetch.mock.calls[0]! as [string, RequestInit];
+    // calls[0] = version report from connect(); calls[1] = lease fetch
+    const [url, opts] = mockFetch.mock.calls[1]! as [string, RequestInit];
     expect(url).toBe('https://hub.example.com/api/v1/leases/tenant-A/prod-B');
     expect((opts.headers as Record<string, string>)['Authorization']).toBe('Bearer tok');
   });
@@ -125,7 +134,8 @@ describe('HubClient getLease() — cache', () => {
     await client.getLease('t1', 'p1');
     await client.getLease('t1', 'p1'); // from cache
 
-    expect(mockFetch).toHaveBeenCalledOnce(); // only 1 HTTP call (the auth token)
+    // 2 calls: 1 version report (connect) + 1 lease fetch (second is cache hit)
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
   it('concurrent getLease() calls for the same key share a single inflight promise', async () => {
@@ -141,7 +151,8 @@ describe('HubClient getLease() — cache', () => {
       client.getLease('t1', 'p1'),
     ]);
 
-    expect(mockFetch).toHaveBeenCalledOnce();
+    // 2 calls: 1 version report (connect) + 1 lease fetch (inflight dedup)
+    expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(l1).toEqual(l2);
     expect(l2).toEqual(l3);
   });
@@ -194,7 +205,8 @@ describe('HubClient getLease() — kill-switch', () => {
     const lease = await client.getLease('t1', 'p1');
 
     expect(lease.tenantId).toBe(alive.tenantId);
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    // 3 calls: 1 version report (connect) + 2 lease fetches (killed + alive)
+    expect(mockFetch).toHaveBeenCalledTimes(3);
   });
 });
 
