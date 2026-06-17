@@ -36,6 +36,13 @@
 // Authorized by HUB-1502 — adminNotificationsRoutes: admin notification channel CRUD
 // Authorized by HUB-1503 — adminNotificationsRoutes: admin escalation rule CRUD; 2-tier cap
 // Authorized by HUB-1504 — adminNotificationsRoutes: admin workflow hook CRUD; hmac_secret masking
+// Authorized by HUB-1506 — 029 migration: tenant_users table; portal auth credentials
+// Authorized by HUB-1507 — portalAuthHook: PORTAL_JWT_SECRET; portalUser augmentation
+// Authorized by HUB-1508 — portalAuthRoutes: POST /api/v1/portal/auth/login; bcrypt; 60-min JWT
+// Authorized by HUB-1509 — portalDataRoutes: GET /api/v1/portal/usage/:productId
+// Authorized by HUB-1510 — portalDataRoutes: GET /api/v1/portal/invoices + /:invoiceId (D-005)
+// Authorized by HUB-1511 — portalDataRoutes: GET+PUT /api/v1/portal/notifications
+// Authorized by HUB-1512 — portalDataRoutes: GET /api/v1/portal/profile
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';
@@ -66,6 +73,7 @@ import inAppNotificationRoutes from './routes/inAppNotificationRoutes.js';
 import escalationRuleRoutes from './routes/escalationRuleRoutes.js';
 import hookRoutes from './routes/hookRoutes.js';
 import adminRoutesPlugin from './plugins/adminRoutes.js';
+import portalRoutesPlugin from './plugins/portalRoutes.js';
 
 export async function buildApp(dest?: DestinationStream) {
   validateEnv();
@@ -111,6 +119,7 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(escalationRuleRoutes);
   await fastify.register(hookRoutes);
   await fastify.register(adminRoutesPlugin);
+  await fastify.register(portalRoutesPlugin);
 
   return fastify;
 }
