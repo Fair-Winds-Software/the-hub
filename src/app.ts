@@ -47,6 +47,10 @@
 // Authorized by HUB-1020 — 030 migration: compliance_signal_evidence (immutable, content hash, signal_id dedup) + compliance_signal_rejections
 // Authorized by HUB-1021 — adminComplianceRoutes: control CRUD + product registration + burn-in promote + bindings
 // Authorized by HUB-1023 — complianceSignalPlugin: POST /api/v1/compliance/signals; HMAC-only auth; dedup; rejection log
+// Authorized by HUB-1031 — 031 migration: compliance_evaluation_runs + compliance_current_verdicts
+// Authorized by HUB-1036 — 031 migration: compliance_verdict_history (immutable) + compliance_posture_scores
+// Authorized by HUB-1043 — complianceEvaluationService: daily CRON evaluator; automated+human control verdicts
+// Authorized by HUB-1048 — complianceEvaluationService: human evaluator + posture aggregation + query API (posture/verdicts/history)
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';

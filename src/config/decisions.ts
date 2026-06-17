@@ -49,3 +49,8 @@ export const D_006_PERIOD_COST_AGGREGATOR_CRON: string =
 // Overridable via ESCALATION_SCANNER_CRON env var. Defaults to every 5 minutes.
 export const D_007_ESCALATION_SCANNER_CRON: string =
   process.env.ESCALATION_SCANNER_CRON ?? '*/5 * * * *';
+
+// Authorized by HUB-1043 — D-008: CRON expression for compliance evaluation runner (E35).
+// Overridable via COMPLIANCE_EVAL_CRON env var. Defaults to 03:00 UTC daily.
+export const D_008_COMPLIANCE_EVAL_CRON: string =
+  process.env.COMPLIANCE_EVAL_CRON ?? '0 3 * * *';

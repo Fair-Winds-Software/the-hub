@@ -1,5 +1,6 @@
 // Authorized by HUB-127 — queue registry; getAllQueueDefinitions() consumed by worker scaffold
 // Authorized by HUB-644 — margin-review queue; periodic_margin_review CRON processor
+// Authorized by HUB-1043 — compliance-evaluation queue; daily CRON evaluation runner
 // Authorized by HUB-643 — alerts queue; below_floor BullMQ event publication
 // Authorized by HUB-672 — period-cost-aggregation queue; monthly billing period cost aggregation
 // Authorized by HUB-146 — queue factory pattern; concrete queue definitions registered here
@@ -382,6 +383,23 @@ export function getMarginReviewQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(MARGIN_REVIEW_DEF.name, connection);
 }
 
+// Compliance evaluation queue: daily CRON triggers runComplianceEvaluation() for all registered products
+const COMPLIANCE_EVAL_DEF: QueueDefinition = {
+  name: 'queue:compliance:evaluation',
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 5000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (_job: Job) => {
+    const { runComplianceEvaluation } = await import('../services/complianceEvaluationService.js');
+    await runComplianceEvaluation();
+  },
+};
+
+export function getComplianceEvalQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(COMPLIANCE_EVAL_DEF.name, connection);
+}
+
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
 registerQueue(STRIPE_EVENT_DEF);
 registerQueue(BATCH_SWEEP_DEF);
@@ -413,5 +431,7 @@ registerQueue(ESCALATION_DELIVER_DEF);
 registerQueue(PERIOD_COST_AGGREGATOR_DEF);
 // E21 workflow hook delivery queue
 registerQueue(WORKFLOW_HOOK_DEF);
+// E35 compliance evaluation daily CRON
+registerQueue(COMPLIANCE_EVAL_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);

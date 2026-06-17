@@ -1,10 +1,16 @@
 // Authorized by HUB-1021 — compliance control registry CRUD, product registration + HMAC secret, burn-in state machine, control binding management
+// Authorized by HUB-1048 — GET /posture, GET /verdicts, GET /history query endpoints
 import type { FastifyPluginAsync } from 'fastify';
 import type { Pool } from 'pg';
 import { randomBytes } from 'node:crypto';
 import { getPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
 import { encryptHookSecret } from '../../services/hookDeliveryService.js';
+import {
+  getProductPosture,
+  getProductCurrentVerdicts,
+  getProductVerdictHistory,
+} from '../../services/complianceEvaluationService.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -263,6 +269,33 @@ const adminComplianceRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(204).send();
     },
   );
+  // ── Evaluation query API (HUB-1048) ────────────────────────────────────────
+
+  fastify.get('/api/v1/admin/compliance/products/:productId/posture', async (request, reply) => {
+    const { productId } = request.params as { productId: string };
+    assertUUID(productId, 'productId');
+    await assertProductAccess(request, productId, pool);
+    return reply.send(await getProductPosture(productId));
+  });
+
+  fastify.get('/api/v1/admin/compliance/products/:productId/verdicts', async (request, reply) => {
+    const { productId } = request.params as { productId: string };
+    assertUUID(productId, 'productId');
+    await assertProductAccess(request, productId, pool);
+    return reply.send(await getProductCurrentVerdicts(productId));
+  });
+
+  fastify.get('/api/v1/admin/compliance/products/:productId/history', async (request, reply) => {
+    const { productId } = request.params as { productId: string };
+    assertUUID(productId, 'productId');
+    await assertProductAccess(request, productId, pool);
+
+    const q = request.query as Record<string, string | undefined>;
+    const limit = Math.min(parseInt(q.limit ?? '50', 10), 200);
+    const offset = parseInt(q.offset ?? '0', 10);
+
+    return reply.send(await getProductVerdictHistory(productId, limit, offset));
+  });
 };
 
 export default adminComplianceRoutes;
