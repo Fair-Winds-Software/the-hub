@@ -1,4 +1,5 @@
 // Authorized by HUB-503 — billing freeze lifecycle: handleLicenseSuspended, handleLicenceCancelled, handleLicenseReactivated
+// Authorized by HUB-1470 — handleLicenseReactivated accepts planId (BILL-004); passes through to createSubscription
 // Authorized by HUB-504 — handleBillingPaymentFailed: billing-payment-failed queue processor entry point
 // Authorized by HUB-517 — scanAndResolveExpiredGracePeriods: CRON-driven expiry resolution
 import { getPool } from '../db/pool.js';
@@ -80,11 +81,11 @@ export async function handleLicenceCancelled(
 }
 
 // Resolves the open grace period as 'reactivated' and creates a new Stripe subscription.
-// No-op if no open grace period exists.
+// No-op if no open grace period exists. planId is resolved to stripe_price_id internally (BILL-004).
 export async function handleLicenseReactivated(
   tenantId: string,
   productId: string,
-  stripePriceId: string,
+  planId: string,
   email: string,
 ): Promise<void> {
   const pool = getPool();
@@ -101,7 +102,7 @@ export async function handleLicenseReactivated(
     return;
   }
 
-  await createSubscription(tenantId, productId, stripePriceId, email);
+  await createSubscription(tenantId, productId, planId, email);
   logger.info({ tenantId, productId }, 'grace period resolved as reactivated; new Stripe subscription created');
 }
 

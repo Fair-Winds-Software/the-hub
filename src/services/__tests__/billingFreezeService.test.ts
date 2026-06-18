@@ -137,19 +137,19 @@ describe('handleLicenseReactivated()', () => {
   it('warns and returns when no open grace period found', async () => {
     mockPoolQuery.mockResolvedValueOnce({ rows: [] });
 
-    await handleLicenseReactivated('tenant-1', 'product-1', 'price_1', 'a@b.com');
+    await handleLicenseReactivated('tenant-1', 'product-1', 'plan-1', 'a@b.com');
 
     expect(mockCreateSubscription).not.toHaveBeenCalled();
   });
 
-  it('resolves grace period as reactivated and calls createSubscription', async () => {
+  it('resolves grace period as reactivated and calls createSubscription with planId', async () => {
     mockPoolQuery.mockResolvedValueOnce({ rows: [{ id: 'gp-1' }] });
     mockCreateSubscription.mockResolvedValueOnce({});
 
-    await handleLicenseReactivated('tenant-1', 'product-1', 'price_1', 'a@b.com');
+    await handleLicenseReactivated('tenant-1', 'product-1', 'plan-1', 'a@b.com');
 
     expect(mockPoolQuery.mock.calls[0]![0]).toMatch(/resolution = 'reactivated'/);
-    expect(mockCreateSubscription).toHaveBeenCalledWith('tenant-1', 'product-1', 'price_1', 'a@b.com');
+    expect(mockCreateSubscription).toHaveBeenCalledWith('tenant-1', 'product-1', 'plan-1', 'a@b.com');
   });
 });
 

@@ -1,16 +1,19 @@
 // Authorized by HUB-426 — ensureStripeCustomer: get-or-create Stripe customer, upsert stripe_customers
 // Authorized by HUB-427 — createSubscription, cancelSubscription, getSubscription
 // Authorized by HUB-428 — handleSubscriptionUpdated, handleSubscriptionDeleted webhook processors
+// Authorized by HUB-1470 — BILL-004 wire-up: createSubscription accepts planId; resolves stripe_price_id internally
 import type Stripe from 'stripe';
 import { getPool } from '../db/pool.js';
 import { getStripe, stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../lib/logger.js';
+import { getPlanById } from './planCatalogService.js';
 
 export interface StripeSubscriptionRow {
   id: string;
   tenant_id: string;
   product_id: string;
+  plan_id: string | null;
   stripe_subscription_id: string;
   stripe_price_id: string;
   status: string;
@@ -57,13 +60,18 @@ export async function ensureStripeCustomer(tenantId: string, email: string): Pro
 }
 
 // Creates a Stripe subscription for the given tenant + product, persists to stripe_subscriptions.
-// Idempotent via Stripe idempotency key derived from tenantId + productId + priceId.
+// Accepts planId (BILL-004): resolves stripe_price_id internally via plans table.
+// Idempotent via Stripe idempotency key derived from tenantId + productId + planId.
 export async function createSubscription(
   tenantId: string,
   productId: string,
-  priceId: string,
+  planId: string,
   email: string,
 ): Promise<StripeSubscriptionRow> {
+  const plan = await getPlanById(planId);
+  if (!plan.active) throw new AppError(400, 'Plan is archived');
+  const priceId = plan.stripe_price_id;
+
   const customerId = await ensureStripeCustomer(tenantId, email);
   const stripe = getStripe();
 
@@ -75,7 +83,7 @@ export async function createSubscription(
         items: [{ price: priceId }],
         metadata: { tenant_id: tenantId, product_id: productId },
       },
-      { idempotencyKey: stripeIdempotencyKey('create-sub', tenantId, productId, priceId) },
+      { idempotencyKey: stripeIdempotencyKey('create-sub', tenantId, productId, planId) },
     );
   } catch (err) {
     mapStripeError(err);
@@ -85,11 +93,12 @@ export async function createSubscription(
   const pool = getPool();
   const { rows } = await pool.query<StripeSubscriptionRow>(
     `INSERT INTO stripe_subscriptions
-       (tenant_id, product_id, stripe_subscription_id, stripe_price_id, status,
+       (tenant_id, product_id, plan_id, stripe_subscription_id, stripe_price_id, status,
         current_period_start, current_period_end, cancel_at_period_end)
-     VALUES ($1, $2, $3, $4, $5, to_timestamp($6), to_timestamp($7), $8)
+     VALUES ($1, $2, $3, $4, $5, $6, to_timestamp($7), to_timestamp($8), $9)
      ON CONFLICT (tenant_id, product_id) DO UPDATE
-       SET stripe_subscription_id = EXCLUDED.stripe_subscription_id,
+       SET plan_id                = EXCLUDED.plan_id,
+           stripe_subscription_id = EXCLUDED.stripe_subscription_id,
            stripe_price_id        = EXCLUDED.stripe_price_id,
            status                 = EXCLUDED.status,
            current_period_start   = EXCLUDED.current_period_start,
@@ -99,6 +108,7 @@ export async function createSubscription(
     [
       tenantId,
       productId,
+      planId,
       sub!.id,
       item?.price.id ?? priceId,
       sub!.status,

@@ -2,6 +2,7 @@
 // Authorized by HUB-427 — unit tests: createSubscription, cancelSubscription, getSubscriptions
 // Authorized by HUB-428 — unit tests: handleSubscriptionUpdated, handleSubscriptionDeleted
 // Authorized by HUB-503 — unit tests: cancelSubscription immediate path
+// Authorized by HUB-1470 — unit tests updated: createSubscription accepts planId; mocks getPlanById
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mock setup ────────────────────────────────────────────────────────────────
@@ -22,6 +23,9 @@ vi.mock('../../stripe/client.js', () => ({
   stripeIdempotencyKey: mockStripeIdempotencyKey,
   mapStripeError: mockMapStripeError,
 }));
+
+const mockGetPlanById = vi.hoisted(() => vi.fn());
+vi.mock('../planCatalogService.js', () => ({ getPlanById: mockGetPlanById }));
 
 vi.mock('../../lib/logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -44,6 +48,7 @@ beforeEach(() => {
     customers: { create: mockCustomersCreate },
     subscriptions: { create: mockSubscriptionsCreate, update: mockSubscriptionsUpdate, cancel: mockSubscriptionsCancel },
   });
+  mockGetPlanById.mockResolvedValue({ id: 'plan-1', stripe_price_id: 'price_1', active: true });
 });
 
 // ── ensureStripeCustomer ──────────────────────────────────────────────────────
@@ -100,28 +105,48 @@ describe('createSubscription()', () => {
   };
   const subRow = { id: 'row-1', stripe_subscription_id: 'sub_1' };
 
-  beforeEach(() => {
-    // ensureStripeCustomer: SELECT returns existing customer
-    mockPoolQuery.mockResolvedValueOnce({ rows: [{ stripe_customer_id: 'cus_1' }] });
-    // INSERT UPSERT for stripe_subscriptions
-    mockPoolQuery.mockResolvedValueOnce({ rows: [subRow] });
-    mockSubscriptionsCreate.mockResolvedValueOnce(mockSub);
+  describe('happy path', () => {
+    beforeEach(() => {
+      // ensureStripeCustomer: SELECT returns existing customer
+      mockPoolQuery.mockResolvedValueOnce({ rows: [{ stripe_customer_id: 'cus_1' }] });
+      // INSERT UPSERT for stripe_subscriptions
+      mockPoolQuery.mockResolvedValueOnce({ rows: [subRow] });
+      mockSubscriptionsCreate.mockResolvedValueOnce(mockSub);
+    });
+
+    it('resolves planId via getPlanById and returns the upserted subscription row', async () => {
+      const result = await createSubscription('tenant-1', 'product-1', 'plan-1', 'owner@example.com');
+      expect(mockGetPlanById).toHaveBeenCalledWith('plan-1');
+      expect(result).toEqual(subRow);
+    });
+
+    it('calls Stripe subscriptions.create with the resolved stripe_price_id', async () => {
+      await createSubscription('tenant-1', 'product-1', 'plan-1', 'owner@example.com');
+      expect(mockSubscriptionsCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customer: 'cus_1',
+          items: expect.arrayContaining([expect.objectContaining({ price: 'price_1' })]),
+        }),
+        expect.any(Object),
+      );
+    });
   });
 
-  it('returns the upserted subscription row', async () => {
-    const result = await createSubscription('tenant-1', 'product-1', 'price_1', 'owner@example.com');
-    expect(result).toEqual(subRow);
-  });
+  describe('plan validation errors', () => {
+    it('throws AppError(400) when plan is archived', async () => {
+      mockGetPlanById.mockResolvedValueOnce({ id: 'plan-1', stripe_price_id: 'price_1', active: false });
+      await expect(createSubscription('tenant-1', 'product-1', 'plan-1', 'owner@example.com')).rejects.toMatchObject({
+        statusCode: 400,
+      });
+      expect(mockSubscriptionsCreate).not.toHaveBeenCalled();
+    });
 
-  it('calls Stripe subscriptions.create with the customer id and price', async () => {
-    await createSubscription('tenant-1', 'product-1', 'price_1', 'owner@example.com');
-    expect(mockSubscriptionsCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        customer: 'cus_1',
-        items: expect.arrayContaining([expect.objectContaining({ price: 'price_1' })]),
-      }),
-      expect.any(Object),
-    );
+    it('propagates AppError(404) when plan not found', async () => {
+      mockGetPlanById.mockRejectedValueOnce(new AppError(404, 'Plan not found'));
+      await expect(createSubscription('tenant-1', 'product-1', 'plan-missing', 'owner@example.com')).rejects.toMatchObject({
+        statusCode: 404,
+      });
+    });
   });
 });
 
