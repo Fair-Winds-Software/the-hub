@@ -59,6 +59,11 @@
 // Authorized by HUB-1355 — runDriftDetectionEngine(): 7-day posture score drop detection CRON (D-010)
 // Authorized by HUB-1365 — adminComplianceAlertsRoutes: in-app notification center
 // Authorized by HUB-1366 — complianceAlertService: deliverAlert, getAlertRule, fireControlFailureAlert, runHumanEscalationScheduler, runDriftDetectionEngine
+// Authorized by HUB-1377 — evidenceExportService: queryEvidence() + export filter types; adminComplianceExportRoutes query endpoint
+// Authorized by HUB-1380 — evidenceExportService: generateExportBundle() ZIP + signed manifest; 033 migration: compliance_export_jobs
+// Authorized by HUB-1381 — evidenceExportService: buildCoverDocument() auditor markdown summary
+// Authorized by HUB-1382 — adminComplianceExportRoutes: POST create job, GET status, GET download stream
+// Authorized by HUB-1383 — evidenceExport integration test suite (RUN_INTEGRATION=1)
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';

@@ -15,6 +15,9 @@
 // Authorized by HUB-1098 — adminComplianceAlertsRoutes: alert_rules GET/PUT
 // Authorized by HUB-1102 — adminComplianceAlertsRoutes: notification list, acknowledge, acknowledge-all
 // Authorized by HUB-1365 — adminComplianceAlertsRoutes: in-app notification center
+// Authorized by HUB-1377 — adminComplianceExportRoutes: evidence query endpoint
+// Authorized by HUB-1380 — adminComplianceExportRoutes: export job creation + bundle generation
+// Authorized by HUB-1382 — adminComplianceExportRoutes: job status + ZIP download endpoints
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { operatorRbacHook } from '../hooks/operatorRbac.js';
@@ -28,6 +31,7 @@ import adminNotificationsRoutes from '../routes/admin/notifications.js';
 import adminComplianceRoutes from '../routes/admin/compliance.js';
 import adminComplianceDashboardRoutes from '../routes/admin/complianceDashboard.js';
 import adminComplianceAlertsRoutes from '../routes/admin/complianceAlerts.js';
+import adminComplianceExportRoutes from '../routes/admin/complianceExport.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -46,6 +50,7 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminComplianceRoutes);
     await scope.register(adminComplianceDashboardRoutes);
     await scope.register(adminComplianceAlertsRoutes);
+    await scope.register(adminComplianceExportRoutes);
   });
 };
 
