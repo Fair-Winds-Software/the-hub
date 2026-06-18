@@ -12,6 +12,7 @@
 // Authorized by HUB-1470 — BILL-004: createSubscription now accepts planId; resolves stripe_price_id internally
 // Authorized by HUB-1465 — 036 migration: plans + plan_archive_ledger; stripe_product_id on products
 // Authorized by HUB-1471 — planCatalogService integration test suite (STRIPE_INTEGRATION=1)
+// Authorized by HUB-1477 — catalogAddOnRoutes + tenantAddOnRoutes: add-on catalog + tenant activation endpoints
 // Authorized by HUB-349 — sdkRoutes registered in business routes slot; POST /api/v1/sdk/version-report
 // Authorized by HUB-350 — versionsRoutes registered in operator routes slot; GET /api/v1/products/:productId/versions
 // Authorized by HUB-552 — leasesRoutes registered in business routes slot; POST /api/v1/leases/issue and verify
@@ -93,6 +94,8 @@ import healthPlugin from './plugins/health.js';
 import pricingRoutes from './pricing/routes.js';
 import stripeWebhookPlugin from './webhooks/stripe.js';
 import catalogPlanRoutes from './routes/catalog/plans.routes.js';
+import catalogAddOnRoutes from './routes/catalog/add-ons.routes.js';
+import tenantAddOnRoutes from './routes/billing/tenant-add-ons.routes.js';
 import sdkRoutes from './routes/sdk.js';
 import versionsRoutes from './routes/versions.js';
 import leasesRoutes from './routes/leases.js';
@@ -140,6 +143,8 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(healthPlugin);
   await fastify.register(stripeWebhookPlugin);
   await fastify.register(catalogPlanRoutes);
+  await fastify.register(catalogAddOnRoutes);
+  await fastify.register(tenantAddOnRoutes);
   await fastify.register(pricingRoutes);
   await fastify.register(sdkRoutes);
   await fastify.register(versionsRoutes);
