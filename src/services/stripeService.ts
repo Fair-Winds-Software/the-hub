@@ -1,6 +1,7 @@
 // Authorized by HUB-426 — ensureStripeCustomer: get-or-create Stripe customer, upsert stripe_customers
 // Authorized by HUB-427 — createSubscription, cancelSubscription, getSubscription
 // Authorized by HUB-428 — handleSubscriptionUpdated, handleSubscriptionDeleted webhook processors
+// Authorized by HUB-1491 — handleSubscriptionUpdated enqueues confirm-plan-change BullMQ job
 // Authorized by HUB-1470 — BILL-004 wire-up: createSubscription accepts planId; resolves stripe_price_id internally
 import type Stripe from 'stripe';
 import { getPool } from '../db/pool.js';
@@ -238,6 +239,16 @@ export async function handleSubscriptionUpdated(eventId: string): Promise<void> 
   );
 
   logger.info({ eventId, subId: sub.id, tenantId, productId }, 'subscription updated');
+
+  // Enqueue plan-change confirmation (no-op if no pending ledger entry)
+  if (tenantId && productId) {
+    const { getBillingJobsQueue } = await import('../queues/index.js');
+    await getBillingJobsQueue().add('confirm-plan-change', {
+      tenantId,
+      productId,
+      newStripePriceId: item?.price.id ?? '',
+    });
+  }
 }
 
 // Webhook processor for customer.subscription.deleted events.

@@ -21,6 +21,7 @@
 // Authorized by HUB-1354 — human-escalation queue; daily CRON human overdue reminder scheduler
 // Authorized by HUB-1355 — drift-detection queue; daily CRON posture score drift detector
 // Authorized by HUB-1145 — plan-advisor queue; weekly CRON advisor engine for all active product/tenant pairs
+// Authorized by HUB-1489 — billing-jobs queue; grandfather-subscribers + confirm-plan-change processors
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -454,6 +455,33 @@ export function getPlanAdvisorQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(PLAN_ADVISOR_DEF.name, connection);
 }
 
+// Billing jobs queue: processes grandfather-subscribers and confirm-plan-change jobs (HUB-1489/1491)
+const BILLING_JOBS_DEF: QueueDefinition = {
+  name: 'queue:billing-jobs',
+  concurrency: 5,
+  maxAttempts: 5,
+  backoff: { type: 'exponential', delay: 500 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (job: Job) => {
+    if (job.name === 'grandfather-subscribers') {
+      const { grandfatherExistingSubscribers } = await import('../services/planChangeService.js');
+      const count = await grandfatherExistingSubscribers(job.data.planId as string);
+      job.log?.(`grandfathered ${count} subscribers for plan ${job.data.planId as string}`);
+    } else if (job.name === 'confirm-plan-change') {
+      const { confirmPlanChange } = await import('../services/planChangeService.js');
+      await confirmPlanChange(
+        job.data.tenantId as string,
+        job.data.productId as string,
+        job.data.newStripePriceId as string,
+      );
+    }
+  },
+};
+
+export function getBillingJobsQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(BILLING_JOBS_DEF.name, connection);
+}
+
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
 registerQueue(STRIPE_EVENT_DEF);
 registerQueue(BATCH_SWEEP_DEF);
@@ -493,5 +521,7 @@ registerQueue(HUMAN_ESCALATION_DEF);
 registerQueue(DRIFT_DETECTION_DEF);
 // HUB-1145 plan advisor weekly CRON
 registerQueue(PLAN_ADVISOR_DEF);
+// HUB-1489/1491 billing jobs (grandfather-subscribers, confirm-plan-change)
+registerQueue(BILLING_JOBS_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);

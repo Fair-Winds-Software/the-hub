@@ -1,6 +1,7 @@
 // Authorized by HUB-1466 — createPlan(): Stripe Product/Price creation with billing type mapping
 // Authorized by HUB-1467 — archivePlan(): soft-archive + immutable ledger entry
 // Authorized by HUB-1468 — getPlans(), getPlanById(): plan list and BILL-004 planId resolution
+// Authorized by HUB-1489 — archivePlan() enqueues grandfather-subscribers BullMQ job
 import type Stripe from 'stripe';
 import { getPool } from '../db/pool.js';
 import { getStripe, stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
@@ -237,6 +238,11 @@ export async function archivePlan(
     'SELECT * FROM plans WHERE id = $1',
     [planId],
   );
+
+  // Enqueue grandfathering job asynchronously — does not block the archive response
+  const { getBillingJobsQueue } = await import('../queues/index.js');
+  await getBillingJobsQueue().add('grandfather-subscribers', { planId });
+
   return updated[0]!;
 }
 

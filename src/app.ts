@@ -14,6 +14,7 @@
 // Authorized by HUB-1471 — planCatalogService integration test suite (STRIPE_INTEGRATION=1)
 // Authorized by HUB-1477 — catalogAddOnRoutes + tenantAddOnRoutes: add-on catalog + tenant activation endpoints
 // Authorized by HUB-1484 — catalogDiscountRoutes + billingFlexibilityRoutes: discounts, credits, price-override endpoints
+// Authorized by HUB-1492 — planChangeRoutes: POST plan-change + GET plan-change history
 // Authorized by HUB-349 — sdkRoutes registered in business routes slot; POST /api/v1/sdk/version-report
 // Authorized by HUB-350 — versionsRoutes registered in operator routes slot; GET /api/v1/products/:productId/versions
 // Authorized by HUB-552 — leasesRoutes registered in business routes slot; POST /api/v1/leases/issue and verify
@@ -99,6 +100,7 @@ import catalogAddOnRoutes from './routes/catalog/add-ons.routes.js';
 import tenantAddOnRoutes from './routes/billing/tenant-add-ons.routes.js';
 import catalogDiscountRoutes from './routes/catalog/discounts.routes.js';
 import billingFlexibilityRoutes from './routes/billing/flexibility.routes.js';
+import planChangeRoutes from './routes/billing/plan-change.routes.js';
 import sdkRoutes from './routes/sdk.js';
 import versionsRoutes from './routes/versions.js';
 import leasesRoutes from './routes/leases.js';
@@ -150,6 +152,7 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(tenantAddOnRoutes);
   await fastify.register(catalogDiscountRoutes);
   await fastify.register(billingFlexibilityRoutes);
+  await fastify.register(planChangeRoutes);
   await fastify.register(pricingRoutes);
   await fastify.register(sdkRoutes);
   await fastify.register(versionsRoutes);
