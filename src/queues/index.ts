@@ -18,6 +18,8 @@
 // Authorized by HUB-787 — escalation scanner queue; CRON-driven scan every 5 minutes; consumed by E20
 // Authorized by HUB-808 — escalation deliver queue; contact fan-out; 3-retry DLQ policy
 // Authorized by HUB-829 — workflow hook delivery queue; event-driven; 3-retry DLQ policy
+// Authorized by HUB-1354 — human-escalation queue; daily CRON human overdue reminder scheduler
+// Authorized by HUB-1355 — drift-detection queue; daily CRON posture score drift detector
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -400,6 +402,40 @@ export function getComplianceEvalQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(COMPLIANCE_EVAL_DEF.name, connection);
 }
 
+// Human escalation queue: daily CRON fires T-7/T-1/T-0/overdue reminders for human controls (HUB-1354)
+const HUMAN_ESCALATION_DEF: QueueDefinition = {
+  name: 'queue:compliance:human-escalation',
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 5000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (_job: Job) => {
+    const { runHumanEscalationScheduler } = await import('../services/complianceAlertService.js');
+    await runHumanEscalationScheduler();
+  },
+};
+
+export function getHumanEscalationQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(HUMAN_ESCALATION_DEF.name, connection);
+}
+
+// Drift detection queue: daily CRON detects 7-day posture score drops (HUB-1355)
+const DRIFT_DETECTION_DEF: QueueDefinition = {
+  name: 'queue:compliance:drift-detection',
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 5000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (_job: Job) => {
+    const { runDriftDetectionEngine } = await import('../services/complianceAlertService.js');
+    await runDriftDetectionEngine();
+  },
+};
+
+export function getDriftDetectionQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(DRIFT_DETECTION_DEF.name, connection);
+}
+
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
 registerQueue(STRIPE_EVENT_DEF);
 registerQueue(BATCH_SWEEP_DEF);
@@ -433,5 +469,9 @@ registerQueue(PERIOD_COST_AGGREGATOR_DEF);
 registerQueue(WORKFLOW_HOOK_DEF);
 // E35 compliance evaluation daily CRON
 registerQueue(COMPLIANCE_EVAL_DEF);
+// HUB-1354 human escalation daily CRON
+registerQueue(HUMAN_ESCALATION_DEF);
+// HUB-1355 drift detection daily CRON
+registerQueue(DRIFT_DETECTION_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);

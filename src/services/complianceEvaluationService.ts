@@ -1,7 +1,10 @@
 // Authorized by HUB-1043 — automated control evaluator: daily CRON, cadence-window signal lookup, pass/fail verdicts
 // Authorized by HUB-1048 — human control evaluator, posture score aggregation, current/history query helpers
+// Authorized by HUB-1118 — PASS→FAIL transition detection: pre-evaluation snapshot + fireControlFailureAlert hook
 import type { Pool } from 'pg';
 import { getPool } from '../db/pool.js';
+import { fireControlFailureAlert } from './complianceAlertService.js';
+import logger from '../lib/logger.js';
 
 type Verdict = 'pass' | 'fail' | 'overdue' | 'observe';
 
@@ -74,15 +77,23 @@ async function _evaluate(
   for (const reg of registrations) {
     const { rows: bindings } = await pool.query<{
       control_id: string;
+      control_key: string;
       control_class: 'automated' | 'human';
       eval_cadence: string;
     }>(
-      `SELECT b.control_id, c.control_class, c.eval_cadence
+      `SELECT b.control_id, c.control_id AS control_key, c.control_class, c.eval_cadence
        FROM product_control_bindings b
        JOIN compliance_controls c ON c.id = b.control_id
        WHERE b.product_id = $1 AND b.active = true AND c.active = true`,
       [reg.product_id],
     );
+
+    // Pre-evaluation snapshot: captures previous verdicts before upsert (HUB-1118)
+    const { rows: prevRows } = await pool.query<{ control_id: string; verdict: string }>(
+      `SELECT control_id, verdict FROM compliance_current_verdicts WHERE product_id = $1`,
+      [reg.product_id],
+    );
+    const previousVerdicts = new Map(prevRows.map((r) => [r.control_id, r.verdict]));
 
     const evaluatedAt = new Date();
 
@@ -123,6 +134,14 @@ async function _evaluate(
              signal_id = EXCLUDED.signal_id`,
         [reg.product_id, binding.control_id, verdict, evaluatedAt, runId, signalId],
       );
+
+      // PASS→FAIL transition detection: fire alert asynchronously (non-blocking)
+      const previousVerdict = previousVerdicts.get(binding.control_id);
+      if (previousVerdict === 'pass' && verdict === 'fail' && binding.control_class === 'automated') {
+        fireControlFailureAlert(reg.product_id, binding.control_id, binding.control_key, previousVerdict).catch(
+          (err) => logger.error({ err, controlId: binding.control_id }, 'Control failure alert dispatch failed'),
+        );
+      }
 
       await pool.query(
         `INSERT INTO compliance_verdict_history

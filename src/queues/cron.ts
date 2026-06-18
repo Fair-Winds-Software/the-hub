@@ -6,9 +6,11 @@
 // Authorized by HUB-672 — period_cost_aggregator CRON entry; D-006 monthly cost aggregation
 // Authorized by HUB-787 — escalation_scanner CRON entry; D-007 5-minute escalation scan interval
 // Authorized by HUB-1043 — compliance_evaluation CRON entry; D-008 daily evaluation at 03:00 UTC
+// Authorized by HUB-1354 — human_escalation CRON entry; D-009 daily human overdue reminders at 08:00 UTC
+// Authorized by HUB-1355 — drift_detection CRON entry; D-010 daily drift detection at 04:00 UTC
 import type { Queue } from 'bullmq';
-import { getBatchSweepQueue, getLicenseCheckQueue, getGracePeriodExpiryScannerQueue, getMarginReviewQueue, getPeriodCostAggregatorQueue, getEscalationScannerQueue, getComplianceEvalQueue } from './index.js';
-import { D_002_PROMOTION_CRON, D_003_RETENTION_CRON, D_004_GRACE_PERIOD_SCANNER_CRON, D_005_MARGIN_REVIEW_CRON, D_006_PERIOD_COST_AGGREGATOR_CRON, D_007_ESCALATION_SCANNER_CRON, D_008_COMPLIANCE_EVAL_CRON } from '../config/decisions.js';
+import { getBatchSweepQueue, getLicenseCheckQueue, getGracePeriodExpiryScannerQueue, getMarginReviewQueue, getPeriodCostAggregatorQueue, getEscalationScannerQueue, getComplianceEvalQueue, getHumanEscalationQueue, getDriftDetectionQueue } from './index.js';
+import { D_002_PROMOTION_CRON, D_003_RETENTION_CRON, D_004_GRACE_PERIOD_SCANNER_CRON, D_005_MARGIN_REVIEW_CRON, D_006_PERIOD_COST_AGGREGATOR_CRON, D_007_ESCALATION_SCANNER_CRON, D_008_COMPLIANCE_EVAL_CRON, D_009_HUMAN_ESCALATION_CRON, D_010_DRIFT_DETECTION_CRON } from '../config/decisions.js';
 import logger from '../lib/logger.js';
 
 interface CronDefinition {
@@ -73,6 +75,18 @@ const CRON_DEFINITIONS: CronDefinition[] = [
     queueFactory: getComplianceEvalQueue,
     name: 'compliance_evaluation',
     cron: D_008_COMPLIANCE_EVAL_CRON,
+    payload: { triggered: 'scheduled' },
+  },
+  {
+    queueFactory: getHumanEscalationQueue,
+    name: 'human_escalation',
+    cron: D_009_HUMAN_ESCALATION_CRON,
+    payload: { triggered: 'scheduled' },
+  },
+  {
+    queueFactory: getDriftDetectionQueue,
+    name: 'drift_detection',
+    cron: D_010_DRIFT_DETECTION_CRON,
     payload: { triggered: 'scheduled' },
   },
 ];

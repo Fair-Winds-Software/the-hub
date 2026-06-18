@@ -54,3 +54,13 @@ export const D_007_ESCALATION_SCANNER_CRON: string =
 // Overridable via COMPLIANCE_EVAL_CRON env var. Defaults to 03:00 UTC daily.
 export const D_008_COMPLIANCE_EVAL_CRON: string =
   process.env.COMPLIANCE_EVAL_CRON ?? '0 3 * * *';
+
+// Authorized by HUB-1354 — D-009: CRON expression for human escalation scheduler.
+// Overridable via HUMAN_ESCALATION_CRON env var. Defaults to 08:00 UTC daily.
+export const D_009_HUMAN_ESCALATION_CRON: string =
+  process.env.HUMAN_ESCALATION_CRON ?? '0 8 * * *';
+
+// Authorized by HUB-1355 — D-010: CRON expression for drift detection engine.
+// Overridable via DRIFT_DETECTION_CRON env var. Defaults to 04:00 UTC daily.
+export const D_010_DRIFT_DETECTION_CRON: string =
+  process.env.DRIFT_DETECTION_CRON ?? '0 4 * * *';

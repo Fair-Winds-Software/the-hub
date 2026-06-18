@@ -52,6 +52,13 @@
 // Authorized by HUB-1043 — complianceEvaluationService: daily CRON evaluator; automated+human control verdicts
 // Authorized by HUB-1048 — complianceEvaluationService: human evaluator + posture aggregation + query API (posture/verdicts/history)
 // Authorized by HUB-1057 — adminComplianceDashboardRoutes: overview, product detail, posture trend (via adminRoutesPlugin)
+// Authorized by HUB-1098 — 032 migration: alert_notifications, alert_acknowledgments, alert_rules; adminComplianceAlertsRoutes alert_rules GET/PUT
+// Authorized by HUB-1102 — adminComplianceAlertsRoutes: notification list, acknowledge, acknowledge-all
+// Authorized by HUB-1118 — complianceEvaluationService: PASS→FAIL transition detection; fireControlFailureAlert hook
+// Authorized by HUB-1354 — runHumanEscalationScheduler(): T-7/T-1/T-0/overdue reminder CRON (D-009)
+// Authorized by HUB-1355 — runDriftDetectionEngine(): 7-day posture score drop detection CRON (D-010)
+// Authorized by HUB-1365 — adminComplianceAlertsRoutes: in-app notification center
+// Authorized by HUB-1366 — complianceAlertService: deliverAlert, getAlertRule, fireControlFailureAlert, runHumanEscalationScheduler, runDriftDetectionEngine
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';
