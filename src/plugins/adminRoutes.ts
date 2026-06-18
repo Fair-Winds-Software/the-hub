@@ -18,6 +18,10 @@
 // Authorized by HUB-1377 — adminComplianceExportRoutes: evidence query endpoint
 // Authorized by HUB-1380 — adminComplianceExportRoutes: export job creation + bundle generation
 // Authorized by HUB-1382 — adminComplianceExportRoutes: job status + ZIP download endpoints
+// Authorized by HUB-1142 — adminAdvisorRoutes: run advisor endpoint
+// Authorized by HUB-1143 — adminAdvisorRoutes: latest recommendation endpoint
+// Authorized by HUB-1144 — adminAdvisorRoutes: record outcome endpoint
+// Authorized by HUB-1149 — adminAdvisorRoutes: portfolio summary endpoint
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { operatorRbacHook } from '../hooks/operatorRbac.js';
@@ -32,6 +36,7 @@ import adminComplianceRoutes from '../routes/admin/compliance.js';
 import adminComplianceDashboardRoutes from '../routes/admin/complianceDashboard.js';
 import adminComplianceAlertsRoutes from '../routes/admin/complianceAlerts.js';
 import adminComplianceExportRoutes from '../routes/admin/complianceExport.js';
+import adminAdvisorRoutes from '../routes/admin/advisor.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -51,6 +56,7 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminComplianceDashboardRoutes);
     await scope.register(adminComplianceAlertsRoutes);
     await scope.register(adminComplianceExportRoutes);
+    await scope.register(adminAdvisorRoutes);
   });
 };
 

@@ -64,6 +64,11 @@
 // Authorized by HUB-1381 — evidenceExportService: buildCoverDocument() auditor markdown summary
 // Authorized by HUB-1382 — adminComplianceExportRoutes: POST create job, GET status, GET download stream
 // Authorized by HUB-1383 — evidenceExport integration test suite (RUN_INTEGRATION=1)
+// Authorized by HUB-1141 — 034 migration: advisor_recommendations + advisor_outcomes tables
+// Authorized by HUB-1142 — planAdvisorService: runAdvisor() 5-step engine; adminAdvisorRoutes: run endpoint
+// Authorized by HUB-1143 — adminAdvisorRoutes: GET latest recommendation; Redis 60s cache + stale flag
+// Authorized by HUB-1144 — adminAdvisorRoutes: POST outcome; cache invalidation
+// Authorized by HUB-1145 — plan_advisor BullMQ weekly CRON (D-011 Monday 02:00 UTC); runWeeklyAdvisor()
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';

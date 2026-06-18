@@ -20,6 +20,7 @@
 // Authorized by HUB-829 — workflow hook delivery queue; event-driven; 3-retry DLQ policy
 // Authorized by HUB-1354 — human-escalation queue; daily CRON human overdue reminder scheduler
 // Authorized by HUB-1355 — drift-detection queue; daily CRON posture score drift detector
+// Authorized by HUB-1145 — plan-advisor queue; weekly CRON advisor engine for all active product/tenant pairs
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
 import { getRedisClient } from '../redis/client.js';
@@ -436,6 +437,23 @@ export function getDriftDetectionQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(DRIFT_DETECTION_DEF.name, connection);
 }
 
+// Plan advisor queue: weekly CRON runs advisor for all active (product, tenant) pairs (HUB-1145)
+const PLAN_ADVISOR_DEF: QueueDefinition = {
+  name: 'queue:advisor:weekly',
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 5000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (_job: Job) => {
+    const { runWeeklyAdvisor } = await import('../services/planAdvisorService.js');
+    await runWeeklyAdvisor();
+  },
+};
+
+export function getPlanAdvisorQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(PLAN_ADVISOR_DEF.name, connection);
+}
+
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
 registerQueue(STRIPE_EVENT_DEF);
 registerQueue(BATCH_SWEEP_DEF);
@@ -473,5 +491,7 @@ registerQueue(COMPLIANCE_EVAL_DEF);
 registerQueue(HUMAN_ESCALATION_DEF);
 // HUB-1355 drift detection daily CRON
 registerQueue(DRIFT_DETECTION_DEF);
+// HUB-1145 plan advisor weekly CRON
+registerQueue(PLAN_ADVISOR_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);

@@ -64,3 +64,8 @@ export const D_009_HUMAN_ESCALATION_CRON: string =
 // Overridable via DRIFT_DETECTION_CRON env var. Defaults to 04:00 UTC daily.
 export const D_010_DRIFT_DETECTION_CRON: string =
   process.env.DRIFT_DETECTION_CRON ?? '0 4 * * *';
+
+// Authorized by HUB-1145 — D-011: CRON expression for weekly plan advisor job.
+// Overridable via PLAN_ADVISOR_CRON env var. Defaults to Monday 02:00 UTC.
+export const D_011_PLAN_ADVISOR_CRON: string =
+  process.env.PLAN_ADVISOR_CRON ?? '0 2 * * 1';
