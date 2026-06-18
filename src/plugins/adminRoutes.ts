@@ -21,7 +21,10 @@
 // Authorized by HUB-1142 — adminAdvisorRoutes: run advisor endpoint
 // Authorized by HUB-1143 — adminAdvisorRoutes: latest recommendation endpoint
 // Authorized by HUB-1144 — adminAdvisorRoutes: record outcome endpoint
-// Authorized by HUB-1149 — adminAdvisorRoutes: portfolio summary endpoint
+// Authorized by HUB-1148 — adminAdvisorRoutes: billing-summary, audit-note, history endpoints
+// Authorized by HUB-1149 — adminAdvisorRoutes: enhanced portfolio summary + CSV export
+// Authorized by HUB-1146 — adminOperatorConsoleRoutes: pricing overview endpoint
+// Authorized by HUB-1147 — adminOperatorConsoleRoutes: tenant list, plan assignment, discounts, overrides, audit log
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { operatorRbacHook } from '../hooks/operatorRbac.js';
@@ -37,6 +40,7 @@ import adminComplianceDashboardRoutes from '../routes/admin/complianceDashboard.
 import adminComplianceAlertsRoutes from '../routes/admin/complianceAlerts.js';
 import adminComplianceExportRoutes from '../routes/admin/complianceExport.js';
 import adminAdvisorRoutes from '../routes/admin/advisor.js';
+import adminOperatorConsoleRoutes from '../routes/admin/operatorConsole.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -57,6 +61,7 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminComplianceAlertsRoutes);
     await scope.register(adminComplianceExportRoutes);
     await scope.register(adminAdvisorRoutes);
+    await scope.register(adminOperatorConsoleRoutes);
   });
 };
 

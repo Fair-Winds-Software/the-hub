@@ -69,6 +69,10 @@
 // Authorized by HUB-1143 — adminAdvisorRoutes: GET latest recommendation; Redis 60s cache + stale flag
 // Authorized by HUB-1144 — adminAdvisorRoutes: POST outcome; cache invalidation
 // Authorized by HUB-1145 — plan_advisor BullMQ weekly CRON (D-011 Monday 02:00 UTC); runWeeklyAdvisor()
+// Authorized by HUB-1146 — 035 migration + operatorConsoleService: pricing overview endpoint
+// Authorized by HUB-1147 — operatorConsoleService: tenant list, plan assignment, discounts, overrides, audit log
+// Authorized by HUB-1148 — planAdvisorService: billing-summary, audit-note, recommendation history
+// Authorized by HUB-1149 — planAdvisorService: enhanced portfolio summary + CSV export; health badges; churn risk
 import Fastify from 'fastify';
 import type { DestinationStream } from 'pino';
 import { createServerOptions } from './server.js';

@@ -3,6 +3,8 @@
 // Authorized by HUB-1143 — getLatestRecommendation(): Redis 60s cache; stale flag
 // Authorized by HUB-1144 — recordOutcome(): outcome write; parent status update; cache invalidation
 // Authorized by HUB-1145 — runWeeklyAdvisor(): batch runner for all active (product, tenant) pairs
+// Authorized by HUB-1148 — getBillingSummary(), addAuditNote(), getRecommendationHistory()
+// Authorized by HUB-1149 — enhanced getPortfolioSummary(): MRR, health badges, churn risk, margin health; CSV export
 import { getPool } from '../db/pool.js';
 import { getRedisClient } from '../redis/client.js';
 import { getActivePricingModel } from './pricingModelService.js';
@@ -497,6 +499,36 @@ export async function recordOutcome(
 
 // ── getPortfolioSummary: aggregate view across all (product, tenant) pairs ─────
 
+export type HealthBadge = 'green' | 'amber' | 'red';
+
+export interface ProductCard {
+  product_id: string;
+  product_name: string;
+  active_tenants: number;
+  mrr_cents: number;
+  open_recommendation_count: number;
+  health_badge: HealthBadge;
+}
+
+export interface ChurnRiskRow {
+  tenant_id: string;
+  tenant_name: string;
+  product_id: string;
+  consecutive_stay_count: number;
+  last_usage_pct: number | null;
+}
+
+export interface MarginHealthRow {
+  discount_id: string;
+  tenant_id: string;
+  tenant_name: string;
+  product_id: string;
+  discount_type: string;
+  discount_value: string;
+  days_active: number;
+  notes: string | null;
+}
+
 export interface PortfolioSummary {
   total_products: number;
   open_recommendations: number;
@@ -508,36 +540,191 @@ export interface PortfolioSummary {
   rows: Array<{
     product_id: string;
     tenant_id: string;
+    tenant_name?: string;
     recommendation_type: RecommendationType;
     confidence: AdvisorConfidence;
     status: RecommendationStatus;
     week_start: string;
     projected_monthly_delta_cents: number | null;
   }>;
+  product_cards: ProductCard[];
+  churn_risk: ChurnRiskRow[];
+  margin_health: MarginHealthRow[];
 }
 
 export async function getPortfolioSummary(): Promise<PortfolioSummary> {
   const pool = getPool();
 
-  // Latest recommendation per (product, tenant)
+  // Latest recommendation per (product, tenant) with tenant name
   const { rows } = await pool.query<{
     product_id: string;
     tenant_id: string;
+    tenant_name: string;
     recommendation_type: RecommendationType;
     confidence: AdvisorConfidence;
     status: RecommendationStatus;
     week_start: string;
     projected_monthly_delta_cents: string | null;
   }>(
-    `SELECT DISTINCT ON (product_id, tenant_id)
-            product_id, tenant_id, recommendation_type, confidence,
-            status, week_start, projected_monthly_delta_cents
-     FROM advisor_recommendations
-     ORDER BY product_id, tenant_id, created_at DESC`,
+    `SELECT DISTINCT ON (ar.product_id, ar.tenant_id)
+            ar.product_id, ar.tenant_id, t.name AS tenant_name,
+            ar.recommendation_type, ar.confidence,
+            ar.status, ar.week_start, ar.projected_monthly_delta_cents
+     FROM advisor_recommendations ar
+     JOIN tenants t ON t.id = ar.tenant_id
+     ORDER BY ar.product_id, ar.tenant_id, ar.created_at DESC`,
   );
 
+  // Per-product MRR: sum of latest billing cost per tenant per product
+  const { rows: mrrRows } = await pool.query<{
+    product_id: string;
+    product_name: string;
+    mrr_cents: string;
+    active_tenants: string;
+  }>(
+    `SELECT
+       p.id AS product_id,
+       p.name AS product_name,
+       COALESCE(SUM(latest_bpc.total_cost_cents), 0)::TEXT AS mrr_cents,
+       COUNT(DISTINCT latest_bpc.tenant_id)::TEXT AS active_tenants
+     FROM products p
+     LEFT JOIN LATERAL (
+       SELECT DISTINCT ON (tenant_id) tenant_id, total_cost_cents
+       FROM billing_period_costs
+       WHERE product_id = p.id
+       ORDER BY tenant_id, period_start DESC
+     ) latest_bpc ON true
+     WHERE p.active = true
+     GROUP BY p.id, p.name
+     ORDER BY p.name`,
+  );
+
+  // Health badge logic per product
+  const openByProduct = new Map<string, { upgrade: number; total: number; churn: number }>();
+  for (const r of rows) {
+    if (!openByProduct.has(r.product_id)) {
+      openByProduct.set(r.product_id, { upgrade: 0, total: 0, churn: 0 });
+    }
+    const entry = openByProduct.get(r.product_id)!;
+    entry.total++;
+    if (r.status === 'open' && r.recommendation_type === 'upgrade') entry.upgrade++;
+  }
+
+  // Churn risk signals: tenants with 3+ consecutive Stay
+  const { rows: churnRows } = await pool.query<{
+    product_id: string;
+    tenant_id: string;
+    tenant_name: string;
+    consecutive_stay_count: string;
+  }>(
+    `WITH last_recs AS (
+       SELECT
+         ar.product_id,
+         ar.tenant_id,
+         t.name AS tenant_name,
+         ar.recommendation_type,
+         ROW_NUMBER() OVER (PARTITION BY ar.product_id, ar.tenant_id ORDER BY ar.created_at DESC) AS rn
+       FROM advisor_recommendations ar
+       JOIN tenants t ON t.id = ar.tenant_id
+     ),
+     stay_streak AS (
+       SELECT product_id, tenant_id, tenant_name, COUNT(*) AS cnt
+       FROM last_recs
+       WHERE rn <= 4 AND recommendation_type = 'stay'
+       GROUP BY product_id, tenant_id, tenant_name
+       HAVING COUNT(*) >= 3
+     )
+     SELECT product_id, tenant_id, tenant_name, cnt::TEXT AS consecutive_stay_count
+     FROM stay_streak
+     ORDER BY cnt DESC`,
+  );
+
+  // Add churn count to product badge calculation
+  for (const cr of churnRows) {
+    const entry = openByProduct.get(cr.product_id);
+    if (entry) entry.churn++;
+  }
+
+  // Latest usage per churn-risk tenant
+  const churnTenantKeys = churnRows.map((r) => `(${r.product_id}, ${r.tenant_id})`);
+  const lastUsagePct = new Map<string, number>();
+  if (churnRows.length > 0) {
+    const { rows: usageRows } = await pool.query<{
+      product_id: string;
+      tenant_id: string;
+      total_units: string;
+    }>(
+      `SELECT DISTINCT ON (tenant_id, product_id) tenant_id, product_id, total_units::TEXT
+       FROM billing_period_costs
+       WHERE (product_id, tenant_id) IN (
+         SELECT product_id, tenant_id FROM advisor_recommendations
+         WHERE product_id = ANY($1::uuid[]) AND tenant_id = ANY($2::uuid[])
+       )
+       ORDER BY tenant_id, product_id, period_start DESC`,
+      [churnRows.map((r) => r.product_id), churnRows.map((r) => r.tenant_id)],
+    );
+    for (const u of usageRows) {
+      lastUsagePct.set(`${u.product_id}:${u.tenant_id}`, parseInt(u.total_units, 10));
+    }
+  }
+
+  // Mark churn count in badge for products
+  void churnTenantKeys; // used implicitly via churnRows above
+
+  // Margin health: active discounts > 90 days
+  const { rows: marginRows } = await pool.query<{
+    discount_id: string;
+    tenant_id: string;
+    tenant_name: string;
+    product_id: string;
+    discount_type: string;
+    discount_value: string;
+    days_active: string;
+    notes: string | null;
+  }>(
+    `SELECT
+       d.id AS discount_id,
+       d.tenant_id,
+       t.name AS tenant_name,
+       d.product_id,
+       d.discount_type::TEXT,
+       d.discount_value::TEXT,
+       EXTRACT(EPOCH FROM (NOW() - d.created_at)) / 86400 AS days_active,
+       d.notes
+     FROM tenant_discounts d
+     JOIN tenants t ON t.id = d.tenant_id
+     WHERE d.active = true
+       AND d.created_at < NOW() - INTERVAL '90 days'
+       AND (d.expiry_date IS NULL OR d.expiry_date > NOW())
+     ORDER BY d.created_at ASC`,
+  );
+
+  // Compute health badges
+  const productCards: ProductCard[] = mrrRows.map((p) => {
+    const signals = openByProduct.get(p.product_id) ?? { upgrade: 0, total: 0, churn: 0 };
+    const tenantCount = parseInt(p.active_tenants, 10) || signals.total || 1;
+    const upgradeRatio = signals.upgrade / tenantCount;
+    const churnRatio = signals.churn / tenantCount;
+
+    let health_badge: HealthBadge = 'green';
+    if (churnRatio > 0.05) {
+      health_badge = 'red';
+    } else if (upgradeRatio > 0.1) {
+      health_badge = 'amber';
+    }
+
+    return {
+      product_id: p.product_id,
+      product_name: p.product_name,
+      active_tenants: parseInt(p.active_tenants, 10),
+      mrr_cents: parseInt(p.mrr_cents, 10),
+      open_recommendation_count: signals.upgrade,
+      health_badge,
+    };
+  });
+
   const summary: PortfolioSummary = {
-    total_products: rows.length,
+    total_products: mrrRows.length,
     open_recommendations: rows.filter((r) => r.status === 'open').length,
     upgrade_count: rows.filter((r) => r.recommendation_type === 'upgrade').length,
     downgrade_count: rows.filter((r) => r.recommendation_type === 'downgrade').length,
@@ -547,6 +734,7 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
     rows: rows.map((r) => ({
       product_id: r.product_id,
       tenant_id: r.tenant_id,
+      tenant_name: r.tenant_name,
       recommendation_type: r.recommendation_type,
       confidence: r.confidence,
       status: r.status,
@@ -556,9 +744,119 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
           ? parseInt(r.projected_monthly_delta_cents, 10)
           : null,
     })),
+    product_cards: productCards,
+    churn_risk: churnRows.map((r) => ({
+      tenant_id: r.tenant_id,
+      tenant_name: r.tenant_name,
+      product_id: r.product_id,
+      consecutive_stay_count: parseInt(r.consecutive_stay_count, 10),
+      last_usage_pct: lastUsagePct.get(`${r.product_id}:${r.tenant_id}`) ?? null,
+    })),
+    margin_health: marginRows.map((r) => ({
+      discount_id: r.discount_id,
+      tenant_id: r.tenant_id,
+      tenant_name: r.tenant_name,
+      product_id: r.product_id,
+      discount_type: r.discount_type,
+      discount_value: r.discount_value,
+      days_active: Math.floor(parseFloat(r.days_active)),
+      notes: r.notes,
+    })),
   };
 
   return summary;
+}
+
+// ── getBillingSummary: last 6 billing periods with usage vs included ──────────
+
+export interface BillingSummaryPeriod {
+  period_start: string;
+  period_end: string;
+  total_units: number;
+  total_cost_cents: number;
+  included_units: number;
+  overage_units: number;
+  utilisation_pct: number;
+}
+
+export async function getBillingSummary(
+  productId: string,
+  tenantId: string,
+): Promise<BillingSummaryPeriod[]> {
+  const periods = await fetchRecentPeriods(tenantId, productId, 6);
+  return periods.map((p) => {
+    const utilPct =
+      p.included_units > 0
+        ? (p.total_units / p.included_units) * 100
+        : p.total_units > 0
+          ? 100
+          : 0;
+    return {
+      period_start: p.period_start.toISOString(),
+      period_end: p.period_end.toISOString(),
+      total_units: p.total_units,
+      total_cost_cents: p.total_cost_cents,
+      included_units: p.included_units,
+      overage_units: p.overage_units,
+      utilisation_pct: Math.round(utilPct * 10) / 10,
+    };
+  });
+}
+
+// ── addAuditNote: write a note to operator_audit_log for a recommendation ─────
+
+export async function addAuditNote(
+  recommendationId: string,
+  note: string,
+  operatorId?: string,
+): Promise<{ id: string; created_at: string }> {
+  const pool = getPool();
+
+  // Verify recommendation exists
+  const { rows: recRows } = await pool.query<{ id: string; product_id: string; tenant_id: string }>(
+    `SELECT id, product_id, tenant_id FROM advisor_recommendations WHERE id = $1`,
+    [recommendationId],
+  );
+  if (recRows.length === 0) {
+    throw Object.assign(new Error('Recommendation not found'), { statusCode: 404 });
+  }
+  const rec = recRows[0]!;
+
+  const { rows } = await pool.query<{ id: string; created_at: Date }>(
+    `INSERT INTO operator_audit_log
+       (operator_id, entity_type, entity_id, action, notes, tenant_id, product_id, recommendation_id)
+     VALUES ($1, 'advisor_recommendation', $2, 'audit_note', $3, $4, $5, $2)
+     RETURNING id, created_at`,
+    [operatorId ?? null, recommendationId, note, rec.tenant_id, rec.product_id],
+  );
+
+  logger.info({ recommendationId, operatorId }, 'Audit note added to advisor recommendation');
+
+  const row = rows[0]!;
+  return { id: row.id, created_at: row.created_at.toISOString() };
+}
+
+// ── getRecommendationHistory: last N weeks of recommendations ─────────────────
+
+export async function getRecommendationHistory(
+  productId: string,
+  tenantId: string,
+  weeks = 4,
+): Promise<AdvisorRecommendation[]> {
+  const pool = getPool();
+
+  const { rows } = await pool.query<AdvisorRecommendation>(
+    `SELECT id, product_id, tenant_id, recommendation_type, suggested_plan_id, rationale,
+            confidence, status, week_start, projected_monthly_delta_cents, periods_analyzed,
+            created_at, updated_at
+     FROM advisor_recommendations
+     WHERE product_id = $1 AND tenant_id = $2
+       AND week_start >= CURRENT_DATE - ($3 * 7)
+     ORDER BY week_start DESC`,
+    [productId, tenantId, weeks],
+  );
+
+  return rows;
 }
 
 // ── runWeeklyAdvisor: BullMQ job runner ───────────────────────────────────────
