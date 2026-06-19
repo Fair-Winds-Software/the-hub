@@ -80,44 +80,48 @@
 // Authorized by HUB-1147 — operatorConsoleService: tenant list, plan assignment, discounts, overrides, audit log
 // Authorized by HUB-1148 — planAdvisorService: billing-summary, audit-note, recommendation history
 // Authorized by HUB-1149 — planAdvisorService: enhanced portfolio summary + CSV export; health badges; churn risk
-import Fastify from 'fastify';
-import type { DestinationStream } from 'pino';
-import { createServerOptions } from './server.js';
-import { validateEnv } from './config/env.js';
-import corsPlugin from './plugins/cors.js';
-import traceparentPlugin from './logging/plugin.js';
-import loggerPlugin from './plugins/logger.js';
-import errorHandlerPlugin from './plugins/errorHandler.js';
-import rateLimitPlugin from './plugins/rateLimit.js';
-import authPlugin from './plugins/auth.js';
-import operatorAuthPlugin from './plugins/operatorAuth.js';
-import healthRoutes from './routes/health.js';
-import healthPlugin from './plugins/health.js';
-import pricingRoutes from './pricing/routes.js';
-import stripeWebhookPlugin from './webhooks/stripe.js';
-import catalogPlanRoutes from './routes/catalog/plans.routes.js';
-import catalogAddOnRoutes from './routes/catalog/add-ons.routes.js';
-import tenantAddOnRoutes from './routes/billing/tenant-add-ons.routes.js';
-import catalogDiscountRoutes from './routes/catalog/discounts.routes.js';
-import billingFlexibilityRoutes from './routes/billing/flexibility.routes.js';
-import planChangeRoutes from './routes/billing/plan-change.routes.js';
-import sdkRoutes from './routes/sdk.js';
-import versionsRoutes from './routes/versions.js';
-import leasesRoutes from './routes/leases.js';
-import billingRoutes from './routes/billing.js';
-import pricingModelRoutes from './routes/pricingModelRoutes.js';
-import usageRoutes from './routes/usageRoutes.js';
-import marginRoutes from './routes/marginRoutes.js';
-import pricingActiveModelRoutes from './routes/pricingActiveModelRoutes.js';
-import costQueryRoutes from './routes/costQueryRoutes.js';
-import alertRoutes from './routes/alertRoutes.js';
-import notificationChannelRoutes from './routes/notificationChannelRoutes.js';
-import inAppNotificationRoutes from './routes/inAppNotificationRoutes.js';
-import escalationRuleRoutes from './routes/escalationRuleRoutes.js';
-import hookRoutes from './routes/hookRoutes.js';
-import adminRoutesPlugin from './plugins/adminRoutes.js';
-import portalRoutesPlugin from './plugins/portalRoutes.js';
-import complianceSignalPlugin from './routes/compliance/signals.js';
+// Authorized by HUB-1517 — auditContextPlugin: request.auditContext decorator + buildAuditContext helper
+// Authorized by HUB-1518 — auditRoutes: GET /api/v1/audit; operator JWT; tenant scoping; cursor pagination
+import Fastify from "fastify";
+import type { DestinationStream } from "pino";
+import { createServerOptions } from "./server.js";
+import { validateEnv } from "./config/env.js";
+import corsPlugin from "./plugins/cors.js";
+import traceparentPlugin from "./logging/plugin.js";
+import loggerPlugin from "./plugins/logger.js";
+import errorHandlerPlugin from "./plugins/errorHandler.js";
+import rateLimitPlugin from "./plugins/rateLimit.js";
+import authPlugin from "./plugins/auth.js";
+import operatorAuthPlugin from "./plugins/operatorAuth.js";
+import healthRoutes from "./routes/health.js";
+import healthPlugin from "./plugins/health.js";
+import pricingRoutes from "./pricing/routes.js";
+import stripeWebhookPlugin from "./webhooks/stripe.js";
+import catalogPlanRoutes from "./routes/catalog/plans.routes.js";
+import catalogAddOnRoutes from "./routes/catalog/add-ons.routes.js";
+import tenantAddOnRoutes from "./routes/billing/tenant-add-ons.routes.js";
+import catalogDiscountRoutes from "./routes/catalog/discounts.routes.js";
+import billingFlexibilityRoutes from "./routes/billing/flexibility.routes.js";
+import planChangeRoutes from "./routes/billing/plan-change.routes.js";
+import sdkRoutes from "./routes/sdk.js";
+import versionsRoutes from "./routes/versions.js";
+import leasesRoutes from "./routes/leases.js";
+import billingRoutes from "./routes/billing.js";
+import pricingModelRoutes from "./routes/pricingModelRoutes.js";
+import usageRoutes from "./routes/usageRoutes.js";
+import marginRoutes from "./routes/marginRoutes.js";
+import pricingActiveModelRoutes from "./routes/pricingActiveModelRoutes.js";
+import costQueryRoutes from "./routes/costQueryRoutes.js";
+import alertRoutes from "./routes/alertRoutes.js";
+import notificationChannelRoutes from "./routes/notificationChannelRoutes.js";
+import inAppNotificationRoutes from "./routes/inAppNotificationRoutes.js";
+import escalationRuleRoutes from "./routes/escalationRuleRoutes.js";
+import hookRoutes from "./routes/hookRoutes.js";
+import adminRoutesPlugin from "./plugins/adminRoutes.js";
+import portalRoutesPlugin from "./plugins/portalRoutes.js";
+import complianceSignalPlugin from "./routes/compliance/signals.js";
+import auditContextPlugin from "./plugins/auditContext.js";
+import auditRoutes from "./routes/auditRoutes.js";
 
 export async function buildApp(dest?: DestinationStream) {
   validateEnv();
@@ -171,6 +175,8 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(adminRoutesPlugin);
   await fastify.register(portalRoutesPlugin);
   await fastify.register(complianceSignalPlugin);
+  await fastify.register(auditContextPlugin);
+  await fastify.register(auditRoutes);
 
   return fastify;
 }
