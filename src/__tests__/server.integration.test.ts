@@ -16,6 +16,9 @@ beforeAll(async () => {
   process.env.REDIS_URL ??= "redis://localhost:6379";
   process.env.JWT_SECRET ??= "test-jwt-secret-hub77";
   process.env.OPERATOR_JWT_SECRET ??= "test-operator-jwt-secret-hub112";
+  // HUB-1525 — new required env vars
+  process.env.LEASE_ENCRYPTION_KEY ??= "test-lease-encryption-key-32bytes!!";
+  process.env.STRIPE_SECRET_KEY ??= "sk_test_hub_integration_test_key";
   // Disable stripe probe so /health only depends on pg + Redis (no Stripe credentials in test)
   process.env.HEALTH_CHECK_STRIPE_ENABLED ??= "false";
 
@@ -162,6 +165,37 @@ describe("env validation", () => {
       await expect(buildApp()).rejects.toThrow("JWT_SECRET");
     } finally {
       if (saved !== undefined) process.env.JWT_SECRET = saved;
+    }
+  });
+
+  it("throws listing LEASE_ENCRYPTION_KEY when it is missing", async () => {
+    const saved = process.env.LEASE_ENCRYPTION_KEY;
+    delete process.env.LEASE_ENCRYPTION_KEY;
+    try {
+      await expect(buildApp()).rejects.toThrow("LEASE_ENCRYPTION_KEY");
+    } finally {
+      if (saved !== undefined) process.env.LEASE_ENCRYPTION_KEY = saved;
+    }
+  });
+
+  it("throws when LEASE_ENCRYPTION_KEY is shorter than 32 bytes", async () => {
+    const saved = process.env.LEASE_ENCRYPTION_KEY;
+    process.env.LEASE_ENCRYPTION_KEY = "short";
+    try {
+      await expect(buildApp()).rejects.toThrow("LEASE_ENCRYPTION_KEY is too short");
+    } finally {
+      if (saved !== undefined) process.env.LEASE_ENCRYPTION_KEY = saved;
+      else delete process.env.LEASE_ENCRYPTION_KEY;
+    }
+  });
+
+  it("throws listing STRIPE_SECRET_KEY when it is missing", async () => {
+    const saved = process.env.STRIPE_SECRET_KEY;
+    delete process.env.STRIPE_SECRET_KEY;
+    try {
+      await expect(buildApp()).rejects.toThrow("STRIPE_SECRET_KEY");
+    } finally {
+      if (saved !== undefined) process.env.STRIPE_SECRET_KEY = saved;
     }
   });
 });

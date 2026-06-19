@@ -15,7 +15,7 @@ export interface AuditEntry {
   product_id?: string | null;
   actor_id?: string | null;
   actor_type?: string | null;
-  operation: "INSERT" | "UPDATE" | "DELETE";
+  operation: "INSERT" | "UPDATE" | "DELETE" | "SYSTEM_PRUNE";
   table_name: string;
   record_id?: string | null;
   old_values?: Record<string, unknown> | null;

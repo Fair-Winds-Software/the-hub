@@ -9,6 +9,7 @@
 // Authorized by HUB-1354 — human_escalation CRON added; count updated to 10
 // Authorized by HUB-1355 — drift_detection CRON added; count updated to 11
 // Authorized by HUB-1145 — plan_advisor CRON added; count updated to 12
+// Authorized by HUB-1524 — retention_monthly CRON added; count updated to 13
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mock queue factories ──────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ const mockQueue7 = { name: 'queue:compliance:evaluation', removeRepeatable: mock
 const mockQueue8 = { name: 'queue:compliance:human-escalation', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
 const mockQueue9 = { name: 'queue:compliance:drift-detection', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
 const mockQueue10 = { name: 'queue:advisor:weekly', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue11 = { name: 'queue:retention:monthly', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
 
 vi.mock('../index.js', () => ({
   getBatchSweepQueue: vi.fn().mockReturnValue(mockQueue),
@@ -36,6 +38,7 @@ vi.mock('../index.js', () => ({
   getHumanEscalationQueue: vi.fn().mockReturnValue(mockQueue8),
   getDriftDetectionQueue: vi.fn().mockReturnValue(mockQueue9),
   getPlanAdvisorQueue: vi.fn().mockReturnValue(mockQueue10),
+  getRetentionMonthlyQueue: vi.fn().mockReturnValue(mockQueue11),
   getAllQueueDefinitions: vi.fn().mockReturnValue([]),
   registerQueue: vi.fn(),
   getDlqQueue: vi.fn(),
@@ -78,9 +81,9 @@ describe('registerAllCronJobs()', () => {
     const { registerAllCronJobs } = await import('../cron.js');
     await registerAllCronJobs();
 
-    // One removeRepeatable per CRON definition (before each add) — now 12 definitions
-    expect(mockRemoveRepeatable).toHaveBeenCalledTimes(12);
-    expect(mockAdd).toHaveBeenCalledTimes(12);
+    // One removeRepeatable per CRON definition (before each add) — now 13 definitions
+    expect(mockRemoveRepeatable).toHaveBeenCalledTimes(13);
+    expect(mockAdd).toHaveBeenCalledTimes(13);
 
     // Verify the cron pattern is passed to removeRepeatable for batch-sweep
     expect(mockRemoveRepeatable).toHaveBeenCalledWith(
@@ -137,6 +140,11 @@ describe('registerAllCronJobs()', () => {
       'plan_advisor',
       expect.objectContaining({ pattern: '0 2 * * 1' }),
     );
+    // Verify retention_monthly is also registered
+    expect(mockRemoveRepeatable).toHaveBeenCalledWith(
+      'retention_monthly',
+      expect.objectContaining({ pattern: '0 3 1 * *' }),
+    );
   });
 
   it('calls add() with repeat.pattern set to the cron expression', async () => {
@@ -157,14 +165,14 @@ describe('registerAllCronJobs()', () => {
     const { registerAllCronJobs } = await import('../cron.js');
     await expect(registerAllCronJobs()).resolves.toBeUndefined();
 
-    // 11 remaining CRONs were still attempted despite first failing
-    expect(mockAdd).toHaveBeenCalledTimes(11);
+    // 12 remaining CRONs were still attempted despite first failing
+    expect(mockAdd).toHaveBeenCalledTimes(12);
   });
 
   it('registers all defined CRONs when CRON_ENABLED is not set', async () => {
     const { registerAllCronJobs } = await import('../cron.js');
     await registerAllCronJobs();
-    // 12 CRON definitions: batch-sweep + license-check-hourly + promote_staged_license_changes + sdk-version-retention-cron + grace-period-expiry-scanner + periodic_margin_review + period_cost_aggregator + escalation_scanner + compliance_evaluation + human_escalation + drift_detection + plan_advisor
-    expect(mockAdd).toHaveBeenCalledTimes(12);
+    // 13 CRON definitions: batch-sweep + license-check-hourly + promote_staged_license_changes + sdk-version-retention-cron + grace-period-expiry-scanner + periodic_margin_review + period_cost_aggregator + escalation_scanner + compliance_evaluation + human_escalation + drift_detection + plan_advisor + retention_monthly
+    expect(mockAdd).toHaveBeenCalledTimes(13);
   });
 });

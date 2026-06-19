@@ -1,4 +1,6 @@
 // Authorized by HUB-127 — queue registry; getAllQueueDefinitions() consumed by worker scaffold
+// Authorized by HUB-1523 — BullMQ retention policy: removeOnComplete (7d) + removeOnFail (30d) on all queues
+// Authorized by HUB-1524 — retention:monthly queue for audit_log + cost_ledger pruning CRON
 // Authorized by HUB-644 — margin-review queue; periodic_margin_review CRON processor
 // Authorized by HUB-1043 — compliance-evaluation queue; daily CRON evaluation runner
 // Authorized by HUB-643 — alerts queue; below_floor BullMQ event publication
@@ -59,12 +61,21 @@ export function defaultJobOptions(def: Pick<QueueDefinition, 'maxAttempts' | 'ba
   };
 }
 
+// Applied to every Queue at construction time — prevents unbounded Redis growth.
+const QUEUE_RETENTION_OPTIONS = {
+  removeOnComplete: { age: 604800 },  // 7 days in seconds
+  removeOnFail: { age: 2592000 },     // 30 days in seconds
+} as const;
+
 function getOrCreateQueue(name: string, connection?: ConnectionOptions): Queue {
   const existing = _queueInstances.get(name);
   if (existing) return existing;
   // Cast required: BullMQ bundles its own ioredis version; same pattern as worker.ts
   const conn = connection ?? (getRedisClient() as unknown as ConnectionOptions);
-  const q = new Queue(name, { connection: conn });
+  const q = new Queue(name, {
+    connection: conn,
+    defaultJobOptions: QUEUE_RETENTION_OPTIONS,
+  });
   _queueInstances.set(name, q);
   return q;
 }
@@ -482,6 +493,26 @@ export function getBillingJobsQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(BILLING_JOBS_DEF.name, connection);
 }
 
+// Monthly data retention CRON job: audit_log (36-month floor) + cost_ledger (RETAIN_MONTHS)
+const RETENTION_MONTHLY_DEF: QueueDefinition = {
+  name: 'queue:retention:monthly',
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 5000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (job: Job) => {
+    if (job.name === 'retention_monthly') {
+      const { runAuditLogRetention, runCostLedgerRetention } = await import('./retentionJob.js');
+      await runAuditLogRetention();
+      await runCostLedgerRetention();
+    }
+  },
+};
+
+export function getRetentionMonthlyQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(RETENTION_MONTHLY_DEF.name, connection);
+}
+
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
 registerQueue(STRIPE_EVENT_DEF);
 registerQueue(BATCH_SWEEP_DEF);
@@ -523,5 +554,7 @@ registerQueue(DRIFT_DETECTION_DEF);
 registerQueue(PLAN_ADVISOR_DEF);
 // HUB-1489/1491 billing jobs (grandfather-subscribers, confirm-plan-change)
 registerQueue(BILLING_JOBS_DEF);
+// HUB-1524 monthly data retention (audit_log 36-month + cost_ledger RETAIN_MONTHS pruning)
+registerQueue(RETENTION_MONTHLY_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);

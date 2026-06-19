@@ -1,9 +1,13 @@
 // Authorized by HUB-146 — unit tests for queue factory: singleton instances, definitions registry
+// Authorized by HUB-1523 — retention policy: removeOnComplete (7d) + removeOnFail (30d) on all queues
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock BullMQ Queue — no real Redis connection
+// Mock BullMQ Queue — captures name and options for retention policy assertions
 vi.mock('bullmq', () => ({
-  Queue: vi.fn().mockImplementation((name: string) => ({ name })),
+  Queue: vi.fn().mockImplementation((name: string, opts?: Record<string, unknown>) => ({
+    name,
+    _opts: opts,
+  })),
   Worker: vi.fn().mockImplementation((name: string) => ({
     name,
     close: vi.fn().mockResolvedValue(undefined),
@@ -79,5 +83,31 @@ describe('defaultJobOptions()', () => {
     const opts = defaultJobOptions({ maxAttempts: 4, backoff: { type: 'exponential', delay: 2000 } });
     expect(opts.attempts).toBe(4);
     expect(opts.backoff).toMatchObject({ type: 'exponential', delay: 2000 });
+  });
+});
+
+describe('BullMQ retention policy (HUB-1523)', () => {
+  it('getOrCreateQueue applies removeOnComplete {age: 604800} to every queue', async () => {
+    const { getBatchSweepQueue, getLicenseCheckQueue, getRetentionMonthlyQueue } = await import('../index.js');
+    const queues = [getBatchSweepQueue(), getLicenseCheckQueue(), getRetentionMonthlyQueue()];
+    for (const q of queues) {
+      const opts = (q as unknown as { _opts: { defaultJobOptions: { removeOnComplete: { age: number } } } })._opts;
+      expect(opts.defaultJobOptions?.removeOnComplete).toMatchObject({ age: 604800 });
+    }
+  });
+
+  it('getOrCreateQueue applies removeOnFail {age: 2592000} to every queue', async () => {
+    const { getBatchSweepQueue, getLicenseCheckQueue } = await import('../index.js');
+    const queues = [getBatchSweepQueue(), getLicenseCheckQueue()];
+    for (const q of queues) {
+      const opts = (q as unknown as { _opts: { defaultJobOptions: { removeOnFail: { age: number } } } })._opts;
+      expect(opts.defaultJobOptions?.removeOnFail).toMatchObject({ age: 2592000 });
+    }
+  });
+
+  it('retention:monthly queue is registered in getAllQueueDefinitions()', async () => {
+    const { getAllQueueDefinitions } = await import('../index.js');
+    const names = getAllQueueDefinitions().map((d) => d.name);
+    expect(names).toContain('queue:retention:monthly');
   });
 });
