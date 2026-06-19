@@ -1,4 +1,6 @@
 // Authorized by HUB-1518 — GET /api/v1/audit; operator JWT auth; tenant scoping; cursor pagination; 90-day max range
+// Authorized by HUB-46 FVL — M1: extract + forward actor_id and product_id query params
+// Authorized by HUB-46 FVL — M2: super_admin tenant_id is optional (omit for cross-tenant queries)
 
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
@@ -57,7 +59,7 @@ const auditRoutes: FastifyPluginAsync = async (fastify) => {
         throw new AppError(400, "from and to must be valid ISO8601 dates");
       }
 
-      let tenant_id: string;
+      let tenant_id: string | undefined;
 
       if (op.role === "tenant_admin") {
         const requested = q["tenant_id"];
@@ -68,8 +70,8 @@ const auditRoutes: FastifyPluginAsync = async (fastify) => {
         if (!op.tenant_id) throw new AppError(403, "Forbidden");
         tenant_id = op.tenant_id;
       } else {
-        if (!q["tenant_id"]) throw new AppError(400, "tenant_id is required");
-        tenant_id = q["tenant_id"];
+        // super_admin/operator: tenant_id is optional — omit to query across all tenants (M2)
+        tenant_id = q["tenant_id"] ?? undefined;
       }
 
       const rawLimit = parseInt(q["limit"] ?? "50", 10);
@@ -77,6 +79,8 @@ const auditRoutes: FastifyPluginAsync = async (fastify) => {
 
       const result = await queryAuditLog({
         tenant_id,
+        product_id: q["product_id"],
+        actor_id: q["actor_id"],
         table_name: q["table_name"],
         operation: q["operation"],
         from,

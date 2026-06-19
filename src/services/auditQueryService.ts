@@ -1,4 +1,5 @@
 // Authorized by HUB-1518 — queryAuditLog; cursor pagination; tenant scoping; 90-day max range
+// Authorized by HUB-46 FVL — M1: add product_id + actor_id filters; M2: tenant_id optional for super_admin cross-tenant queries
 
 import { getPool } from "../db/pool.js";
 import { AppError } from "../errors/AppError.js";
@@ -7,7 +8,9 @@ const MAX_RANGE_DAYS = 90;
 const MAX_LIMIT = 200;
 
 export interface AuditQueryParams {
-  tenant_id: string;
+  tenant_id?: string;  // optional — omit for super_admin cross-tenant queries (M2)
+  product_id?: string; // M1: filter by product
+  actor_id?: string;   // M1: filter by actor
   table_name?: string;
   operation?: string;
   from: Date;
@@ -68,14 +71,28 @@ export async function queryAuditLog(params: AuditQueryParams): Promise<{
   }
 
   const limit = Math.min(params.limit, MAX_LIMIT);
-  const conditions: string[] = [
-    "tenant_id = $1",
-    "created_at >= $2",
-    "created_at <= $3",
-  ];
-  const values: unknown[] = [params.tenant_id, params.from, params.to];
-  let idx = 4;
+  const conditions: string[] = [];
+  const values: unknown[] = [];
+  let idx = 1;
 
+  // tenant_id is optional: omitting it returns all-tenant data (super_admin only path)
+  if (params.tenant_id) {
+    conditions.push(`tenant_id = $${idx++}`);
+    values.push(params.tenant_id);
+  }
+  conditions.push(`created_at >= $${idx++}`);
+  values.push(params.from);
+  conditions.push(`created_at <= $${idx++}`);
+  values.push(params.to);
+
+  if (params.product_id) {
+    conditions.push(`product_id = $${idx++}`);
+    values.push(params.product_id);
+  }
+  if (params.actor_id) {
+    conditions.push(`actor_id = $${idx++}`);
+    values.push(params.actor_id);
+  }
   if (params.table_name) {
     conditions.push(`table_name = $${idx++}`);
     values.push(params.table_name);
@@ -94,7 +111,7 @@ export async function queryAuditLog(params: AuditQueryParams): Promise<{
     values.push(created_at, id);
   }
 
-  const where = conditions.join(" AND ");
+  const where = conditions.length ? conditions.join(" AND ") : "TRUE";
   const fetchLimit = limit + 1;
 
   const { rows } = await getPool().query<AuditRow>(

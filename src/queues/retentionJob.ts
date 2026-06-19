@@ -1,4 +1,5 @@
 // Authorized by HUB-1524 — monthly data retention: audit_log (36-month) + cost_ledger (RETAIN_MONTHS) pruning
+// Authorized by HUB-46 FVL — C1: use prune_audit_log() SECURITY DEFINER function; hub_app lacks direct DELETE on audit_log
 
 import { getPool } from '../db/pool.js';
 import logger from '../lib/logger.js';
@@ -24,11 +25,13 @@ export function getRetainMonths(): number {
 
 export async function runAuditLogRetention(): Promise<void> {
   const pool = getPool();
-  const { rowCount } = await pool.query(
-    `DELETE FROM audit_log
-      WHERE created_at < NOW() - INTERVAL '${AUDIT_LOG_RETAIN_MONTHS} months'`,
+  // hub_app has DELETE revoked on audit_log (R2 immutability). prune_audit_log() is a
+  // SECURITY DEFINER function that mediates the deletion without granting direct DELETE.
+  const { rows } = await pool.query<{ prune_audit_log: number }>(
+    'SELECT prune_audit_log($1)',
+    [AUDIT_LOG_RETAIN_MONTHS],
   );
-  const pruned = rowCount ?? 0;
+  const pruned = rows[0]?.prune_audit_log ?? 0;
 
   logger.info({ pruned, retain_months: AUDIT_LOG_RETAIN_MONTHS }, 'audit_log_retention_complete');
 
