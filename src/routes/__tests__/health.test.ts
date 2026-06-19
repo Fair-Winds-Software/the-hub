@@ -1,5 +1,6 @@
 // Authorized by HUB-230 — unit tests for deriveStatus(); integration tests for GET /health route
 // Authorized by HUB-1514 — ProbeResult-aware assertions; GET /ready tests
+// Authorized by HUB-1526 (FVL-E35) — pg→db; "error"→"down"; "timeout"→"degraded" per FR-35-03 spec
 import { describe, it, expect, vi, afterEach } from "vitest";
 import Fastify from "fastify";
 import type {
@@ -27,20 +28,20 @@ function stripeDisabled(): StripeProbeResult {
   return { status: "disabled", latency_ms: 0 };
 }
 
-function err(latency_ms = 1): ProbeResult {
-  return { status: "error", latency_ms };
+function down(latency_ms = 1): ProbeResult {
+  return { status: "down", latency_ms };
 }
 
-function stripeErr(latency_ms = 1): StripeProbeResult {
-  return { status: "error", latency_ms };
+function stripeDown(latency_ms = 1): StripeProbeResult {
+  return { status: "down", latency_ms };
 }
 
-function timeout(latency_ms = 2001): ProbeResult {
-  return { status: "timeout", latency_ms };
+function degraded(latency_ms = 501): ProbeResult {
+  return { status: "degraded", latency_ms };
 }
 
 function allOk(): HealthCheckResult {
-  return { pg: ok(), redis: ok(), stripe: stripeOk(), queue: ok() };
+  return { db: ok(), redis: ok(), stripe: stripeOk(), queue: ok() };
 }
 
 // ── deriveStatus() unit tests ─────────────────────────────────────────────────
@@ -50,10 +51,10 @@ describe("deriveStatus()", () => {
     expect(deriveStatus(allOk())).toBe("ok");
   });
 
-  it('returns "ok" when stripe is "disabled" and pg + redis + queue are "ok"', () => {
+  it('returns "ok" when stripe is "disabled" and db + redis + queue are "ok"', () => {
     expect(
       deriveStatus({
-        pg: ok(),
+        db: ok(),
         redis: ok(),
         stripe: stripeDisabled(),
         queue: ok(),
@@ -61,34 +62,34 @@ describe("deriveStatus()", () => {
     ).toBe("ok");
   });
 
-  it('returns "degraded" when pg returns "error"', () => {
+  it('returns "degraded" when db returns "down"', () => {
     expect(
-      deriveStatus({ pg: err(), redis: ok(), stripe: stripeOk(), queue: ok() }),
+      deriveStatus({ db: down(), redis: ok(), stripe: stripeOk(), queue: ok() }),
     ).toBe("degraded");
   });
 
-  it('returns "degraded" when redis returns "error"', () => {
+  it('returns "degraded" when redis returns "down"', () => {
     expect(
-      deriveStatus({ pg: ok(), redis: err(), stripe: stripeOk(), queue: ok() }),
+      deriveStatus({ db: ok(), redis: down(), stripe: stripeOk(), queue: ok() }),
     ).toBe("degraded");
   });
 
-  it('returns "degraded" when stripe returns "error"', () => {
+  it('returns "degraded" when stripe returns "down"', () => {
     expect(
-      deriveStatus({ pg: ok(), redis: ok(), stripe: stripeErr(), queue: ok() }),
+      deriveStatus({ db: ok(), redis: ok(), stripe: stripeDown(), queue: ok() }),
     ).toBe("degraded");
   });
 
-  it('returns "degraded" when queue returns "error"', () => {
+  it('returns "degraded" when queue returns "down"', () => {
     expect(
-      deriveStatus({ pg: ok(), redis: ok(), stripe: stripeOk(), queue: err() }),
+      deriveStatus({ db: ok(), redis: ok(), stripe: stripeOk(), queue: down() }),
     ).toBe("degraded");
   });
 
-  it('returns "degraded" when any probe returns "timeout"', () => {
+  it('returns "degraded" when any probe returns "degraded" (timeout)', () => {
     expect(
       deriveStatus({
-        pg: timeout(),
+        db: degraded(),
         redis: ok(),
         stripe: stripeOk(),
         queue: ok(),
@@ -96,18 +97,18 @@ describe("deriveStatus()", () => {
     ).toBe("degraded");
     expect(
       deriveStatus({
-        pg: ok(),
-        redis: timeout(),
+        db: ok(),
+        redis: degraded(),
         stripe: stripeOk(),
         queue: ok(),
       }),
     ).toBe("degraded");
   });
 
-  it('returns "degraded" when pg errors even with stripe "disabled"', () => {
+  it('returns "degraded" when db is "down" even with stripe "disabled"', () => {
     expect(
       deriveStatus({
-        pg: err(),
+        db: down(),
         redis: ok(),
         stripe: stripeDisabled(),
         queue: ok(),
@@ -131,7 +132,7 @@ afterEach(() => {
 // ── All probes succeed ────────────────────────────────────────────────────────
 
 describe("GET /health — all probes ok", () => {
-  it('returns HTTP 200 with {status:"ok", checks:{pg,redis,stripe,queue}}', async () => {
+  it('returns HTTP 200 with {status:"ok", checks:{db,redis,stripe,queue}}', async () => {
     vi.mocked(runHealthChecks).mockResolvedValue(allOk());
     const fastify = await buildTestApp();
     try {
@@ -139,7 +140,7 @@ describe("GET /health — all probes ok", () => {
       expect(res.statusCode).toBe(200);
       const body = res.json<{ status: string; checks: HealthCheckResult }>();
       expect(body.status).toBe("ok");
-      expect(body.checks.pg.status).toBe("ok");
+      expect(body.checks.db.status).toBe("ok");
       expect(body.checks.redis.status).toBe("ok");
       expect(body.checks.stripe.status).toBe("ok");
       expect(body.checks.queue.status).toBe("ok");
@@ -164,9 +165,9 @@ describe("GET /health — all probes ok", () => {
 // ── Probe failures ────────────────────────────────────────────────────────────
 
 describe("GET /health — probe failure", () => {
-  it('returns HTTP 503 with status:"degraded" when pg is "error"', async () => {
+  it('returns HTTP 503 with status:"degraded" when db is "down"', async () => {
     vi.mocked(runHealthChecks).mockResolvedValue({
-      pg: err(),
+      db: down(),
       redis: ok(),
       stripe: stripeOk(),
       queue: ok(),
@@ -177,7 +178,7 @@ describe("GET /health — probe failure", () => {
       expect(res.statusCode).toBe(503);
       const body = res.json<{ status: string; checks: HealthCheckResult }>();
       expect(body.status).toBe("degraded");
-      expect(body.checks.pg.status).toBe("error");
+      expect(body.checks.db.status).toBe("down");
       expect(body.checks.redis.status).toBe("ok");
       expect(body.checks.stripe.status).toBe("ok");
     } finally {
@@ -185,10 +186,10 @@ describe("GET /health — probe failure", () => {
     }
   });
 
-  it('preserves "timeout" as-is in the body — not remapped to "error"', async () => {
+  it('returns HTTP 503 with status:"degraded" when a probe times out ("degraded")', async () => {
     vi.mocked(runHealthChecks).mockResolvedValue({
-      pg: ok(),
-      redis: timeout(),
+      db: ok(),
+      redis: degraded(),
       stripe: stripeOk(),
       queue: ok(),
     });
@@ -198,15 +199,15 @@ describe("GET /health — probe failure", () => {
       expect(res.statusCode).toBe(503);
       const body = res.json<{ status: string; checks: HealthCheckResult }>();
       expect(body.status).toBe("degraded");
-      expect(body.checks.redis.status).toBe("timeout");
+      expect(body.checks.redis.status).toBe("degraded");
     } finally {
       await fastify.close();
     }
   });
 
-  it("all check results (pg, redis, stripe, queue) are always present in the body", async () => {
+  it("all check results (db, redis, stripe, queue) are always present in the body", async () => {
     vi.mocked(runHealthChecks).mockResolvedValue({
-      pg: err(),
+      db: down(),
       redis: ok(),
       stripe: stripeOk(),
       queue: ok(),
@@ -215,7 +216,7 @@ describe("GET /health — probe failure", () => {
     try {
       const res = await fastify.inject({ method: "GET", url: "/health" });
       const body = res.json<{ status: string; checks: HealthCheckResult }>();
-      expect(body.checks).toHaveProperty("pg");
+      expect(body.checks).toHaveProperty("db");
       expect(body.checks).toHaveProperty("redis");
       expect(body.checks).toHaveProperty("stripe");
       expect(body.checks).toHaveProperty("queue");
@@ -228,9 +229,9 @@ describe("GET /health — probe failure", () => {
 // ── Stripe disabled ───────────────────────────────────────────────────────────
 
 describe("GET /health — stripe disabled", () => {
-  it('returns HTTP 200 when stripe is "disabled" and pg+redis+queue are "ok"', async () => {
+  it('returns HTTP 200 when stripe is "disabled" and db+redis+queue are "ok"', async () => {
     vi.mocked(runHealthChecks).mockResolvedValue({
-      pg: ok(),
+      db: ok(),
       redis: ok(),
       stripe: stripeDisabled(),
       queue: ok(),
@@ -247,9 +248,9 @@ describe("GET /health — stripe disabled", () => {
     }
   });
 
-  it('"disabled" alone does not trigger 503 — pg+redis determine overall status', async () => {
+  it('"disabled" alone does not trigger 503 — db+redis determine overall status', async () => {
     vi.mocked(runHealthChecks).mockResolvedValue({
-      pg: err(),
+      db: down(),
       redis: ok(),
       stripe: stripeDisabled(),
       queue: ok(),
@@ -270,7 +271,7 @@ describe("GET /health — stripe disabled", () => {
 // ── GET /ready ────────────────────────────────────────────────────────────────
 
 describe("GET /ready — critical probes healthy", () => {
-  it('returns HTTP 200 with {status:"ok"} when pg and redis are healthy', async () => {
+  it('returns HTTP 200 with {status:"ok"} when db and redis are healthy', async () => {
     vi.mocked(runHealthChecks).mockResolvedValue(allOk());
     const fastify = await buildTestApp();
     try {
@@ -285,7 +286,7 @@ describe("GET /ready — critical probes healthy", () => {
 
   it('returns HTTP 200 even when stripe is "disabled" and queue is non-critical', async () => {
     vi.mocked(runHealthChecks).mockResolvedValue({
-      pg: ok(),
+      db: ok(),
       redis: ok(),
       stripe: stripeDisabled(),
       queue: ok(),
@@ -301,9 +302,9 @@ describe("GET /ready — critical probes healthy", () => {
 });
 
 describe("GET /ready — critical probe failure", () => {
-  it('returns HTTP 503 with failing:["pg"] when pg is down', async () => {
+  it('returns HTTP 503 with failing:["db"] when db is down', async () => {
     vi.mocked(runHealthChecks).mockResolvedValue({
-      pg: err(),
+      db: down(),
       redis: ok(),
       stripe: stripeOk(),
       queue: ok(),
@@ -314,7 +315,7 @@ describe("GET /ready — critical probe failure", () => {
       expect(res.statusCode).toBe(503);
       const body = res.json<{ status: string; failing: string[] }>();
       expect(body.status).toBe("degraded");
-      expect(body.failing).toContain("pg");
+      expect(body.failing).toContain("db");
       expect(body.failing).not.toContain("redis");
     } finally {
       await fastify.close();
@@ -323,8 +324,8 @@ describe("GET /ready — critical probe failure", () => {
 
   it('returns HTTP 503 with failing:["redis"] when redis is down', async () => {
     vi.mocked(runHealthChecks).mockResolvedValue({
-      pg: ok(),
-      redis: err(),
+      db: ok(),
+      redis: down(),
       stripe: stripeOk(),
       queue: ok(),
     });
@@ -335,16 +336,16 @@ describe("GET /ready — critical probe failure", () => {
       const body = res.json<{ status: string; failing: string[] }>();
       expect(body.status).toBe("degraded");
       expect(body.failing).toContain("redis");
-      expect(body.failing).not.toContain("pg");
+      expect(body.failing).not.toContain("db");
     } finally {
       await fastify.close();
     }
   });
 
-  it("returns HTTP 503 with both pg and redis in failing[] when both are down", async () => {
+  it("returns HTTP 503 with both db and redis in failing[] when both are down", async () => {
     vi.mocked(runHealthChecks).mockResolvedValue({
-      pg: err(),
-      redis: timeout(),
+      db: down(),
+      redis: degraded(),
       stripe: stripeOk(),
       queue: ok(),
     });
@@ -353,7 +354,7 @@ describe("GET /ready — critical probe failure", () => {
       const res = await fastify.inject({ method: "GET", url: "/ready" });
       expect(res.statusCode).toBe(503);
       const body = res.json<{ status: string; failing: string[] }>();
-      expect(body.failing).toContain("pg");
+      expect(body.failing).toContain("db");
       expect(body.failing).toContain("redis");
     } finally {
       await fastify.close();

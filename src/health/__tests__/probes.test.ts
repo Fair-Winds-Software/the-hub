@@ -1,5 +1,6 @@
 // Authorized by HUB-217 — unit tests for runHealthChecks(); probe isolation; timeout; disabled stripe
 // Authorized by HUB-1514 — ProbeResult assertions; queue probe tests
+// Authorized by HUB-1526 (FVL-E35) — updated to spec status values (down/degraded) and db field name
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../../db/pool.js", () => ({ getPool: vi.fn() }));
@@ -50,7 +51,7 @@ describe("all probes succeed", () => {
   it('returns ProbeResult objects with status "ok" for all four probes', async () => {
     setupHappyPath();
     const result = await runHealthChecks();
-    expect(result.pg.status).toBe("ok");
+    expect(result.db.status).toBe("ok");
     expect(result.redis.status).toBe("ok");
     expect(result.stripe.status).toBe("ok");
     expect(result.queue.status).toBe("ok");
@@ -59,28 +60,28 @@ describe("all probes succeed", () => {
   it("includes non-negative latency_ms for all probes", async () => {
     setupHappyPath();
     const result = await runHealthChecks();
-    expect(result.pg.latency_ms).toBeGreaterThanOrEqual(0);
+    expect(result.db.latency_ms).toBeGreaterThanOrEqual(0);
     expect(result.redis.latency_ms).toBeGreaterThanOrEqual(0);
     expect(result.stripe.latency_ms).toBeGreaterThanOrEqual(0);
     expect(result.queue.latency_ms).toBeGreaterThanOrEqual(0);
   });
 });
 
-// ── pg probe ─────────────────────────────────────────────────────────────────
+// ── pg/db probe ───────────────────────────────────────────────────────────────
 
-describe("pg probe", () => {
-  it('returns status "error" when pool.query rejects', async () => {
+describe("db probe", () => {
+  it('returns status "down" when pool.query rejects', async () => {
     setupHappyPath();
     vi.mocked(getPool).mockReturnValue({
       query: vi.fn().mockRejectedValue(new Error("connection refused")),
     } as never);
     const result = await runHealthChecks();
-    expect(result.pg.status).toBe("error");
+    expect(result.db.status).toBe("down");
     expect(result.redis.status).toBe("ok");
     expect(result.stripe.status).toBe("ok");
   });
 
-  it('returns status "timeout" when pool.query never resolves within 2000ms', async () => {
+  it('returns status "degraded" when pool.query never resolves within 500ms', async () => {
     vi.useFakeTimers();
     setupHappyPath();
     vi.mocked(getPool).mockReturnValue({
@@ -88,10 +89,10 @@ describe("pg probe", () => {
     } as never);
 
     const promise = runHealthChecks();
-    await vi.advanceTimersByTimeAsync(2001);
+    await vi.advanceTimersByTimeAsync(501);
     const result = await promise;
 
-    expect(result.pg.status).toBe("timeout");
+    expect(result.db.status).toBe("degraded");
     expect(result.redis.status).toBe("ok");
     vi.useRealTimers();
   });
@@ -100,18 +101,18 @@ describe("pg probe", () => {
 // ── Redis probe ───────────────────────────────────────────────────────────────
 
 describe("redis probe", () => {
-  it('returns status "error" when redis.ping() rejects', async () => {
+  it('returns status "down" when redis.ping() rejects', async () => {
     setupHappyPath();
     vi.mocked(getRedisClient).mockReturnValue({
       ping: vi.fn().mockRejectedValue(new Error("ECONNREFUSED")),
     } as never);
     const result = await runHealthChecks();
-    expect(result.redis.status).toBe("error");
-    expect(result.pg.status).toBe("ok");
+    expect(result.redis.status).toBe("down");
+    expect(result.db.status).toBe("ok");
     expect(result.stripe.status).toBe("ok");
   });
 
-  it('returns status "timeout" when redis.ping() never resolves within 2000ms', async () => {
+  it('returns status "degraded" when redis.ping() never resolves within 500ms', async () => {
     vi.useFakeTimers();
     setupHappyPath();
     vi.mocked(getRedisClient).mockReturnValue({
@@ -119,11 +120,11 @@ describe("redis probe", () => {
     } as never);
 
     const promise = runHealthChecks();
-    await vi.advanceTimersByTimeAsync(2001);
+    await vi.advanceTimersByTimeAsync(501);
     const result = await promise;
 
-    expect(result.redis.status).toBe("timeout");
-    expect(result.pg.status).toBe("ok");
+    expect(result.redis.status).toBe("degraded");
+    expect(result.db.status).toBe("ok");
     vi.useRealTimers();
   });
 });
@@ -131,7 +132,7 @@ describe("redis probe", () => {
 // ── Stripe probe ──────────────────────────────────────────────────────────────
 
 describe("stripe probe — enabled (default)", () => {
-  it('returns status "error" when stripe.balance.retrieve() rejects', async () => {
+  it('returns status "down" when stripe.balance.retrieve() rejects', async () => {
     setupHappyPath();
     vi.mocked(getStripeClient).mockReturnValue({
       balance: {
@@ -139,8 +140,8 @@ describe("stripe probe — enabled (default)", () => {
       },
     } as never);
     const result = await runHealthChecks();
-    expect(result.stripe.status).toBe("error");
-    expect(result.pg.status).toBe("ok");
+    expect(result.stripe.status).toBe("down");
+    expect(result.db.status).toBe("ok");
     expect(result.redis.status).toBe("ok");
   });
 });
@@ -159,7 +160,7 @@ describe("stripe probe — HEALTH_CHECK_STRIPE_ENABLED=false", () => {
     expect(result.stripe.status).toBe("disabled");
     expect(result.stripe.latency_ms).toBe(0);
     expect(mockRetrieve).not.toHaveBeenCalled();
-    expect(result.pg.status).toBe("ok");
+    expect(result.db.status).toBe("ok");
     expect(result.redis.status).toBe("ok");
   });
 });
@@ -173,14 +174,14 @@ describe("queue probe", () => {
     expect(result.queue.status).toBe("ok");
   });
 
-  it('returns status "error" when getDlqQueue().getJobCounts() rejects', async () => {
+  it('returns status "down" when getDlqQueue().getJobCounts() rejects', async () => {
     setupHappyPath();
     vi.mocked(getDlqQueue).mockReturnValue({
       getJobCounts: vi.fn().mockRejectedValue(new Error("redis disconnected")),
     } as never);
     const result = await runHealthChecks();
-    expect(result.queue.status).toBe("error");
-    expect(result.pg.status).toBe("ok");
+    expect(result.queue.status).toBe("down");
+    expect(result.db.status).toBe("ok");
     expect(result.redis.status).toBe("ok");
   });
 });
@@ -188,7 +189,7 @@ describe("queue probe", () => {
 // ── Independent failure isolation ─────────────────────────────────────────────
 
 describe("probe isolation", () => {
-  it("a pg failure does not prevent redis, stripe, or queue from completing", async () => {
+  it("a db failure does not prevent redis, stripe, or queue from completing", async () => {
     vi.mocked(getPool).mockReturnValue({
       query: vi.fn().mockRejectedValue(new Error("pg down")),
     } as never);
@@ -204,7 +205,7 @@ describe("probe isolation", () => {
 
     const result = await runHealthChecks();
 
-    expect(result.pg.status).toBe("error");
+    expect(result.db.status).toBe("down");
     expect(result.redis.status).toBe("ok");
     expect(result.stripe.status).toBe("ok");
     expect(result.queue.status).toBe("ok");
@@ -226,9 +227,9 @@ describe("probe isolation", () => {
 
     const result = await runHealthChecks();
 
-    expect(result.pg.status).toBe("error");
-    expect(result.redis.status).toBe("error");
-    expect(result.stripe.status).toBe("error");
-    expect(result.queue.status).toBe("error");
+    expect(result.db.status).toBe("down");
+    expect(result.redis.status).toBe("down");
+    expect(result.stripe.status).toBe("down");
+    expect(result.queue.status).toBe("down");
   });
 });

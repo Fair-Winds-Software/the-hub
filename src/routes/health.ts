@@ -1,5 +1,6 @@
 // Authorized by HUB-230 — GET /health route; probe-backed aggregated health check; no auth or rate limit
 // Authorized by HUB-1514 — GET /ready route; pg+redis critical probes; 503 with failing[] array
+// Authorized by HUB-1526 (FVL-E35) — checks.db (was pg); failing[] uses "db"
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
 import { runHealthChecks, type HealthCheckResult } from "../health/probes.js";
@@ -29,7 +30,7 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
     async (_request, reply) => {
       const checks = await runHealthChecks();
       const failing: string[] = [];
-      if (checks.pg.status !== "ok") failing.push("pg");
+      if (checks.db.status !== "ok") failing.push("db");
       if (checks.redis.status !== "ok") failing.push("redis");
       if (failing.length > 0) {
         return reply.status(503).send({ status: "degraded", failing });

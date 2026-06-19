@@ -1,21 +1,22 @@
 // Authorized by HUB-237 — startup observability env validation; warn + apply default; never throws
+// Authorized by HUB-1526 (FVL-E35) — invalid LOG_LEVEL now calls process.exit(1) per FR-35-05 epic AC
 // Call validateObservabilityEnv() from every process entry point before createLogger().
 
 const VALID_PINO_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const;
 const VALID_STRIPE_FLAGS = ['true', 'false'] as const;
 
 // Validates LOG_LEVEL and HEALTH_CHECK_STRIPE_ENABLED at process startup.
-// Emits console.warn for invalid values and corrects the env var so that
-// downstream calls to resolveLogLevel() and health probes see a valid value.
-// Safe to call multiple times; never throws.
+// Invalid LOG_LEVEL aborts startup via process.exit(1) — a misconfigured log
+// level can mask critical errors in production.
+// Invalid HEALTH_CHECK_STRIPE_ENABLED warns and defaults (non-critical config).
+// Safe to call multiple times with valid config.
 export function validateObservabilityEnv(): void {
   const logLevel = process.env.LOG_LEVEL;
   if (logLevel !== undefined && !(VALID_PINO_LEVELS as readonly string[]).includes(logLevel)) {
-    const defaultLevel = process.env.NODE_ENV === 'production' ? 'info' : 'debug';
-    console.warn(
-      `[hub] Invalid LOG_LEVEL="${logLevel}" — must be one of ${VALID_PINO_LEVELS.join(', ')}; defaulting to "${defaultLevel}"`,
+    console.error(
+      `[hub] Invalid LOG_LEVEL="${logLevel}" — must be one of ${VALID_PINO_LEVELS.join(', ')}; aborting startup`,
     );
-    process.env.LOG_LEVEL = defaultLevel;
+    process.exit(1);
   }
 
   const stripeEnabled = process.env.HEALTH_CHECK_STRIPE_ENABLED;

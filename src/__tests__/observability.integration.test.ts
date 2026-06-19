@@ -1,4 +1,5 @@
 // Authorized by HUB-1515 — observability integration tests: log schema, traceparent, redaction, /health, /ready
+// Authorized by HUB-1526 (FVL-E35) — updated to spec status values (down/degraded) and db field name
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import Fastify from "fastify";
@@ -45,14 +46,14 @@ function createLogCapture() {
 // ── Probe result fixtures ─────────────────────────────────────────────────────
 
 function probe(
-  status: "ok" | "error" | "timeout",
+  status: "ok" | "degraded" | "down",
   latency_ms = 1,
 ): ProbeResult {
   return { status, latency_ms };
 }
 
 function stripeProbe(
-  status: "ok" | "error" | "disabled",
+  status: "ok" | "down" | "disabled",
   latency_ms = 1,
 ): StripeProbeResult {
   return { status, latency_ms };
@@ -60,7 +61,7 @@ function stripeProbe(
 
 function allOk(): HealthCheckResult {
   return {
-    pg: probe("ok"),
+    db: probe("ok"),
     redis: probe("ok"),
     stripe: stripeProbe("ok"),
     queue: probe("ok"),
@@ -225,7 +226,7 @@ describe("§5 GET /health", () => {
       expect(res.statusCode).toBe(200);
       const body = res.json<{ status: string; checks: HealthCheckResult }>();
       expect(body.status).toBe("ok");
-      expect(body.checks.pg.status).toBe("ok");
+      expect(body.checks.db.status).toBe("ok");
       expect(body.checks.redis.status).toBe("ok");
     } finally {
       await fastify.close();
@@ -234,7 +235,7 @@ describe("§5 GET /health", () => {
 
   it('returns 503 with status "degraded" when any probe fails', async () => {
     vi.mocked(runHealthChecks).mockResolvedValue({
-      pg: probe("error"),
+      db: probe("down"),
       redis: probe("ok"),
       stripe: stripeProbe("ok"),
       queue: probe("ok"),
@@ -245,7 +246,7 @@ describe("§5 GET /health", () => {
       expect(res.statusCode).toBe(503);
       const body = res.json<{ status: string; checks: HealthCheckResult }>();
       expect(body.status).toBe("degraded");
-      expect(body.checks.pg.status).toBe("error");
+      expect(body.checks.db.status).toBe("down");
     } finally {
       await fastify.close();
     }
@@ -261,7 +262,7 @@ describe("§6 GET /ready", () => {
     return fastify;
   }
 
-  it("returns 200 when pg and redis are healthy", async () => {
+  it("returns 200 when db and redis are healthy", async () => {
     vi.mocked(runHealthChecks).mockResolvedValue(allOk());
     const fastify = await buildApp();
     try {
@@ -273,9 +274,9 @@ describe("§6 GET /ready", () => {
     }
   });
 
-  it('returns 503 with failing:["pg"] when pg is unhealthy', async () => {
+  it('returns 503 with failing:["db"] when db is unhealthy', async () => {
     vi.mocked(runHealthChecks).mockResolvedValue({
-      pg: probe("error"),
+      db: probe("down"),
       redis: probe("ok"),
       stripe: stripeProbe("ok"),
       queue: probe("ok"),
@@ -285,17 +286,17 @@ describe("§6 GET /ready", () => {
       const res = await fastify.inject({ method: "GET", url: "/ready" });
       expect(res.statusCode).toBe(503);
       const body = res.json<{ status: string; failing: string[] }>();
-      expect(body.failing).toContain("pg");
+      expect(body.failing).toContain("db");
       expect(body.failing).not.toContain("redis");
     } finally {
       await fastify.close();
     }
   });
 
-  it("returns 503 with both pg and redis in failing[] when both are down", async () => {
+  it("returns 503 with both db and redis in failing[] when both are down", async () => {
     vi.mocked(runHealthChecks).mockResolvedValue({
-      pg: probe("timeout"),
-      redis: probe("error"),
+      db: probe("degraded"),
+      redis: probe("down"),
       stripe: stripeProbe("disabled", 0),
       queue: probe("ok"),
     });
@@ -304,7 +305,7 @@ describe("§6 GET /ready", () => {
       const res = await fastify.inject({ method: "GET", url: "/ready" });
       expect(res.statusCode).toBe(503);
       const body = res.json<{ status: string; failing: string[] }>();
-      expect(body.failing).toContain("pg");
+      expect(body.failing).toContain("db");
       expect(body.failing).toContain("redis");
     } finally {
       await fastify.close();

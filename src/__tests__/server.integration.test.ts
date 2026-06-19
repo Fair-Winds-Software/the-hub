@@ -1,6 +1,7 @@
 // Authorized by HUB-77 — Fastify server bootstrap: health routes, env validation, graceful shutdown
 // Authorized by HUB-230 — GET /health updated: probe-backed response shape {status, checks}
 // Authorized by HUB-1514 — update assertions to use ProbeResult {status, latency_ms} shape
+// Authorized by HUB-1526 (FVL-E35) — pg→db rename in assertions per FR-35-03
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { Redis } from "ioredis";
 import { buildApp } from "../app.js";
@@ -58,7 +59,7 @@ describe("GET /health", () => {
         checks: Record<string, { status: string; latency_ms: number }>;
       }>();
       expect(["ok", "degraded"]).toContain(body.status);
-      expect(body.checks).toHaveProperty("pg");
+      expect(body.checks).toHaveProperty("db");
       expect(body.checks).toHaveProperty("redis");
       // stripe probe disabled in test environment — always 'disabled'
       expect(body.checks.stripe?.status).toBe("disabled");
@@ -79,7 +80,7 @@ describe("GET /health", () => {
         checks: Record<string, { status: string; latency_ms: number }>;
       }>();
       expect(body.status).toBe("ok");
-      expect(body.checks.pg?.status).toBe("ok");
+      expect(body.checks.db?.status).toBe("ok");
       expect(body.checks.redis?.status).toBe("ok");
     } finally {
       await fastify.close();

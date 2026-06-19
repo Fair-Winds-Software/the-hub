@@ -1,12 +1,13 @@
 // Authorized by HUB-217 — standalone health probe module; pg/Redis/Stripe reachability; Promise.allSettled concurrency
 // Authorized by HUB-1514 — ProbeResult with latency_ms; queue probe via DLQ; /ready endpoint support
+// Authorized by HUB-1526 (FVL-E35) — ProbeStatus renamed to spec values (down/degraded); pg→db; timeout 2000→500ms
 import { getPool } from "../db/pool.js";
 import { getRedisClient } from "../redis/client.js";
 import { getStripeClient } from "../stripe/client.js";
 import { getDlqQueue } from "../queues/index.js";
 import logger from "../lib/logger.js";
 
-export type ProbeStatus = "ok" | "error" | "timeout";
+export type ProbeStatus = "ok" | "degraded" | "down";
 
 export interface ProbeResult {
   status: ProbeStatus;
@@ -19,13 +20,13 @@ export interface StripeProbeResult {
 }
 
 export interface HealthCheckResult {
-  pg: ProbeResult;
+  db: ProbeResult;
   redis: ProbeResult;
   stripe: StripeProbeResult;
   queue: ProbeResult;
 }
 
-const PROBE_TIMEOUT_MS = 2000;
+const PROBE_TIMEOUT_MS = 500;
 
 function runProbe(
   name: string,
@@ -39,11 +40,11 @@ function runProbe(
         { probe: name, errMsg: (err as Error).message },
         "health probe failed",
       );
-      return "error";
+      return "down";
     },
   );
   const timeoutP: Promise<ProbeStatus> = new Promise<ProbeStatus>((resolve) =>
-    setTimeout(() => resolve("timeout"), ms),
+    setTimeout(() => resolve("degraded"), ms),
   );
   return Promise.race([probeP, timeoutP]).then(
     (status): ProbeResult => ({
@@ -93,11 +94,11 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
       Promise<ProbeResult>,
     ]);
 
-  const errResult: ProbeResult = { status: "error", latency_ms: 0 };
-  const errStripe: StripeProbeResult = { status: "error", latency_ms: 0 };
+  const errResult: ProbeResult = { status: "down", latency_ms: 0 };
+  const errStripe: StripeProbeResult = { status: "down", latency_ms: 0 };
 
   return {
-    pg: pgResult.status === "fulfilled" ? pgResult.value : errResult,
+    db: pgResult.status === "fulfilled" ? pgResult.value : errResult,
     redis: redisResult.status === "fulfilled" ? redisResult.value : errResult,
     stripe:
       stripeResult.status === "fulfilled" ? stripeResult.value : errStripe,

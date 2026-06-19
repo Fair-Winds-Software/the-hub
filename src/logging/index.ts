@@ -1,4 +1,5 @@
 // Authorized by HUB-216 — createLogger() factory; structured log schema; LOG_LEVEL resolution
+// Authorized by HUB-1526 (FVL-E35) — LEASE_ENCRYPTION_KEY and JWT_SECRET added to redact paths per FR-35-06
 import pino from 'pino';
 
 const VALID_PINO_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const;
@@ -48,6 +49,10 @@ export function createLogger(bindings?: Partial<LogBindings>): pino.Logger {
         '*.password',
         '*.secret',
         '*.token',
+        'LEASE_ENCRYPTION_KEY',
+        '*.LEASE_ENCRYPTION_KEY',
+        'JWT_SECRET',
+        '*.JWT_SECRET',
       ],
       censor: '[redacted]',
     },

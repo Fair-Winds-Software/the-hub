@@ -1,11 +1,13 @@
 // Authorized by HUB-216 — unit tests for createLogger() factory and resolveLogLevel()
+// Authorized by HUB-1526 (FVL-E35) — LEASE_ENCRYPTION_KEY and JWT_SECRET redaction tests
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { resolveLogLevel, createLogger } from '../index.js';
 
 // ── resolveLogLevel() ─────────────────────────────────────────────────────────
 
 describe('resolveLogLevel()', () => {
-  let warnSpy: ReturnType<typeof vi.spyOn>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let warnSpy: any;
   let savedLogLevel: string | undefined;
   let savedNodeEnv: string | undefined;
 
@@ -118,5 +120,62 @@ describe('createLogger()', () => {
     expect(Object.keys(bindings)).toEqual(
       expect.arrayContaining(['trace_id', 'span_id', 'tenant_id', 'product_id']),
     );
+  });
+});
+
+// ── createLogger() — redaction (FR-35-06) ─────────────────────────────────────
+
+import { Writable } from 'stream';
+import pino from 'pino';
+
+describe('createLogger() — LEASE_ENCRYPTION_KEY and JWT_SECRET redaction (FR-35-06)', () => {
+  function captureLines(): { lines: Record<string, unknown>[]; dest: Writable } {
+    const lines: Record<string, unknown>[] = [];
+    const dest = new Writable({
+      write(chunk: Buffer, _enc: BufferEncoding, cb: () => void) {
+        chunk.toString().split('\n').filter(Boolean).forEach((l) => {
+          try { lines.push(JSON.parse(l) as Record<string, unknown>); } catch { /* skip */ }
+        });
+        cb();
+      },
+    });
+    return { lines, dest };
+  }
+
+  function tick(): Promise<void> {
+    return new Promise((resolve) => setImmediate(resolve));
+  }
+
+  it('censors LEASE_ENCRYPTION_KEY as a top-level property', async () => {
+    const { lines, dest } = captureLines();
+    const logger = pino(
+      { level: 'info', base: null, redact: { paths: ['LEASE_ENCRYPTION_KEY', '*.LEASE_ENCRYPTION_KEY', 'JWT_SECRET', '*.JWT_SECRET'], censor: '[redacted]' } },
+      dest,
+    );
+    logger.info({ LEASE_ENCRYPTION_KEY: 'super-secret-key-value' }, 'init');
+    await tick();
+    expect(lines[0]).toHaveProperty('LEASE_ENCRYPTION_KEY', '[redacted]');
+  });
+
+  it('censors LEASE_ENCRYPTION_KEY as a nested property', async () => {
+    const { lines, dest } = captureLines();
+    const logger = pino(
+      { level: 'info', base: null, redact: { paths: ['LEASE_ENCRYPTION_KEY', '*.LEASE_ENCRYPTION_KEY', 'JWT_SECRET', '*.JWT_SECRET'], censor: '[redacted]' } },
+      dest,
+    );
+    logger.info({ config: { LEASE_ENCRYPTION_KEY: 'nested-secret' } }, 'config loaded');
+    await tick();
+    expect((lines[0] as Record<string, Record<string, unknown>>).config?.LEASE_ENCRYPTION_KEY).toBe('[redacted]');
+  });
+
+  it('censors JWT_SECRET as a top-level property', async () => {
+    const { lines, dest } = captureLines();
+    const logger = pino(
+      { level: 'info', base: null, redact: { paths: ['LEASE_ENCRYPTION_KEY', '*.LEASE_ENCRYPTION_KEY', 'JWT_SECRET', '*.JWT_SECRET'], censor: '[redacted]' } },
+      dest,
+    );
+    logger.info({ JWT_SECRET: 'jwt-secret-value' }, 'auth');
+    await tick();
+    expect(lines[0]).toHaveProperty('JWT_SECRET', '[redacted]');
   });
 });

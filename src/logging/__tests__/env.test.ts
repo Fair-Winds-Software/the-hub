@@ -1,4 +1,5 @@
 // Authorized by HUB-237 — unit tests for validateObservabilityEnv(); AC5 per-job binding integration test
+// Authorized by HUB-1526 (FVL-E35) — invalid LOG_LEVEL now asserts process.exit(1) per FR-35-05
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Writable } from 'stream';
 import pino from 'pino';
@@ -7,14 +8,23 @@ import pino from 'pino';
 
 import { validateObservabilityEnv } from '../env.js';
 
-let warnSpy: ReturnType<typeof vi.spyOn>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let warnSpy: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let errorSpy: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let exitSpy: any;
 
 beforeEach(() => {
   warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as () => never);
 });
 
 afterEach(() => {
   warnSpy.mockRestore();
+  errorSpy.mockRestore();
+  exitSpy.mockRestore();
   delete process.env.LOG_LEVEL;
   delete process.env.HEALTH_CHECK_STRIPE_ENABLED;
 });
@@ -23,38 +33,34 @@ afterEach(() => {
 
 describe('validateObservabilityEnv() — LOG_LEVEL', () => {
   it.each(['trace', 'debug', 'info', 'warn', 'error', 'fatal'])(
-    'emits no warn for valid level "%s"',
+    'does not exit for valid level "%s"',
     (level) => {
       process.env.LOG_LEVEL = level;
       validateObservabilityEnv();
+      expect(exitSpy).not.toHaveBeenCalled();
       expect(warnSpy).not.toHaveBeenCalled();
-      // env var is preserved unchanged
       expect(process.env.LOG_LEVEL).toBe(level);
     },
   );
 
-  it('emits warn when LOG_LEVEL is invalid', () => {
+  it('calls process.exit(1) when LOG_LEVEL is invalid', () => {
     process.env.LOG_LEVEL = 'verbose';
     validateObservabilityEnv();
-    expect(warnSpy).toHaveBeenCalledOnce();
-    expect(warnSpy.mock.calls[0][0]).toContain('Invalid LOG_LEVEL="verbose"');
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
-  it('applies a valid default level when LOG_LEVEL is invalid', () => {
+  it('emits console.error (not warn) when LOG_LEVEL is invalid', () => {
     process.env.LOG_LEVEL = 'verbose';
     validateObservabilityEnv();
-    const corrected = process.env.LOG_LEVEL!;
-    expect(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).toContain(corrected);
+    expect(errorSpy).toHaveBeenCalledOnce();
+    expect(errorSpy.mock.calls[0][0]).toContain('Invalid LOG_LEVEL="verbose"');
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it('does not throw when LOG_LEVEL is invalid', () => {
-    process.env.LOG_LEVEL = 'nope';
-    expect(() => validateObservabilityEnv()).not.toThrow();
-  });
-
-  it('emits no warn when LOG_LEVEL is absent', () => {
+  it('does not exit when LOG_LEVEL is absent', () => {
     delete process.env.LOG_LEVEL;
     validateObservabilityEnv();
+    expect(exitSpy).not.toHaveBeenCalled();
     expect(warnSpy).not.toHaveBeenCalled();
   });
 });
@@ -85,26 +91,27 @@ describe('validateObservabilityEnv() — HEALTH_CHECK_STRIPE_ENABLED', () => {
     validateObservabilityEnv();
     expect(warnSpy).toHaveBeenCalledOnce();
     expect(warnSpy.mock.calls[0][0]).toContain('Invalid HEALTH_CHECK_STRIPE_ENABLED="banana"');
-    // Defaults to enabled: env var deleted so the probe treats it as enabled
     expect(process.env.HEALTH_CHECK_STRIPE_ENABLED).toBeUndefined();
   });
 
-  it('does not throw for invalid HEALTH_CHECK_STRIPE_ENABLED', () => {
+  it('does not exit for invalid HEALTH_CHECK_STRIPE_ENABLED', () => {
     process.env.HEALTH_CHECK_STRIPE_ENABLED = 'yes';
-    expect(() => validateObservabilityEnv()).not.toThrow();
+    validateObservabilityEnv();
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 });
 
 // ── Idempotency ───────────────────────────────────────────────────────────────
 
 describe('validateObservabilityEnv() — idempotency', () => {
-  it('can be called multiple times with valid config without accumulating warnings', () => {
+  it('can be called multiple times with valid config without accumulating warnings or exits', () => {
     process.env.LOG_LEVEL = 'info';
     process.env.HEALTH_CHECK_STRIPE_ENABLED = 'false';
     validateObservabilityEnv();
     validateObservabilityEnv();
     validateObservabilityEnv();
     expect(warnSpy).not.toHaveBeenCalled();
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 });
 
