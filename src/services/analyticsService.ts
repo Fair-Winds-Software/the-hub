@@ -1,4 +1,5 @@
 // Authorized by HUB-1520 — analyticsService: getUsageAnalytics + getBillingAnalytics over billing_period_costs
+// Authorized by HUB-47 FVL — M1: add recovery_count to BillingRow per FR-37-02
 
 import { getPool } from '../db/pool.js';
 import { AppError } from '../errors/AppError.js';
@@ -47,6 +48,7 @@ export interface BillingRow {
   active_subscriptions: number;
   mrr_cents: number;
   freeze_count: number;
+  recovery_count: number;
 }
 
 export interface BillingAnalyticsResult {
@@ -162,7 +164,7 @@ export async function getBillingAnalytics(params: BillingAnalyticsParams): Promi
   validateRange(params.from, params.to);
 
   const pool = getPool();
-  const [costRows, subRow, freezeRow, stale] = await Promise.all([
+  const [costRows, subRow, freezeRow, recoveryRow, stale] = await Promise.all([
     // MRR per period: sum total_cost_cents across all tenants for this product
     pool.query<{ period_start: string; period_end: string; mrr_cents: string }>(
       `SELECT period_start::text AS period_start,
@@ -194,11 +196,25 @@ export async function getBillingAnalytics(params: BillingAnalyticsParams): Promi
           AND l.reason = 'FREEZE'`,
       [params.productId],
     ),
+    // Recovery count: licenses now active that were previously frozen (suspended_at set),
+    // where the recovery (updated_at) falls within the queried billing period.
+    pool.query<{ recovery_count: string }>(
+      `SELECT COUNT(*)::bigint AS recovery_count
+         FROM licenses l
+         JOIN product_registrations pr ON pr.id = l.product_id
+        WHERE pr.product_id = $1
+          AND l.status = 'active'
+          AND l.suspended_at IS NOT NULL
+          AND l.updated_at >= $2
+          AND l.updated_at <= $3`,
+      [params.productId, params.from, params.to],
+    ),
     checkStaleness(params.from),
   ]);
 
   const activeSubscriptions = parseInt(subRow.rows[0]?.active_subscriptions ?? '0', 10);
   const freezeCount = parseInt(freezeRow.rows[0]?.freeze_count ?? '0', 10);
+  const recoveryCount = parseInt(recoveryRow.rows[0]?.recovery_count ?? '0', 10);
 
   const data: BillingRow[] = costRows.rows.map((row) => ({
     product_id: params.productId,
@@ -206,6 +222,7 @@ export async function getBillingAnalytics(params: BillingAnalyticsParams): Promi
     active_subscriptions: activeSubscriptions,
     mrr_cents: Math.round(parseInt(row.mrr_cents ?? '0', 10)),
     freeze_count: freezeCount,
+    recovery_count: recoveryCount,
   }));
 
   return {

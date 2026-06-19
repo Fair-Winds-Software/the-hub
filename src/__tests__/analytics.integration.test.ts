@@ -1,4 +1,5 @@
 // Authorized by HUB-1522 — analytics integration tests: usage aggregation, tenant scoping, pagination, monetary format
+// Authorized by HUB-47 FVL — M1: assert recovery_count present and integer in billing response
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { FastifyInstance } from "fastify";
@@ -198,12 +199,13 @@ const RUN_INTEGRATION = process.env["RUN_INTEGRATION"] === "1";
         expect(res.statusCode).toBe(200);
         const body = res.json<{
           row_count: number;
-          data: { mrr_cents: number; active_subscriptions: number; freeze_count: number }[];
+          data: { mrr_cents: number; active_subscriptions: number; freeze_count: number; recovery_count: number }[];
         }>();
         for (const row of body.data) {
           expect(Number.isInteger(row.mrr_cents)).toBe(true);
           expect(Number.isInteger(row.active_subscriptions)).toBe(true);
           expect(Number.isInteger(row.freeze_count)).toBe(true);
+          expect(Number.isInteger(row.recovery_count)).toBe(true);
         }
       });
 
