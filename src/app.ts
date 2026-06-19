@@ -82,6 +82,8 @@
 // Authorized by HUB-1149 — planAdvisorService: enhanced portfolio summary + CSV export; health badges; churn risk
 // Authorized by HUB-1517 — auditContextPlugin: request.auditContext decorator + buildAuditContext helper
 // Authorized by HUB-1518 — auditRoutes: GET /api/v1/audit; operator JWT; tenant scoping; cursor pagination
+// Authorized by HUB-1520 — analyticsService: getUsageAnalytics + getBillingAnalytics over billing_period_costs
+// Authorized by HUB-1521 — analyticsRoutes: GET /api/v1/analytics/usage + /billing + /health (501 stub)
 import Fastify from "fastify";
 import type { DestinationStream } from "pino";
 import { createServerOptions } from "./server.js";
@@ -122,6 +124,7 @@ import portalRoutesPlugin from "./plugins/portalRoutes.js";
 import complianceSignalPlugin from "./routes/compliance/signals.js";
 import auditContextPlugin from "./plugins/auditContext.js";
 import auditRoutes from "./routes/auditRoutes.js";
+import analyticsRoutes from "./routes/analyticsRoutes.js";
 
 export async function buildApp(dest?: DestinationStream) {
   validateEnv();
@@ -177,6 +180,7 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(complianceSignalPlugin);
   await fastify.register(auditContextPlugin);
   await fastify.register(auditRoutes);
+  await fastify.register(analyticsRoutes);
 
   return fastify;
 }
