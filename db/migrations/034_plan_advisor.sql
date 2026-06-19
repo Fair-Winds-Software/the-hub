@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS advisor_recommendations (
   product_id                   UUID                          NOT NULL REFERENCES products(id),
   tenant_id                    UUID                          NOT NULL REFERENCES tenants(id),
   recommendation_type          advisor_recommendation_type   NOT NULL,
-  suggested_plan_id            UUID                          REFERENCES pricing_models(model_id),
+  suggested_plan_id            UUID                          REFERENCES pricing_models(id),
   rationale                    TEXT                          NOT NULL,
   confidence                   advisor_confidence            NOT NULL,
   status                       advisor_recommendation_status NOT NULL DEFAULT 'open',
