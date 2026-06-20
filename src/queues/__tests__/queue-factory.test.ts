@@ -1,6 +1,6 @@
 // Authorized by HUB-146 — unit tests for queue factory: singleton instances, definitions registry
 // Authorized by HUB-1523 — retention policy: removeOnComplete (7d) + removeOnFail (30d) on all queues
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // Mock BullMQ Queue — captures name and options for retention policy assertions
 vi.mock('bullmq', () => ({

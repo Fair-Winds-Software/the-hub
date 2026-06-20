@@ -177,7 +177,7 @@ describe.skipIf(SKIP)('planCatalogService integration (Stripe test mode)', () =>
 
   it('archivePlan: throws AppError(409) when plan already archived', async () => {
     const { archivePlan } = await import('../planCatalogService.js');
-    const { AppError } = await import('../../errors/AppError.js');
+    await import('../../errors/AppError.js');
 
     mockClientQuery
       .mockResolvedValueOnce({ rows: [] }) // BEGIN

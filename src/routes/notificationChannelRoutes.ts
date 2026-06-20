@@ -47,7 +47,7 @@ const notificationChannelRoutes: FastifyPluginAsync = async (fastify) => {
       validateChannelConfig(channel_type, config);
 
       const pool = getPool();
-      const { rows, rowCount } = await pool.query<{ id: string }>(
+      const { rows, rowCount: _rowCount } = await pool.query<{ id: string }>(
         `INSERT INTO notification_channels (tenant_id, product_id, channel_type, config, hmac_secret, enabled)
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (tenant_id, product_id, channel_type)

@@ -208,7 +208,7 @@ export async function runHumanEscalationScheduler(): Promise<{ fired: number; sk
 
     let reminderStage: string | null = null;
     let severity: Severity = 'medium';
-    let alertType: AlertType = 'human_overdue_reminder';
+    const alertType: AlertType = 'human_overdue_reminder';
 
     if (daysUntilDue <= 0) {
       reminderStage = 'overdue';

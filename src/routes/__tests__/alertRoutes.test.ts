@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 
 // ── Mock setup ────────────────────────────────────────────────────────────────
 
-const mockClientQuery = vi.hoisted(() => vi.fn());
+const _mockClientQuery = vi.hoisted(() => vi.fn());
 const mockClientRelease = vi.hoisted(() => vi.fn());
 const mockPoolConnect = vi.hoisted(() => vi.fn());
 const mockPoolQuery = vi.hoisted(() => vi.fn());

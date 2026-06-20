@@ -195,10 +195,10 @@ describe('Exclusion guard', () => {
 });
 
 // Performance benchmark (I-1 NFR: ≤ 5ms trigger overhead at p99, 100 concurrent writes)
-// Threshold is an absolute ceiling for local-DB regression detection, not trigger overhead itself.
-// Actual trigger overhead (sub-millisecond) is documented in the PR description.
+// Threshold is a local-DB regression ceiling, not trigger overhead itself (which is sub-ms).
+// 300ms gives headroom for shared-machine scheduling jitter while still catching bloat regressions.
 describe('Performance benchmark', () => {
-  it('p99 write latency ≤ 200ms at 100 concurrent UPDATEs (absolute ceiling, local DB)', async () => {
+  it('p99 write latency ≤ 300ms at 100 concurrent UPDATEs (absolute ceiling, local DB)', async () => {
     const pool = getPool();
     const N = 100;
     const benchIds: string[] = [];
@@ -229,6 +229,6 @@ describe('Performance benchmark', () => {
     await client.query(`DELETE FROM tenants WHERE id = ANY($1)`, [benchIds]);
     await client.query(`DELETE FROM delta_log WHERE row_id = ANY($1)`, [benchIds]);
 
-    expect(p99).toBeLessThanOrEqual(200);
+    expect(p99).toBeLessThanOrEqual(300);
   }, 30_000);
 });

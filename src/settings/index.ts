@@ -46,7 +46,7 @@ export async function getSetting(key: string): Promise<JsonValue> {
       if (raw !== null) {
         return JSON.parse(raw) as JsonValue;
       }
-    } catch (err) {
+    } catch (_err) {
       logger.warn({ key }, 'Redis read failed — falling back to PostgreSQL');
     }
   } else {

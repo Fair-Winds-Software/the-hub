@@ -1,6 +1,7 @@
 # Authorized by HUB-71 — CI pipeline: migrate + test against live PostgreSQL on every PR and push
 # Authorized by HUB-77 — Redis service added; JWT_SECRET + REDIS_URL added to CI env
 # Authorized by HUB-112 — OPERATOR_JWT_SECRET added to CI env
+# Authorized by HUB-4.1 L2 — LEASE_ENCRYPTION_KEY, STRIPE_SECRET_KEY, BCRYPT_ROUNDS, RUN_INTEGRATION, typecheck step added
 name: CI
 
 on:
@@ -20,41 +21,43 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: hub_test
           POSTGRES_USER: hub
-          POSTGRES_PASSWORD: hub_test
+          POSTGRES_PASSWORD: hub
+          POSTGRES_DB: hub_dev
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        ports:
-          - 5432:5432
 
       redis:
         image: redis:7-alpine
+        ports:
+          - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        ports:
-          - 6379:6379
 
     env:
-      DATABASE_URL: postgresql://hub:hub_test@localhost:5432/hub_test
+      DATABASE_URL: postgresql://hub:hub@localhost:5432/hub_dev
       REDIS_URL: redis://localhost:6379
-      JWT_SECRET: hub-ci-jwt-secret-not-for-production
-      OPERATOR_JWT_SECRET: hub-ci-operator-jwt-secret-not-for-production
-      DB_POOL_SIZE: 5
-      DB_IDLE_TIMEOUT_MS: 5000
-      # DATABASE_URL, REDIS_URL, JWT_SECRET, OPERATOR_JWT_SECRET are intentionally not echoed in any step — treat CI logs as public
+      JWT_SECRET: ci-test-jwt-secret-not-for-production
+      OPERATOR_JWT_SECRET: ci-test-operator-jwt-secret-not-for-production
+      OPERATOR_JWT_TTL_SECONDS: "900"
+      LEASE_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      STRIPE_SECRET_KEY: sk_test_ci_placeholder_not_real
+      BCRYPT_ROUNDS: "1"
+      NODE_ENV: test
+      RUN_INTEGRATION: "1"
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js ${{ matrix.node-version }}
+      - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
@@ -62,6 +65,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Run migrations
         run: npm run migrate

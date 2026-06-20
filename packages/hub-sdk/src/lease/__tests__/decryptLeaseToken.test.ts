@@ -30,7 +30,7 @@ describe('decryptLeaseToken', () => {
   });
 
   it('throws HubLeaseInvalidError when buffer is too short', () => {
-    const tooShort = Buffer.alloc(28, 0).toString('base64'); // exactly 28 bytes = 12 + 16, empty ciphertext but still edge
+    const _tooShort = Buffer.alloc(28, 0).toString('base64'); // exactly 28 bytes = 12 + 16, empty ciphertext but still edge
     // Actually we need <= 28 to fail — use 10 bytes
     const tinyBuf = Buffer.alloc(10, 0).toString('base64');
     expect(() => decryptLeaseToken(tinyBuf, TEST_ENC_KEY)).toThrowError(HubLeaseInvalidError);
