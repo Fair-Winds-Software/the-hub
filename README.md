@@ -13,12 +13,12 @@ Canonical SSoT for everything this project depends on. Maintained by `/infra-aud
 | Confluence space | https://fairwindssoftware.atlassian.net/wiki/spaces/HUB/overview?homepageId=474939684 | ✅ Active |
 | Jira project | [HUB](https://fairwindssoftware.atlassian.net/jira/software/c/projects/HUB/list) | ✅ Active |
 | GitHub repo | [Fair-Winds-Software/the-hub](https://github.com/Fair-Winds-Software/the-hub) | ✅ Active (you are here) |
-| Postgres (local) | docker-compose service `postgres` (container `hub_postgres`) on `localhost:5432` (db: `hub_dev`, user: `hub`) | ✅ Active (postgres:17-alpine) |
+| Postgres (local) | docker-compose service `postgres` (container `hub_postgres`) on `localhost:${POSTGRES_PORT:-5432}` — HUB defaults to canonical 5432 per D-FW-INFRA-002 (HUB is the spine). DB `hub_dev`, user `hub`. | ✅ Active (postgres:17-alpine) |
 | Postgres (AWS Dev) | Not yet provisioned | ⏳ Pending AWS setup |
 | Postgres (AWS UAT) | Not yet provisioned | ⏳ Pending AWS setup |
 | Postgres (AWS Prod) | Not yet provisioned | ⏳ Pending AWS setup |
-| Redis | docker-compose service `redis` (container `hub_redis`) on `localhost:6379` | ✅ Active (redis:7-alpine) |
-| Adminer (DB UI) | docker-compose service `adminer` (container `hub_adminer`) on http://localhost:8080 (auto-fills server=postgres at login) | ✅ Active (adminer:latest) |
+| Redis | docker-compose service `redis` (container `hub_redis`) on `localhost:${REDIS_PORT:-6379}` — HUB defaults to canonical 6379 per D-FW-INFRA-002 | ✅ Active (redis:7-alpine) |
+| Adminer (DB UI) | docker-compose service `adminer` (container `hub_adminer`) on `http://localhost:${ADMINER_PORT:-8080}` — HUB defaults to canonical 8080 per D-FW-INFRA-002. Auto-fills server=postgres at login. | ✅ Active (adminer:latest) |
 | Docker | `docker-compose.yml` at repo root | ✅ Active |
 | HUB connection | — (HUB IS the spine; doesn't license itself) | N/A |
 | Project type | `full-stack-saas` minus the HUB Connection phase (HUB is the spine) | — |
