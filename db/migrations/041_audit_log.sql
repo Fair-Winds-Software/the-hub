@@ -1,4 +1,14 @@
 -- Authorized by HUB-1516 — audit_log table; INSERT-only grant for hub_app; composite index (tenant_id, created_at DESC)
+-- Authorized by HUB-4.1 L1 fix — idempotent CREATE ROLE hub_app so the migration is self-contained
+--   across envs (CI Postgres service ships with only the postgres/hub superuser; without this guard
+--   the subsequent GRANT/REVOKE fail with "role hub_app does not exist", crashing the migration step
+--   and turning CI red. Role is NOLOGIN — used only as a grant target, never as a login identity).
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'hub_app') THEN
+    CREATE ROLE hub_app NOLOGIN;
+  END IF;
+END $$;
 
 CREATE TABLE audit_log (
   id          UUID        NOT NULL DEFAULT gen_random_uuid(),
