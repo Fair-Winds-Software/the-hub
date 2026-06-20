@@ -1,4 +1,5 @@
 // Authorized by HUB-844 — POST /api/v1/hooks/:tenantId; AES-256-GCM hmac_secret encryption; operator JWT
+// Authorized by HUB-4.1 L2 — Red Team H3: SSRF guard — block RFC-1918, link-local, and metadata IPs
 // Authorized by HUB-851 — GET /api/v1/hooks/:tenantId; secret masking via jsonb_set; operator JWT
 // Authorized by HUB-858 — DELETE /api/v1/hooks/:tenantId/:hookId; 204/404; ON DELETE CASCADE; operator JWT
 // Authorized by HUB-872 — GET /api/v1/hooks/:tenantId/:hookId/executions; preflight ownership check; operator JWT
@@ -13,6 +14,44 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 function assertUUID(value: string, label: string): void {
   if (!UUID_RE.test(value)) throw new AppError(400, `${label} must be a valid UUID`);
+}
+
+// SSRF guard: blocks RFC-1918, link-local, loopback, and cloud metadata targets.
+// Returns true when the URL resolves to an internal network destination.
+function isSsrfUrl(rawUrl: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return true;
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, ''); // strip IPv6 brackets
+
+  const BLOCKED_HOSTS = [
+    'localhost',
+    '169.254.169.254',    // AWS / Azure / GCP metadata (IPv4 link-local)
+    'fd00:ec2::254',      // AWS metadata (IPv6)
+    '100.100.100.200',    // Alibaba Cloud metadata
+    'metadata.google.internal',
+  ];
+  if (BLOCKED_HOSTS.includes(host)) return true;
+
+  // Block IPv4 private, loopback, and link-local ranges
+  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if (
+      a === 0 || a === 10 || a === 127 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254)
+    ) return true;
+  }
+
+  // Block IPv6 loopback and unique-local (fc00::/7)
+  if (host === '::1' || /^f[cd]/i.test(host)) return true;
+
+  return false;
 }
 
 const hookRoutes: FastifyPluginAsync = async (fastify) => {
@@ -40,6 +79,9 @@ const hookRoutes: FastifyPluginAsync = async (fastify) => {
       const cfg = action_config as Record<string, unknown> | undefined;
       if (!cfg || typeof cfg.url !== 'string' || !cfg.url.startsWith('https://')) {
         throw new AppError(400, 'action_config.url must be an https:// URL');
+      }
+      if (isSsrfUrl(cfg.url as string)) {
+        throw new AppError(400, 'action_config.url must point to a public HTTPS endpoint');
       }
       if (typeof cfg.hmac_secret !== 'string' || cfg.hmac_secret.trim() === '') {
         throw new AppError(400, 'action_config.hmac_secret is required');

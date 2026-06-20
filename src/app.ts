@@ -30,6 +30,7 @@
 // Authorized by HUB-767 — inAppNotificationRoutes registered; GET paginated list + PATCH mark-read
 // Authorized by HUB-801 — escalationRuleRoutes registered; POST/GET/DELETE escalation rules
 // Authorized by HUB-844 — hookRoutes registered; POST/GET/DELETE hooks + GET execution history
+// Authorized by HUB-4.1 L2 — businessOperatorRoutesPlugin: wraps business operator routes under operatorRbacHook (Red Team H2)
 // Authorized by HUB-1034 — adminRoutesPlugin registered; operator admin auth + RBAC-protected routes
 // Authorized by HUB-1086 — adminTenantRoutes registered via adminRoutesPlugin; tenant CRUD
 // Authorized by HUB-1103 — adminProductRoutes registered via adminRoutesPlugin; product registration + credentials
@@ -106,19 +107,10 @@ import catalogDiscountRoutes from "./routes/catalog/discounts.routes.js";
 import billingFlexibilityRoutes from "./routes/billing/flexibility.routes.js";
 import planChangeRoutes from "./routes/billing/plan-change.routes.js";
 import sdkRoutes from "./routes/sdk.js";
-import versionsRoutes from "./routes/versions.js";
 import leasesRoutes from "./routes/leases.js";
-import billingRoutes from "./routes/billing.js";
-import pricingModelRoutes from "./routes/pricingModelRoutes.js";
 import usageRoutes from "./routes/usageRoutes.js";
-import marginRoutes from "./routes/marginRoutes.js";
 import pricingActiveModelRoutes from "./routes/pricingActiveModelRoutes.js";
-import costQueryRoutes from "./routes/costQueryRoutes.js";
-import alertRoutes from "./routes/alertRoutes.js";
-import notificationChannelRoutes from "./routes/notificationChannelRoutes.js";
-import inAppNotificationRoutes from "./routes/inAppNotificationRoutes.js";
-import escalationRuleRoutes from "./routes/escalationRuleRoutes.js";
-import hookRoutes from "./routes/hookRoutes.js";
+import businessOperatorRoutesPlugin from "./plugins/businessOperatorRoutes.js";
 import adminRoutesPlugin from "./plugins/adminRoutes.js";
 import portalRoutesPlugin from "./plugins/portalRoutes.js";
 import complianceSignalPlugin from "./routes/compliance/signals.js";
@@ -162,19 +154,10 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(planChangeRoutes);
   await fastify.register(pricingRoutes);
   await fastify.register(sdkRoutes);
-  await fastify.register(versionsRoutes);
   await fastify.register(leasesRoutes);
-  await fastify.register(billingRoutes);
-  await fastify.register(pricingModelRoutes);
   await fastify.register(usageRoutes);
-  await fastify.register(marginRoutes);
   await fastify.register(pricingActiveModelRoutes);
-  await fastify.register(costQueryRoutes);
-  await fastify.register(alertRoutes);
-  await fastify.register(notificationChannelRoutes);
-  await fastify.register(inAppNotificationRoutes);
-  await fastify.register(escalationRuleRoutes);
-  await fastify.register(hookRoutes);
+  await fastify.register(businessOperatorRoutesPlugin);
   await fastify.register(adminRoutesPlugin);
   await fastify.register(portalRoutesPlugin);
   await fastify.register(complianceSignalPlugin);

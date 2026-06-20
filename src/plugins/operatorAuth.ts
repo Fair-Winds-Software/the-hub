@@ -1,4 +1,5 @@
 // Authorized by HUB-112 — Operator auth plugin; slot 5 in app.ts plugin chain
+// Authorized by HUB-4.1 L2 — Red Team H1: add active check to prevent deactivated operator login
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import jwt from 'jsonwebtoken';
@@ -62,8 +63,9 @@ const operatorAuthPlugin: FastifyPluginAsync = async (fastify) => {
         operator_id: string;
         password_hash: string;
         role: string;
+        active: boolean;
       }>(
-        `SELECT operator_id, password_hash, role FROM operators WHERE username = $1`,
+        `SELECT operator_id, password_hash, role, active FROM operators WHERE username = $1`,
         [username],
       );
 
@@ -72,7 +74,8 @@ const operatorAuthPlugin: FastifyPluginAsync = async (fastify) => {
       // Always bcrypt.compare — even against dummy hash — to prevent timing oracle
       const valid = await bcrypt.compare(password, row?.password_hash ?? DUMMY_HASH);
 
-      if (!row || !valid) {
+      // Check active AFTER bcrypt.compare to avoid timing oracle revealing account existence
+      if (!row || !valid || !row.active) {
         throw new AppError(401, 'Invalid credentials');
       }
 
