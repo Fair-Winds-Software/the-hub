@@ -1,0 +1,51 @@
+# The HUB
+
+Central control plane for the Maverick Launch / Fair Winds Software portfolio. The HUB is the single internal service every Fair Winds product (Synapz, Social Squeeze, LaunchKit, ContentHelm, and others) connects to for subscription state, signed-lease enforcement, usage tracking, billing events, kill-switch enforcement, and cost calculation. Products embed the HUB Client SDK; the HUB itself is internal-only (no external tenant users).
+
+Stack: Node.js 20+, TypeScript (strict ESM), Fastify, PostgreSQL (raw `pg` pool — no ORM), BullMQ + Redis, Stripe.
+
+## Infrastructure
+
+Canonical SSoT for everything this project depends on. Maintained by `/infra-audit`.
+
+| Resource | Location | Status |
+|---|---|---|
+| Confluence space | https://fairwindssoftware.atlassian.net/wiki/spaces/HUB/overview?homepageId=474939684 | ✅ Active |
+| Jira project | [HUB](https://fairwindssoftware.atlassian.net/jira/software/c/projects/HUB/list) | ✅ Active |
+| GitHub repo | [Fair-Winds-Software/the-hub](https://github.com/Fair-Winds-Software/the-hub) | ✅ Active (you are here) |
+| Postgres (local) | docker-compose service `postgres` (container `hub_postgres`) on `localhost:5432` (db: `hub_dev`, user: `hub`) | ✅ Active (postgres:17-alpine) |
+| Postgres (AWS Dev) | Not yet provisioned | ⏳ Pending AWS setup |
+| Postgres (AWS UAT) | Not yet provisioned | ⏳ Pending AWS setup |
+| Postgres (AWS Prod) | Not yet provisioned | ⏳ Pending AWS setup |
+| Redis | docker-compose service `redis` (container `hub_redis`) on `localhost:6379` | ✅ Active (redis:7-alpine) |
+| Adminer (DB UI) | docker-compose service `adminer` (container `hub_adminer`) on http://localhost:8080 (auto-fills server=postgres at login) | ✅ Active (adminer:latest) |
+| Docker | `docker-compose.yml` at repo root | ✅ Active |
+| HUB connection | — (HUB IS the spine; doesn't license itself) | N/A |
+| Project type | `full-stack-saas` minus the HUB Connection phase (HUB is the spine) | — |
+
+### Local development
+
+```bash
+docker-compose up -d         # Start postgres + redis + adminer
+npm install
+cp .env.example .env         # Fill in missing required vars — see "Required env vars" below
+npm run migrate              # Apply all 45 SQL migrations
+                             # (seeds the Maverick Launch internal tenant via migration 001 INSERT)
+npm start                    # Boot the API (validateEnv() enforces all required env vars at startup)
+```
+
+Open Adminer at http://localhost:8080 (system: PostgreSQL, server: postgres, user: hub, password: hub, database: hub_dev).
+
+**Required env vars** (enforced by `validateEnv()` at startup):
+
+- `DATABASE_URL` — provided in `.env.example`, already matches Docker postgres
+- `REDIS_URL` — `redis://localhost:6379` for local Docker redis
+- `JWT_SECRET`, `OPERATOR_JWT_SECRET` — secrets for token signing
+- `LEASE_ENCRYPTION_KEY`, `HOOK_ENCRYPTION_KEY` — must be 64 hex chars each (`openssl rand -hex 32`)
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SIGNING_SECRET` — Stripe API credentials
+
+See the GitHub Actions CI workflow for example dev values. The current `.env.example` only lists DB vars; expanding it with safe dev defaults for all required vars is tracked as a follow-up ticket.
+
+**Migration runner note:** `src/db/migrate.ts` applies all SQL files in `db/migrations/` lexicographically. Migration `041_audit_log.sql` includes an idempotent `CREATE ROLE hub_app` guard (commit `7972b5e`) so re-runs against existing roles don't fail.
+
+**Why Docker:** Before 2026-06-20, HUB ran a native Windows `postgresql-x64-17` install. The local DB drifted out of sync with the migration tracking table (44 migrations recorded as applied, only 8 of ~67 tables actually present). `/infra-audit` resolved the drift by migrating into Docker and running all migrations against a fresh DB. See the HUB Decision Log for full context.

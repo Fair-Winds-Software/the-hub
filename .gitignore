@@ -5,3 +5,6 @@ coverage/
 *.js.map
 desktop.ini
 *.html
+
+# Infra audit (2026-06-20) - local Postgres dump backups, never commit
+hub_dev_backup_*.dump
