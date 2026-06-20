@@ -36,16 +36,20 @@ export async function getInvoices(
   const pool = getPool();
   const safeLimit = Math.min(limit ?? DEFAULT_LIMIT, MAX_LIMIT);
 
+  const COLS = `id, tenant_id, product_id, stripe_invoice_id, stripe_subscription_id, status,
+    amount_due, amount_paid, currency, period_start, period_end, invoice_pdf_url, payment_failed_at,
+    created_at, updated_at`;
+
   if (productId) {
     const { rows } = await pool.query<InvoiceRow>(
-      'SELECT * FROM invoices WHERE tenant_id = $1 AND product_id = $2 ORDER BY period_start DESC LIMIT $3',
+      `SELECT ${COLS} FROM invoices WHERE tenant_id = $1 AND product_id = $2 ORDER BY period_start DESC LIMIT $3`,
       [tenantId, productId, safeLimit],
     );
     return rows;
   }
 
   const { rows } = await pool.query<InvoiceRow>(
-    'SELECT * FROM invoices WHERE tenant_id = $1 ORDER BY period_start DESC LIMIT $2',
+    `SELECT ${COLS} FROM invoices WHERE tenant_id = $1 ORDER BY period_start DESC LIMIT $2`,
     [tenantId, safeLimit],
   );
   return rows;
@@ -128,20 +132,19 @@ export async function handleInvoiceCreated(eventId: string): Promise<void> {
   const invoiceDbId = invRows[0]?.id;
   if (!invoiceDbId) return;
 
-  for (const item of invoice.lines.data) {
+  if (invoice.lines.data.length > 0) {
+    const values: unknown[] = [];
+    const placeholders = invoice.lines.data.map((item, i) => {
+      const base = i * 6;
+      values.push(invoiceDbId, item.id, item.description ?? null, item.amount, item.quantity ?? 1, resolvePriceId(item));
+      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`;
+    });
     await pool.query(
       `INSERT INTO invoice_items
          (invoice_id, stripe_invoice_item_id, description, amount, quantity, stripe_price_id)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ${placeholders.join(', ')}
        ON CONFLICT (stripe_invoice_item_id) DO NOTHING`,
-      [
-        invoiceDbId,
-        item.id,
-        item.description ?? null,
-        item.amount,
-        item.quantity ?? 1,
-        resolvePriceId(item),
-      ],
+      values,
     );
   }
 

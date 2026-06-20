@@ -233,45 +233,49 @@ describe('grandfatherExistingSubscribers()', () => {
     expect(await grandfatherExistingSubscribers('plan-uuid-1')).toBe(0);
   });
 
-  it('inserts ledger rows for each non-grandfathered subscriber', async () => {
+  it('inserts ledger rows for each non-grandfathered subscriber (bulk INSERT with NOT EXISTS dedup)', async () => {
     mockPoolQuery
-      .mockResolvedValueOnce({ rows: [{ stripe_price_id: 'price_1' }] })                                     // SELECT plan
+      .mockResolvedValueOnce({ rows: [{ stripe_price_id: 'price_1' }] })                                       // SELECT plan
       .mockResolvedValueOnce({ rows: [{ tenant_id: 't1', product_id: 'p1', current_period_end: new Date() }] }) // SELECT subscribers
-      .mockResolvedValueOnce({ rows: [] })                                                                     // SELECT existing grandfather — none
-      .mockResolvedValueOnce({ rows: [] });                                                                    // INSERT
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });                                                       // bulk INSERT — 1 row inserted
 
     const count = await grandfatherExistingSubscribers('plan-uuid-1');
 
     expect(count).toBe(1);
-    const insertSql = mockPoolQuery.mock.calls[3]![0] as string;
+    expect(mockPoolQuery).toHaveBeenCalledTimes(3); // no per-row SELECT — bulk INSERT
+    const insertSql = mockPoolQuery.mock.calls[2]![0] as string;
     expect(insertSql).toContain('grandfathered');
+    expect(insertSql).toContain('NOT EXISTS');
   });
 
-  it('skips subscribers that already have a grandfather row (idempotent)', async () => {
+  it('skips subscribers that already have a grandfather row (NOT EXISTS dedup at SQL layer)', async () => {
     mockPoolQuery
-      .mockResolvedValueOnce({ rows: [{ stripe_price_id: 'price_1' }] })                                     // SELECT plan
+      .mockResolvedValueOnce({ rows: [{ stripe_price_id: 'price_1' }] })                                       // SELECT plan
       .mockResolvedValueOnce({ rows: [{ tenant_id: 't1', product_id: 'p1', current_period_end: new Date() }] }) // SELECT subscribers
-      .mockResolvedValueOnce({ rows: [{ 1: 1 }] });                                                           // SELECT existing — found, skip
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });                                                       // bulk INSERT — 0 rows (dedup matched)
 
     const count = await grandfatherExistingSubscribers('plan-uuid-1');
 
     expect(count).toBe(0);
-    expect(mockPoolQuery).toHaveBeenCalledTimes(3); // no insert
+    expect(mockPoolQuery).toHaveBeenCalledTimes(3);
   });
 });
 
 // ── getPlanChangeHistory ──────────────────────────────────────────────────────
 
 describe('getPlanChangeHistory()', () => {
-  it('returns rows ordered newest-first', async () => {
+  it('returns rows ordered newest-first with explicit LIMIT', async () => {
     mockPoolQuery.mockResolvedValueOnce({ rows: [LEDGER_ROW] });
 
     const result = await getPlanChangeHistory('tenant-1', 'prod-1');
 
     expect(mockPoolQuery).toHaveBeenCalledWith(
       expect.stringContaining('ORDER BY created_at DESC'),
-      ['tenant-1', 'prod-1'],
+      ['tenant-1', 'prod-1', 200], // default HISTORY_MAX_LIMIT
     );
+    const sql = mockPoolQuery.mock.calls[0]![0] as string;
+    expect(sql).toContain('LIMIT $3');
+    expect(sql).not.toContain('SELECT *'); // explicit column list, no wildcard
     expect(result).toEqual([LEDGER_ROW]);
   });
 

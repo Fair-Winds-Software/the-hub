@@ -1,5 +1,6 @@
 // Authorized by HUB-1021 — compliance control registry CRUD, product registration + HMAC secret, burn-in state machine, control binding management
 // Authorized by HUB-1048 — GET /posture, GET /verdicts, GET /history query endpoints
+// Authorized by HUB-4.1 L2 — Deep Audit DA-H5/DA-M2: duplicate control_id → 409; LIMIT on GET controls
 import type { FastifyPluginAsync } from 'fastify';
 import type { Pool } from 'pg';
 import { randomBytes } from 'node:crypto';
@@ -59,28 +60,40 @@ const adminComplianceRoutes: FastifyPluginAsync = async (fastify) => {
       throw new AppError(400, 'control_id, name, tsc_category, control_class, and eval_cadence are required');
     }
 
-    const { rows } = await pool.query<{ id: string }>(
-      `INSERT INTO compliance_controls (control_id, name, description, tsc_category, control_class, signal_schema, eval_cadence)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id`,
-      [
-        b.control_id,
-        b.name,
-        b.description ?? null,
-        b.tsc_category,
-        b.control_class,
-        b.signal_schema != null ? JSON.stringify(b.signal_schema) : null,
-        b.eval_cadence,
-      ],
-    );
-    return reply.status(201).send(rows[0]);
+    try {
+      const { rows } = await pool.query<{ id: string }>(
+        `INSERT INTO compliance_controls (control_id, name, description, tsc_category, control_class, signal_schema, eval_cadence)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id`,
+        [
+          b.control_id,
+          b.name,
+          b.description ?? null,
+          b.tsc_category,
+          b.control_class,
+          b.signal_schema != null ? JSON.stringify(b.signal_schema) : null,
+          b.eval_cadence,
+        ],
+      );
+      return reply.status(201).send(rows[0]);
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string };
+      if (pgErr.code === '23505') throw new AppError(409, `control_id '${b.control_id}' already exists`);
+      throw err;
+    }
   });
 
-  fastify.get('/api/v1/admin/compliance/controls', async (_request, reply) => {
+  fastify.get('/api/v1/admin/compliance/controls', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>;
+    const limit = Math.min(parseInt(q.limit ?? '100', 10), 500);
+    const offset = parseInt(q.offset ?? '0', 10);
+
     const { rows } = await pool.query(
       `SELECT id, control_id, name, description, tsc_category, control_class, signal_schema, eval_cadence, active, created_at
        FROM compliance_controls
-       ORDER BY control_id ASC`,
+       ORDER BY control_id ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset],
     );
     return reply.send(rows);
   });

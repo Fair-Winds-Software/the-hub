@@ -235,47 +235,64 @@ export async function grandfatherExistingSubscribers(planId: string): Promise<nu
     [planRows[0].stripe_price_id],
   );
 
-  let count = 0;
-  for (const s of subscribers) {
-    const { rows: existing } = await pool.query(
-      `SELECT 1 FROM plan_change_ledger
-       WHERE tenant_id = $1 AND product_id = $2 AND old_plan_id = $3 AND grandfathered = true`,
-      [s.tenant_id, s.product_id, planId],
-    );
-    if (existing[0]) continue;
-
-    await pool.query(
-      `INSERT INTO plan_change_ledger
-         (tenant_id, product_id, plan_id, old_plan_id, effective_date, effective_at,
-          grandfathered, protection_expires_at, applied_at, reason)
-       VALUES ($1, $2, $3, $3, 'next_cycle', NOW(), true, $4, NULL, $5)`,
-      [
-        s.tenant_id,
-        s.product_id,
-        planId,
-        s.current_period_end,
-        'Plan archived — grandfathered at renewal date',
-      ],
-    );
-    count++;
+  if (subscribers.length === 0) {
+    logger.info({ planId, count: 0 }, 'grandfatherExistingSubscribers complete');
+    return 0;
   }
 
+  const params: unknown[] = [planId, 'Plan archived — grandfathered at renewal date'];
+  const valuesSql = subscribers
+    .map((s) => {
+      params.push(s.tenant_id, s.product_id, s.current_period_end);
+      const tIdx = params.length - 2;
+      const pIdx = params.length - 1;
+      const eIdx = params.length;
+      return `($${tIdx}::uuid, $${pIdx}::uuid, $${eIdx}::timestamptz)`;
+    })
+    .join(', ');
+
+  const { rowCount } = await pool.query(
+    `INSERT INTO plan_change_ledger
+       (tenant_id, product_id, plan_id, old_plan_id, effective_date, effective_at,
+        grandfathered, protection_expires_at, applied_at, reason)
+     SELECT v.tenant_id, v.product_id, $1, $1, 'next_cycle', NOW(), true, v.current_period_end, NULL, $2
+     FROM (VALUES ${valuesSql}) AS v(tenant_id, product_id, current_period_end)
+     WHERE NOT EXISTS (
+       SELECT 1 FROM plan_change_ledger pcl
+       WHERE pcl.tenant_id = v.tenant_id
+         AND pcl.product_id = v.product_id
+         AND pcl.old_plan_id = $1
+         AND pcl.grandfathered = true
+     )`,
+    params,
+  );
+
+  const count = rowCount ?? 0;
   logger.info({ planId, count }, 'grandfatherExistingSubscribers complete');
   return count;
 }
 
 // Returns the full plan change history for a tenant-product pair, ordered newest-first.
 // Includes pending (applied_at IS NULL), grandfathered, and applied rows.
+const LEDGER_COLS = `id, product_id, tenant_id, plan_id, effective_date, effective_at, audit_note,
+  discount_percent, price_overrides, applied_by, created_at, delta_data, stripe_schedule_id,
+  grandfathered, protection_expires_at, target_stripe_price_id, applied_at, old_plan_id, reason`;
+
+const HISTORY_MAX_LIMIT = 200;
+
 export async function getPlanChangeHistory(
   tenantId: string,
   productId: string,
+  limit?: number,
 ): Promise<PlanChangeLedgerRow[]> {
   const pool = getPool();
+  const safeLimit = Math.min(limit ?? HISTORY_MAX_LIMIT, HISTORY_MAX_LIMIT);
   const { rows } = await pool.query<PlanChangeLedgerRow>(
-    `SELECT * FROM plan_change_ledger
+    `SELECT ${LEDGER_COLS} FROM plan_change_ledger
      WHERE tenant_id = $1 AND product_id = $2
-     ORDER BY created_at DESC`,
-    [tenantId, productId],
+     ORDER BY created_at DESC
+     LIMIT $3`,
+    [tenantId, productId, safeLimit],
   );
   return rows;
 }

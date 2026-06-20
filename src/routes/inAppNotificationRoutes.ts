@@ -33,7 +33,8 @@ const inAppNotificationRoutes: FastifyPluginAsync = async (fastify) => {
 
       const pool = getPool();
       const { rows } = await pool.query(
-        `SELECT *, COUNT(*) OVER() AS total_count
+        `SELECT id, tenant_id, product_id, alert_event_id, message, read, created_at, delta_data,
+                COUNT(*) OVER() AS total_count
          FROM in_app_notifications
          WHERE tenant_id = $1${readFilter}
          ORDER BY created_at DESC

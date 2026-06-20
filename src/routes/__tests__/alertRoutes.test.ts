@@ -47,10 +47,18 @@ async function buildTestApp(): Promise<FastifyInstance> {
   return fastify;
 }
 
+// Transaction-control statements (BEGIN/COMMIT/ROLLBACK) are passed through with empty rows so the
+// `queries` array only mocks real data queries — keeps individual tests readable.
 function setupClientMock(queries: Array<{ rows: unknown[] }>) {
   let callIndex = 0;
   mockPoolConnect.mockResolvedValueOnce({
-    query: vi.fn().mockImplementation(() => Promise.resolve(queries[callIndex++])),
+    query: vi.fn().mockImplementation((sql: string) => {
+      const trimmed = typeof sql === 'string' ? sql.trim().toUpperCase() : '';
+      if (trimmed === 'BEGIN' || trimmed === 'COMMIT' || trimmed === 'ROLLBACK') {
+        return Promise.resolve({ rows: [] });
+      }
+      return Promise.resolve(queries[callIndex++]);
+    }),
     release: mockClientRelease,
   });
 }

@@ -82,12 +82,13 @@ const portalDataRoutes: FastifyPluginAsync = async (fastify) => {
     const tenantId = request.portalUser!.tenant_id;
 
     const { rows } = await pool.query<InvoiceRow>(
-      'SELECT * FROM invoices WHERE id = $1',
-      [invoiceId],
+      `SELECT id, tenant_id, product_id, stripe_invoice_id, stripe_subscription_id, status,
+              amount_due, amount_paid, currency, period_start, period_end, invoice_pdf_url,
+              payment_failed_at, created_at, updated_at
+       FROM invoices WHERE id = $1 AND tenant_id = $2`,
+      [invoiceId, tenantId],
     );
-    if (!rows[0] || rows[0].tenant_id !== tenantId) {
-      throw new AppError(404, 'Invoice not found');
-    }
+    if (!rows[0]) throw new AppError(404, 'Invoice not found');
     return reply.send(rows[0]);
   });
 
@@ -107,7 +108,8 @@ const portalDataRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const { rows } = await pool.query(
-      `SELECT *, COUNT(*) OVER() AS total_count
+      `SELECT id, tenant_id, product_id, alert_event_id, message, read, created_at, delta_data,
+              COUNT(*) OVER() AS total_count
        FROM in_app_notifications
        WHERE tenant_id = $1${readFilter}
        ORDER BY created_at DESC

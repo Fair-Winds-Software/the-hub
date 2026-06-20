@@ -102,12 +102,13 @@ const adminBillingRoutes: FastifyPluginAsync = async (fastify) => {
     assertTenantAccess(request, tenantId);
 
     const { rows } = await getPool().query<InvoiceRow>(
-      'SELECT * FROM invoices WHERE id = $1',
-      [invoiceId],
+      `SELECT id, tenant_id, product_id, stripe_invoice_id, stripe_subscription_id, status,
+              amount_due, amount_paid, currency, period_start, period_end, invoice_pdf_url,
+              payment_failed_at, created_at, updated_at
+       FROM invoices WHERE id = $1 AND tenant_id = $2`,
+      [invoiceId, tenantId],
     );
-    if (!rows[0] || rows[0].tenant_id !== tenantId) {
-      throw new AppError(404, 'Invoice not found');
-    }
+    if (!rows[0]) throw new AppError(404, 'Invoice not found');
     return reply.send(rows[0]);
   });
 

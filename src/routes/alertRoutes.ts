@@ -1,4 +1,5 @@
 // Authorized by HUB-725 — POST acknowledge/resolve, GET paginated list; operator JWT; alert_events
+// Authorized by HUB-4.1 L2 — Deep Audit DA-C4/DA-H1: explicit RETURNING, transactions, explicit SELECT columns
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { getPool } from '../db/pool.js';
@@ -13,6 +14,9 @@ function assertUUID(value: string, label: string): void {
 const VALID_STATUSES   = new Set(['new', 'acknowledged', 'resolved']);
 const VALID_SEVERITIES = new Set(['info', 'warning', 'critical']);
 
+const ALERT_COLS = `id, tenant_id, product_id, alert_type, severity, payload, status, dedup_key,
+  first_fired_at, last_fired_at, fire_count, acknowledged_at, resolved_at, delta_data`;
+
 const alertRoutes: FastifyPluginAsync = async (fastify) => {
   // ── POST /api/v1/alerts/:tenantId/:alertId/acknowledge ────────────────────
   fastify.post(
@@ -26,6 +30,7 @@ const alertRoutes: FastifyPluginAsync = async (fastify) => {
       const pool = getPool();
       const client = await pool.connect();
       try {
+        await client.query('BEGIN');
         const { rows } = await client.query<{ id: string; status: string }>(
           `SELECT id, status FROM alert_events WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
           [alertId, tenantId],
@@ -37,10 +42,15 @@ const alertRoutes: FastifyPluginAsync = async (fastify) => {
         if (current === 'resolved')     throw new AppError(400, 'Cannot acknowledge a resolved alert');
 
         const { rows: updated } = await client.query(
-          `UPDATE alert_events SET status = 'acknowledged', acknowledged_at = NOW() WHERE id = $1 RETURNING *`,
+          `UPDATE alert_events SET status = 'acknowledged', acknowledged_at = NOW()
+           WHERE id = $1 RETURNING ${ALERT_COLS}`,
           [alertId],
         );
+        await client.query('COMMIT');
         return reply.status(200).send(updated[0]);
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
       } finally {
         client.release();
       }
@@ -59,6 +69,7 @@ const alertRoutes: FastifyPluginAsync = async (fastify) => {
       const pool = getPool();
       const client = await pool.connect();
       try {
+        await client.query('BEGIN');
         const { rows } = await client.query<{ id: string; status: string }>(
           `SELECT id, status FROM alert_events WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
           [alertId, tenantId],
@@ -67,10 +78,15 @@ const alertRoutes: FastifyPluginAsync = async (fastify) => {
         if (rows[0]!.status === 'resolved') throw new AppError(400, 'Alert is already resolved');
 
         const { rows: updated } = await client.query(
-          `UPDATE alert_events SET status = 'resolved', resolved_at = NOW() WHERE id = $1 RETURNING *`,
+          `UPDATE alert_events SET status = 'resolved', resolved_at = NOW()
+           WHERE id = $1 RETURNING ${ALERT_COLS}`,
           [alertId],
         );
+        await client.query('COMMIT');
         return reply.status(200).send(updated[0]);
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
       } finally {
         client.release();
       }
@@ -108,7 +124,7 @@ const alertRoutes: FastifyPluginAsync = async (fastify) => {
       const pool = getPool();
       const [{ rows: alerts }, { rows: countRows }] = await Promise.all([
         pool.query(
-          `SELECT * FROM alert_events ${where} ORDER BY first_fired_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+          `SELECT ${ALERT_COLS} FROM alert_events ${where} ORDER BY first_fired_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
           [...params, limit, offset],
         ),
         pool.query<{ count: string }>(

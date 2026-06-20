@@ -38,16 +38,17 @@ const versionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const pool = getPool();
 
+      const COLS = `id, product_id, version, status, deprecated_at, sunset_at, release_notes, created_by, delta_data, created_at, updated_at`;
       const { rows } = status
         ? await pool.query<ProductVersionRow>(
-            `SELECT * FROM product_versions
+            `SELECT ${COLS} FROM product_versions
              WHERE product_id = $1 AND status = $2
              ORDER BY created_at DESC
              LIMIT $3 OFFSET $4`,
             [productId, status, limit, offset],
           )
         : await pool.query<ProductVersionRow>(
-            `SELECT * FROM product_versions
+            `SELECT ${COLS} FROM product_versions
              WHERE product_id = $1
              ORDER BY created_at DESC
              LIMIT $2 OFFSET $3`,
