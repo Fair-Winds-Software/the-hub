@@ -1,0 +1,483 @@
+{
+  "generator": "scripts/generate-story-key-index.mjs",
+  "test_file_count": 113,
+  "story_key_count": 142,
+  "files_without_key": [],
+  "story_keys": {
+    "HUB-4.1": [
+      "src/__tests__/envValidation.test.ts",
+      "src/__tests__/server.integration.test.ts",
+      "src/services/__tests__/operatorAuth.test.ts",
+      "src/services/__tests__/planChangeService.test.ts",
+      "src/services/__tests__/products.test.ts",
+      "src/services/__tests__/tenants.test.ts"
+    ],
+    "HUB-47": [
+      "src/__tests__/analytics.integration.test.ts"
+    ],
+    "HUB-48": [
+      "src/queues/__tests__/retentionJob.test.ts",
+      "src/services/__tests__/stripeService.test.ts"
+    ],
+    "HUB-49": [
+      "src/db/__tests__/migrate.integration.test.ts",
+      "src/db/__tests__/pool.test.ts"
+    ],
+    "HUB-50": [
+      "src/__tests__/constants.test.ts",
+      "src/db/__tests__/core_schema.integration.test.ts"
+    ],
+    "HUB-51": [
+      "src/db/__tests__/delta_tracker.integration.test.ts"
+    ],
+    "HUB-71": [
+      "src/__tests__/ci_workflow.test.ts"
+    ],
+    "HUB-76": [
+      "src/__tests__/ci_workflow.test.ts"
+    ],
+    "HUB-77": [
+      "src/__tests__/ci_workflow.test.ts",
+      "src/__tests__/server.integration.test.ts"
+    ],
+    "HUB-78": [
+      "src/__tests__/logger.integration.test.ts"
+    ],
+    "HUB-79": [
+      "src/__tests__/errorHandler.integration.test.ts"
+    ],
+    "HUB-98": [
+      "src/__tests__/auth.integration.test.ts"
+    ],
+    "HUB-99": [
+      "src/__tests__/rateLimit.integration.test.ts"
+    ],
+    "HUB-112": [
+      "src/__tests__/operatorAuth.integration.test.ts"
+    ],
+    "HUB-113": [
+      "src/__tests__/middlewareChain.integration.test.ts"
+    ],
+    "HUB-125": [
+      "src/redis/__tests__/client.integration.test.ts"
+    ],
+    "HUB-126": [
+      "src/db/__tests__/settings.integration.test.ts"
+    ],
+    "HUB-127": [
+      "src/queues/__tests__/worker.test.ts"
+    ],
+    "HUB-146": [
+      "src/queues/__tests__/queue-factory.test.ts"
+    ],
+    "HUB-147": [
+      "src/queues/__tests__/worker.test.ts",
+      "src/utils/__tests__/sanitize.test.ts"
+    ],
+    "HUB-160": [
+      "src/settings/__tests__/settings-cache.test.ts"
+    ],
+    "HUB-161": [
+      "src/queues/__tests__/cron.test.ts"
+    ],
+    "HUB-174": [
+      "src/stripe/__tests__/client.test.ts"
+    ],
+    "HUB-175": [
+      "src/db/__tests__/stripe_webhook_events.integration.test.ts"
+    ],
+    "HUB-188": [
+      "src/stripe/__tests__/client.test.ts",
+      "src/webhooks/__tests__/stripe.test.ts"
+    ],
+    "HUB-189": [
+      "src/webhooks/__tests__/stripe.test.ts"
+    ],
+    "HUB-202": [
+      "src/webhooks/__tests__/stripe.test.ts"
+    ],
+    "HUB-216": [
+      "src/__tests__/logger.integration.test.ts",
+      "src/logging/__tests__/index.test.ts",
+      "src/logging/__tests__/plugin.test.ts"
+    ],
+    "HUB-217": [
+      "src/health/__tests__/probes.test.ts"
+    ],
+    "HUB-230": [
+      "src/__tests__/server.integration.test.ts",
+      "src/routes/__tests__/health.test.ts"
+    ],
+    "HUB-237": [
+      "src/logging/__tests__/env.test.ts"
+    ],
+    "HUB-258": [
+      "src/services/__tests__/license.test.ts"
+    ],
+    "HUB-259": [
+      "src/services/__tests__/license.test.ts"
+    ],
+    "HUB-272": [
+      "src/queues/__tests__/cron.test.ts",
+      "src/services/__tests__/license.test.ts"
+    ],
+    "HUB-279": [
+      "src/services/__tests__/license.test.ts"
+    ],
+    "HUB-300": [
+      "src/services/__tests__/featureGate.test.ts"
+    ],
+    "HUB-301": [
+      "src/services/__tests__/featureGate.test.ts"
+    ],
+    "HUB-314": [
+      "src/services/__tests__/featureGate.test.ts"
+    ],
+    "HUB-335": [
+      "src/services/__tests__/versionReporting.test.ts"
+    ],
+    "HUB-336": [
+      "src/queues/__tests__/cron.test.ts",
+      "src/services/__tests__/versionReporting.test.ts"
+    ],
+    "HUB-349": [
+      "src/routes/__tests__/sdk.test.ts"
+    ],
+    "HUB-350": [
+      "src/routes/__tests__/versions.test.ts"
+    ],
+    "HUB-370": [
+      "src/services/__tests__/leaseService.test.ts"
+    ],
+    "HUB-371": [
+      "src/services/__tests__/leaseService.test.ts"
+    ],
+    "HUB-372": [
+      "src/services/__tests__/leaseService.test.ts"
+    ],
+    "HUB-391": [
+      "src/routes/__tests__/leases.test.ts"
+    ],
+    "HUB-392": [
+      "src/routes/__tests__/leases.test.ts"
+    ],
+    "HUB-393": [
+      "src/routes/__tests__/leases.test.ts"
+    ],
+    "HUB-413": [
+      "src/stripe/__tests__/client.test.ts"
+    ],
+    "HUB-426": [
+      "src/services/__tests__/stripeService.test.ts"
+    ],
+    "HUB-427": [
+      "src/services/__tests__/stripeService.test.ts"
+    ],
+    "HUB-428": [
+      "src/services/__tests__/stripeService.test.ts"
+    ],
+    "HUB-454": [
+      "src/routes/__tests__/billing.test.ts"
+    ],
+    "HUB-476": [
+      "src/routes/__tests__/billing.test.ts"
+    ],
+    "HUB-489": [
+      "src/services/__tests__/invoiceService.test.ts"
+    ],
+    "HUB-503": [
+      "src/services/__tests__/billingFreezeService.test.ts",
+      "src/services/__tests__/stripeService.test.ts"
+    ],
+    "HUB-504": [
+      "src/services/__tests__/billingFreezeService.test.ts"
+    ],
+    "HUB-517": [
+      "src/queues/__tests__/cron.test.ts",
+      "src/services/__tests__/billingFreezeService.test.ts"
+    ],
+    "HUB-525": [
+      "src/lib/__tests__/leaseCrypto.test.ts"
+    ],
+    "HUB-538": [
+      "src/services/__tests__/leaseService.test.ts"
+    ],
+    "HUB-539": [
+      "src/services/__tests__/leaseService.test.ts"
+    ],
+    "HUB-552": [
+      "src/routes/__tests__/leases.test.ts"
+    ],
+    "HUB-553": [
+      "src/routes/__tests__/leases.test.ts"
+    ],
+    "HUB-567": [
+      "src/lib/__tests__/pricingModelValidation.test.ts"
+    ],
+    "HUB-580": [
+      "src/services/__tests__/pricingModelService.test.ts"
+    ],
+    "HUB-581": [
+      "src/services/__tests__/pricingModelService.test.ts"
+    ],
+    "HUB-594": [
+      "src/routes/__tests__/pricingModelRoutes.test.ts"
+    ],
+    "HUB-595": [
+      "src/routes/__tests__/pricingModelRoutes.test.ts"
+    ],
+    "HUB-609": [
+      "src/lib/__tests__/computeCost.test.ts"
+    ],
+    "HUB-622": [
+      "src/services/__tests__/usageTrackingService.test.ts"
+    ],
+    "HUB-629": [
+      "src/routes/__tests__/usageRoutes.test.ts"
+    ],
+    "HUB-643": [
+      "src/services/__tests__/marginService.test.ts"
+    ],
+    "HUB-644": [
+      "src/queues/__tests__/cron.test.ts",
+      "src/queues/__tests__/marginReviewJob.test.ts"
+    ],
+    "HUB-657": [
+      "src/routes/__tests__/marginRoutes.test.ts"
+    ],
+    "HUB-671": [
+      "src/services/__tests__/billingPeriodCostService.test.ts"
+    ],
+    "HUB-672": [
+      "src/queues/__tests__/cron.test.ts",
+      "src/queues/__tests__/periodCostAggregatorJob.test.ts"
+    ],
+    "HUB-685": [
+      "src/services/__tests__/costCalculationService.test.ts"
+    ],
+    "HUB-692": [
+      "src/routes/__tests__/pricingActiveModelRoutes.test.ts"
+    ],
+    "HUB-699": [
+      "src/routes/__tests__/costQueryRoutes.test.ts"
+    ],
+    "HUB-707": [
+      "src/services/__tests__/alertService.test.ts"
+    ],
+    "HUB-719": [
+      "src/jobs/__tests__/alertHandlers.test.ts"
+    ],
+    "HUB-725": [
+      "src/routes/__tests__/alertRoutes.test.ts"
+    ],
+    "HUB-732": [
+      "src/jobs/__tests__/notificationDeliveryWorker.test.ts"
+    ],
+    "HUB-745": [
+      "src/services/notifications/__tests__/emailHandler.test.ts"
+    ],
+    "HUB-746": [
+      "src/services/notifications/__tests__/webhookHandler.test.ts"
+    ],
+    "HUB-747": [
+      "src/services/notifications/__tests__/inAppHandler.test.ts"
+    ],
+    "HUB-766": [
+      "src/routes/__tests__/notificationChannelRoutes.test.ts"
+    ],
+    "HUB-767": [
+      "src/routes/__tests__/inAppNotificationRoutes.test.ts"
+    ],
+    "HUB-787": [
+      "src/jobs/__tests__/escalationScannerJob.test.ts",
+      "src/queues/__tests__/cron.test.ts"
+    ],
+    "HUB-788": [
+      "src/services/__tests__/escalationService.test.ts"
+    ],
+    "HUB-801": [
+      "src/routes/__tests__/escalationRuleRoutes.test.ts"
+    ],
+    "HUB-808": [
+      "src/jobs/__tests__/escalationDeliveryWorker.test.ts"
+    ],
+    "HUB-822": [
+      "src/services/__tests__/hookMatchingService.test.ts"
+    ],
+    "HUB-829": [
+      "src/jobs/__tests__/hookDeliveryWorker.test.ts"
+    ],
+    "HUB-830": [
+      "src/services/__tests__/hookDeliveryService.test.ts"
+    ],
+    "HUB-844": [
+      "src/routes/__tests__/hookRoutes.test.ts"
+    ],
+    "HUB-914": [
+      "packages/hub-sdk/src/__tests__/HubClient.test.ts",
+      "packages/hub-sdk/src/auth/__tests__/acquireToken.test.ts"
+    ],
+    "HUB-957": [
+      "packages/hub-sdk/src/__tests__/getLease.test.ts",
+      "packages/hub-sdk/src/lease/__tests__/decryptLeaseToken.test.ts",
+      "packages/hub-sdk/src/lease/__tests__/graceWindow.test.ts",
+      "packages/hub-sdk/src/lease/__tests__/leaseCache.test.ts",
+      "packages/hub-sdk/src/lease/__tests__/verifyLeaseSignature.test.ts"
+    ],
+    "HUB-986": [
+      "packages/hub-sdk/src/__tests__/HubClient.test.ts",
+      "packages/hub-sdk/src/__tests__/getLease.test.ts"
+    ],
+    "HUB-1006": [
+      "packages/hub-sdk/src/__tests__/bufferRetention.unit.test.ts",
+      "packages/hub-sdk/src/__tests__/disconnect.unit.test.ts",
+      "packages/hub-sdk/src/__tests__/flush.unit.test.ts",
+      "packages/hub-sdk/src/__tests__/ping.unit.test.ts",
+      "packages/hub-sdk/src/__tests__/trackUsage.unit.test.ts",
+      "packages/hub-sdk/src/__tests__/usage.integration.test.ts",
+      "packages/hub-sdk/src/__tests__/versionReport.unit.test.ts"
+    ],
+    "HUB-1028": [
+      "src/__tests__/complianceWave1.integration.test.ts"
+    ],
+    "HUB-1043": [
+      "src/queues/__tests__/cron.test.ts"
+    ],
+    "HUB-1051": [
+      "src/__tests__/complianceWave2.integration.test.ts"
+    ],
+    "HUB-1057": [
+      "src/services/__tests__/complianceDashboardService.test.ts"
+    ],
+    "HUB-1079": [
+      "src/__tests__/operatorConsole.integration.test.ts"
+    ],
+    "HUB-1090": [
+      "src/__tests__/complianceDashboard.integration.test.ts"
+    ],
+    "HUB-1098": [
+      "src/__tests__/complianceAlerting.integration.test.ts"
+    ],
+    "HUB-1102": [
+      "src/__tests__/complianceAlerting.integration.test.ts"
+    ],
+    "HUB-1118": [
+      "src/__tests__/complianceAlerting.integration.test.ts"
+    ],
+    "HUB-1128": [
+      "src/__tests__/tenantProduct.integration.test.ts"
+    ],
+    "HUB-1142": [
+      "src/__tests__/planAdvisor.integration.test.ts",
+      "src/services/__tests__/planAdvisorService.test.ts"
+    ],
+    "HUB-1143": [
+      "src/__tests__/planAdvisor.integration.test.ts",
+      "src/services/__tests__/planAdvisorService.test.ts"
+    ],
+    "HUB-1144": [
+      "src/__tests__/planAdvisor.integration.test.ts"
+    ],
+    "HUB-1145": [
+      "src/queues/__tests__/cron.test.ts"
+    ],
+    "HUB-1146": [
+      "src/__tests__/operatorConsoleE19.integration.test.ts"
+    ],
+    "HUB-1147": [
+      "src/__tests__/operatorConsoleE19.integration.test.ts",
+      "src/services/__tests__/operatorConsoleService.test.ts"
+    ],
+    "HUB-1148": [
+      "src/__tests__/operatorConsoleE19.integration.test.ts"
+    ],
+    "HUB-1149": [
+      "src/__tests__/operatorConsoleE19.integration.test.ts",
+      "src/__tests__/planAdvisor.integration.test.ts"
+    ],
+    "HUB-1354": [
+      "src/__tests__/complianceAlerting.integration.test.ts",
+      "src/queues/__tests__/cron.test.ts"
+    ],
+    "HUB-1355": [
+      "src/__tests__/complianceAlerting.integration.test.ts",
+      "src/queues/__tests__/cron.test.ts"
+    ],
+    "HUB-1365": [
+      "src/__tests__/complianceAlerting.integration.test.ts"
+    ],
+    "HUB-1366": [
+      "src/__tests__/complianceAlerting.integration.test.ts"
+    ],
+    "HUB-1377": [
+      "src/__tests__/evidenceExport.integration.test.ts"
+    ],
+    "HUB-1380": [
+      "src/__tests__/evidenceExport.integration.test.ts"
+    ],
+    "HUB-1381": [
+      "src/__tests__/evidenceExport.integration.test.ts",
+      "src/services/__tests__/evidenceExportService.test.ts"
+    ],
+    "HUB-1382": [
+      "src/__tests__/evidenceExport.integration.test.ts"
+    ],
+    "HUB-1383": [
+      "src/__tests__/evidenceExport.integration.test.ts",
+      "src/services/__tests__/evidenceExportService.test.ts"
+    ],
+    "HUB-1470": [
+      "src/services/__tests__/stripeService.test.ts"
+    ],
+    "HUB-1471": [
+      "src/services/__tests__/planCatalogService.test.ts"
+    ],
+    "HUB-1485": [
+      "src/services/__tests__/billingFlexibility.integration.test.ts"
+    ],
+    "HUB-1493": [
+      "src/services/__tests__/planChange.integration.test.ts"
+    ],
+    "HUB-1498": [
+      "src/__tests__/billingAdmin.integration.test.ts"
+    ],
+    "HUB-1505": [
+      "src/__tests__/notificationsAdmin.integration.test.ts"
+    ],
+    "HUB-1513": [
+      "src/__tests__/portalE29.integration.test.ts"
+    ],
+    "HUB-1514": [
+      "src/__tests__/server.integration.test.ts",
+      "src/health/__tests__/probes.test.ts",
+      "src/routes/__tests__/health.test.ts"
+    ],
+    "HUB-1515": [
+      "src/__tests__/observability.integration.test.ts"
+    ],
+    "HUB-1519": [
+      "src/__tests__/audit.integration.test.ts"
+    ],
+    "HUB-1522": [
+      "src/__tests__/analytics.integration.test.ts"
+    ],
+    "HUB-1523": [
+      "src/queues/__tests__/queue-factory.test.ts"
+    ],
+    "HUB-1524": [
+      "src/queues/__tests__/cron.test.ts"
+    ],
+    "HUB-1525": [
+      "src/__tests__/envValidation.test.ts",
+      "src/__tests__/server.integration.test.ts"
+    ],
+    "HUB-1526": [
+      "src/__tests__/observability.integration.test.ts",
+      "src/__tests__/server.integration.test.ts",
+      "src/health/__tests__/probes.test.ts",
+      "src/logging/__tests__/env.test.ts",
+      "src/logging/__tests__/index.test.ts",
+      "src/routes/__tests__/health.test.ts"
+    ]
+  }
+}
