@@ -1,5 +1,7 @@
 // Authorized by HUB-112 — Operator auth plugin; slot 5 in app.ts plugin chain
 // Authorized by HUB-4.1 L2 — Red Team H1: add active check to prevent deactivated operator login
+// Authorized by HUB-4.1 L2 — Red Team M1: explicit exp check so non-expiring crafted tokens are rejected
+// Authorized by HUB-4.1 L2 — Red Team M4: requireRole emits 401 (not 403) when operator_role is unset
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import jwt from 'jsonwebtoken';
@@ -28,9 +30,8 @@ interface OperatorJwtPayload {
 // Usage: { preHandler: [fastify.authenticateOperator, requireRole('admin')] }
 export function requireRole(role: string) {
   return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
-    if (request.operator_role !== role) {
-      throw new AppError(403, 'Forbidden');
-    }
+    if (!request.operator_role) throw new AppError(401, 'Invalid or expired token');
+    if (request.operator_role !== role) throw new AppError(403, 'Forbidden');
   };
 }
 
@@ -106,9 +107,11 @@ const operatorAuthPlugin: FastifyPluginAsync = async (fastify) => {
 
       try {
         const payload = jwt.verify(token, secret) as OperatorJwtPayload;
+        if (!payload.exp) throw new AppError(401, 'Invalid or expired token');
         request.operator_id = payload.operator_id;
         request.operator_role = payload.role;
-      } catch {
+      } catch (err) {
+        if (err instanceof AppError) throw err;
         throw new AppError(401, 'Invalid or expired token');
       }
     },

@@ -17,9 +17,11 @@ beforeAll(async () => {
   process.env.REDIS_URL ??= "redis://localhost:6379";
   process.env.JWT_SECRET ??= "test-jwt-secret-hub77";
   process.env.OPERATOR_JWT_SECRET ??= "test-operator-jwt-secret-hub112";
-  // HUB-1525 — new required env vars
-  process.env.LEASE_ENCRYPTION_KEY ??= "test-lease-encryption-key-32bytes!!";
+  // HUB-1525 — new required env vars; HUB-4.1 L2 — M2/M5/L1: hex key + new required vars
+  process.env.LEASE_ENCRYPTION_KEY ??= "00".repeat(32); // 64 hex chars = valid AES-256 key
   process.env.STRIPE_SECRET_KEY ??= "sk_test_hub_integration_test_key";
+  process.env.STRIPE_WEBHOOK_SIGNING_SECRET ??= "whsec_test_integration_fallback";
+  process.env.HOOK_ENCRYPTION_KEY ??= "00".repeat(32); // 64 hex chars = valid AES-256 key
   // Disable stripe probe so /health only depends on pg + Redis (no Stripe credentials in test)
   process.env.HEALTH_CHECK_STRIPE_ENABLED ??= "false";
 
@@ -179,11 +181,11 @@ describe("env validation", () => {
     }
   });
 
-  it("throws when LEASE_ENCRYPTION_KEY is shorter than 32 bytes", async () => {
+  it("throws when LEASE_ENCRYPTION_KEY is not a valid 64-char hex string", async () => {
     const saved = process.env.LEASE_ENCRYPTION_KEY;
     process.env.LEASE_ENCRYPTION_KEY = "short";
     try {
-      await expect(buildApp()).rejects.toThrow("LEASE_ENCRYPTION_KEY is too short");
+      await expect(buildApp()).rejects.toThrow("LEASE_ENCRYPTION_KEY must be exactly 64 hex characters");
     } finally {
       if (saved !== undefined) process.env.LEASE_ENCRYPTION_KEY = saved;
       else delete process.env.LEASE_ENCRYPTION_KEY;

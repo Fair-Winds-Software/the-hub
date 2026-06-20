@@ -1,8 +1,9 @@
 // Authorized by HUB-1023 — POST /api/v1/compliance/signals; HMAC-verified signal ingestion; dedup via signal_id; burn-in gap tracking; rejection log
+// Authorized by HUB-4.1 L2 — Red Team M3: use timingSafeEqual for HMAC comparison; Red Team L2: use createHash for content_hash
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { Readable } from 'stream';
-import { createDecipheriv, createHmac, randomBytes as _randomBytes } from 'node:crypto';
+import { createDecipheriv, createHash, createHmac, randomBytes as _randomBytes, timingSafeEqual } from 'node:crypto';
 import { getPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
 
@@ -37,7 +38,7 @@ function computeSignature(rawBody: Buffer, secret: string): string {
 }
 
 function sha256Hex(data: string): string {
-  return createHmac('sha256', 'content-hash').update(data).digest('hex');
+  return createHash('sha256').update(data).digest('hex');
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -121,8 +122,10 @@ const complianceSignalPlugin: FastifyPluginAsync = async (fastify) => {
         return reply.status(202).send({ received: false });
       }
 
-      const expected = `sha256=${computeSignature(raw, decryptedSecret)}`;
-      if (sig !== expected) {
+      const expected = Buffer.from(`sha256=${computeSignature(raw, decryptedSecret)}`);
+      const incoming = Buffer.from(sig);
+      const sigValid = incoming.length === expected.length && timingSafeEqual(incoming, expected);
+      if (!sigValid) {
         await reject(productId, 'signature mismatch');
         return reply.status(202).send({ received: false });
       }

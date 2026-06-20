@@ -1,4 +1,5 @@
 // Authorized by HUB-1034 — operatorRbacHook; super_admin unrestricted; tenant_admin scoped to tenant_id
+// Authorized by HUB-4.1 L2 — Red Team M1/L3: explicit exp check so non-expiring crafted tokens are rejected
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { AppError } from '../errors/AppError.js';
@@ -36,7 +37,9 @@ export async function operatorRbacHook(
   let claims: OperatorJwtClaims;
   try {
     claims = jwt.verify(token, secret) as OperatorJwtClaims;
-  } catch {
+    if (!claims.exp) throw new AppError(401, 'Unauthorized');
+  } catch (err) {
+    if (err instanceof AppError) throw err;
     throw new AppError(401, 'Unauthorized');
   }
 
