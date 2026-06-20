@@ -3,6 +3,7 @@
 // Authorized by HUB-428 — unit tests: handleSubscriptionUpdated, handleSubscriptionDeleted
 // Authorized by HUB-503 — unit tests: cancelSubscription immediate path
 // Authorized by HUB-1470 — unit tests updated: createSubscription accepts planId; mocks getPlanById
+// Authorized by HUB-48 FVL — mock getBillingJobsQueue so unit tests don't require REDIS_URL
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mock setup ────────────────────────────────────────────────────────────────
@@ -26,6 +27,11 @@ vi.mock('../../stripe/client.js', () => ({
 
 const mockGetPlanById = vi.hoisted(() => vi.fn());
 vi.mock('../planCatalogService.js', () => ({ getPlanById: mockGetPlanById }));
+
+const mockQueueAdd = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('../../queues/index.js', () => ({
+  getBillingJobsQueue: () => ({ add: mockQueueAdd }),
+}));
 
 vi.mock('../../lib/logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
