@@ -1,22 +1,14 @@
-// Authorized by HUB-1569 — App root; BrowserRouter + Suspense + lazy /console/login stub
-// Authorized by HUB-1576 — adds /console/dashboard placeholder route (HUB-1577 will replace
-// with DashboardStub + shell) so post-login navigation has a landing target
+// Authorized by HUB-1569 — App root; BrowserRouter + Suspense + lazy /console/login
+// Authorized by HUB-1576 — login route + post-login redirect target
+// Authorized by HUB-1577 — ConsoleShell layout + DashboardStub at /console/dashboard
+//   (replaces HUB-1576 temporary placeholder per D-HUB-SCOPE-027) + RBACRoute guard
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ConsoleShell } from './components/shell/ConsoleShell';
+import { RBACRoute } from './components/RBACRoute';
 
 const Login = lazy(() => import('./routes/Login'));
-
-// TODO HUB-1577: replace with DashboardStub wrapped in app shell + RBACRoute.
-function DashboardPlaceholder(): React.ReactElement {
-  return (
-    <main className="min-h-screen bg-sailcloth p-8">
-      <h1 className="font-heading text-2xl text-primary-navy">Console Dashboard</h1>
-      <p className="font-body text-deep-charcoal mt-2">
-        Placeholder — shell + real dashboard delivered in HUB-1577 / E-FE-2.
-      </p>
-    </main>
-  );
-}
+const DashboardStub = lazy(() => import('./routes/DashboardStub'));
 
 export function App() {
   return (
@@ -24,7 +16,16 @@ export function App() {
       <Suspense fallback={<div>Loading…</div>}>
         <Routes>
           <Route path="/console/login" element={<Login />} />
-          <Route path="/console/dashboard" element={<DashboardPlaceholder />} />
+          <Route element={<ConsoleShell />}>
+            <Route
+              path="/console/dashboard"
+              element={
+                <RBACRoute requiredRole="product_admin">
+                  <DashboardStub />
+                </RBACRoute>
+              }
+            />
+          </Route>
           <Route path="*" element={<Navigate to="/console/login" replace />} />
         </Routes>
       </Suspense>
