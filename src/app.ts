@@ -85,6 +85,7 @@
 // Authorized by HUB-1518 — auditRoutes: GET /api/v1/audit; operator JWT; tenant scoping; cursor pagination
 // Authorized by HUB-1520 — analyticsService: getUsageAnalytics + getBillingAnalytics over billing_period_costs
 // Authorized by HUB-1521 — analyticsRoutes: GET /api/v1/analytics/usage + /billing + /health (501 stub)
+// Authorized by HUB-1570 — spaShellPlugin: serves frontend/dist SPA + setNotFoundHandler returns index.html on non-API GETs (production-only per D-HUB-SCOPE-025)
 import Fastify from "fastify";
 import type { DestinationStream } from "pino";
 import { createServerOptions } from "./server.js";
@@ -117,6 +118,7 @@ import complianceSignalPlugin from "./routes/compliance/signals.js";
 import auditContextPlugin from "./plugins/auditContext.js";
 import auditRoutes from "./routes/auditRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
+import spaShellPlugin from "./plugins/spaShell.js";
 
 export async function buildApp(dest?: DestinationStream) {
   validateEnv();
@@ -164,6 +166,10 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(auditContextPlugin);
   await fastify.register(auditRoutes);
   await fastify.register(analyticsRoutes);
+
+  // HUB-1570: SPA-shell middleware registered last so all API routes take precedence.
+  // No-ops when NODE_ENV === 'development' (Vite owns SPA shell in dev per D-HUB-SCOPE-025).
+  await fastify.register(spaShellPlugin);
 
   return fastify;
 }

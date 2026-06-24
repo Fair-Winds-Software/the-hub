@@ -1,5 +1,8 @@
 node_modules/
 dist/
+# Authorized by HUB-1570 — integration test fixtures may shadow dist/
+!__tests__/integration/spaShell.fixtures/dist/
+!__tests__/integration/spaShell.fixtures/dist/**
 .env
 coverage/
 *.js.map
@@ -7,6 +10,8 @@ desktop.ini
 *.html
 # Authorized by HUB-1569 — Vite SPA entry must be tracked
 !frontend/index.html
+# Authorized by HUB-1570 — SPA-shell integration test fixture HTML must be tracked
+!__tests__/integration/spaShell.fixtures/dist/index.html
 
 # Infra audit (2026-06-20) - local Postgres dump backups, never commit
 hub_dev_backup_*.dump
