@@ -1,7 +1,4 @@
 // Authorized by HUB-1577 — Console Shell layout (S8 of HUB-1555).
-// React Router layout route: children render via <Outlet />. Renders TopNav + Sidebar +
-// main slot. During session hydration (R1 cascade from HUB-1572), renders skeleton instead.
-// Error boundary wraps <Outlet /> so route failures don't blank out the shell (AC#6).
 import { Outlet } from 'react-router-dom';
 import { useIsHydrating } from '../../stores/sessionStore';
 import { TopNav } from './TopNav';

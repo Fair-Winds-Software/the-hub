@@ -1,17 +1,29 @@
 // Authorized by HUB-1577 — Sidebar for the Console Shell (S8 ACs #3, #4).
+// Authorized by HUB-1578 — Per-item RBAC filter via useRBACGuard (S9 AC#1).
 // Vertical list of nav items; active item highlight; viewport-responsive auto-collapse
 // at 1024-1280px (Tailwind xl breakpoint); user toggle via uiStore (Zustand).
-// HUB-1578 (S9) wires the per-item RBAC filter — for now we render all items; HUB-1574
-// useRBACGuard is the gate at the route level.
+// Items the operator cannot access are filtered OUT entirely (no greyed-out state per AC#1).
 import { useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSidebarCollapsed, useUIStore } from '../../stores/uiStore';
-import { NAV_ITEMS } from '../../config/navItems';
+import { NAV_ITEMS, type NavItem } from '../../config/navItems';
+import { useRBACGuard } from '../../lib/rbac';
+
+/** Hook that returns the subset of NAV_ITEMS the current operator can access. */
+function useVisibleNavItems(): readonly NavItem[] {
+  // Each item maps to a useRBACGuard call. React's rules-of-hooks require a stable hook
+  // call order — NAV_ITEMS is a module-level constant so the order is stable across renders.
+  return NAV_ITEMS.filter((item) =>
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useRBACGuard(item.requiredRole).allowed,
+  );
+}
 
 export function Sidebar(): React.ReactElement {
   const location = useLocation();
   const userCollapsed = useSidebarCollapsed();
   const toggle = useUIStore((s) => s.toggleSidebar);
+  const visibleItems = useVisibleNavItems();
 
   // CSS-driven responsive: collapsed by default below xl (1280px); user toggle above xl.
   // Combined width: 64px for icon-rail; 240px for expanded.
@@ -31,7 +43,7 @@ export function Sidebar(): React.ReactElement {
       data-user-collapsed={userCollapsed}
     >
       <ul className="flex-1 py-2">
-        {NAV_ITEMS.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.route;
           return (

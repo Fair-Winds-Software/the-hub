@@ -1,14 +1,20 @@
 // Authorized by HUB-1569 — App root; BrowserRouter + Suspense + lazy /console/login
 // Authorized by HUB-1576 — login route + post-login redirect target
 // Authorized by HUB-1577 — ConsoleShell layout + DashboardStub at /console/dashboard
-//   (replaces HUB-1576 temporary placeholder per D-HUB-SCOPE-027) + RBACRoute guard
+//   (replaces HUB-1576 temporary placeholder per D-HUB-SCOPE-027)
+// Authorized by HUB-1578 — GuardedRoute wraps every /console/* route (RBAC + toast emit);
+//   AuditStub + SettingsStub placeholder routes (super_admin only) — supersession owned
+//   by HUB-1558 + HUB-1564 per D-HUB-SCOPE-027 pattern
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
-import { RBACRoute } from './components/RBACRoute';
+import { GuardedRoute } from './components/GuardedRoute';
+import { Toaster } from './components/Toaster';
 
 const Login = lazy(() => import('./routes/Login'));
 const DashboardStub = lazy(() => import('./routes/DashboardStub'));
+const AuditStub = lazy(() => import('./routes/AuditStub'));
+const SettingsStub = lazy(() => import('./routes/SettingsStub'));
 
 export function App() {
   return (
@@ -20,14 +26,34 @@ export function App() {
             <Route
               path="/console/dashboard"
               element={
-                <RBACRoute requiredRole="product_admin">
+                <GuardedRoute requiredRole="product_admin">
                   <DashboardStub />
-                </RBACRoute>
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/audit"
+              element={
+                <GuardedRoute requiredRole="super_admin">
+                  <AuditStub />
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/settings"
+              element={
+                <GuardedRoute requiredRole="super_admin">
+                  <SettingsStub />
+                </GuardedRoute>
               }
             />
           </Route>
           <Route path="*" element={<Navigate to="/console/login" replace />} />
         </Routes>
+        {/* HUB-1578: Toaster mounted at App root so toasts persist across the
+            login/shell route boundary (e.g., unauthenticated guard denial → redirect
+            to /console/login → toast must remain visible). */}
+        <Toaster />
       </Suspense>
     </BrowserRouter>
   );

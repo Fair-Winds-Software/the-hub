@@ -4,8 +4,11 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { axe } from 'vitest-axe';
 import { ConsoleShell } from '../ConsoleShell';
+import { GuardedRoute } from '../../GuardedRoute';
+import { Toaster } from '../../Toaster';
 import { useSessionStore, type Operator } from '../../../stores/sessionStore';
 import { useUIStore } from '../../../stores/uiStore';
+import { useToastStore } from '../../../stores/toastStore';
 
 const SUPER: Operator = {
   id: 'op-1',
@@ -59,11 +62,13 @@ describe('ConsoleShell (HUB-1577)', () => {
   beforeEach(() => {
     setSession(null);
     useUIStore.setState({ sidebarCollapsed: false });
+    useToastStore.getState().clearAll();
   });
 
   afterEach(() => {
     setSession(null);
     useUIStore.setState({ sidebarCollapsed: false });
+    useToastStore.getState().clearAll();
   });
 
   describe('AC#1 + AC#3: shell renders TopNav + Sidebar + outlet', () => {
@@ -171,6 +176,86 @@ describe('ConsoleShell (HUB-1577)', () => {
       expect(screen.getByText('STATIC')).toBeInTheDocument();
       // If we got here without fetch throwing, AC#7 holds.
       expect(fetchSpy).toBeDefined();
+    });
+  });
+
+  describe('HUB-1578 sidebar role filter (AC#1, AC#5)', () => {
+    it('AC#5: super_admin sees all 3 nav items (Dashboard, Audit, Settings)', () => {
+      setSession(SUPER);
+      renderShellAt('/console/dashboard', <div>X</div>);
+      expect(screen.getByTestId('nav-dashboard')).toBeInTheDocument();
+      expect(screen.getByTestId('nav-audit')).toBeInTheDocument();
+      expect(screen.getByTestId('nav-settings')).toBeInTheDocument();
+    });
+
+    it('AC#1: product_admin sees ONLY Dashboard (audit + settings filtered out)', () => {
+      setSession(PRODUCT);
+      renderShellAt('/console/dashboard', <div>X</div>);
+      expect(screen.getByTestId('nav-dashboard')).toBeInTheDocument();
+      expect(screen.queryByTestId('nav-audit')).toBeNull();
+      expect(screen.queryByTestId('nav-settings')).toBeNull();
+    });
+  });
+
+  describe('HUB-1578 URL-hack guard (AC#3, AC#4)', () => {
+    function renderGuardedAt(
+      path: string,
+      requiredRole: 'super_admin' | 'product_admin',
+    ): ReturnType<typeof render> {
+      return render(
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route path="/console/login" element={<div>LOGIN PAGE</div>} />
+            <Route element={<ConsoleShell />}>
+              <Route
+                path="/console/dashboard"
+                element={
+                  <GuardedRoute requiredRole="product_admin">
+                    <div>DASHBOARD</div>
+                  </GuardedRoute>
+                }
+              />
+              <Route
+                path="/console/audit"
+                element={
+                  <GuardedRoute requiredRole={requiredRole}>
+                    <div>AUDIT CONTENT</div>
+                  </GuardedRoute>
+                }
+              />
+            </Route>
+          </Routes>
+          {/* Toaster mounted at App root in production (App.tsx); mirror that here. */}
+          <Toaster />
+        </MemoryRouter>,
+      );
+    }
+
+    it('AC#3: product_admin URL-hack to super_admin route → redirect to dashboard + warning toast', () => {
+      setSession(PRODUCT);
+      renderGuardedAt('/console/audit', 'super_admin');
+      // Redirected to dashboard.
+      expect(screen.getByText('DASHBOARD')).toBeInTheDocument();
+      expect(screen.queryByText('AUDIT CONTENT')).toBeNull();
+      // Warning toast surfaced (assertive live region).
+      expect(screen.getByTestId('toaster-assertive')).toBeInTheDocument();
+      expect(screen.getByText(/don't have access/i)).toBeInTheDocument();
+    });
+
+    it('AC#4: unauthenticated → redirect to /console/login + info toast', () => {
+      setSession(null);
+      renderGuardedAt('/console/audit', 'super_admin');
+      expect(screen.getByText('LOGIN PAGE')).toBeInTheDocument();
+      expect(screen.getByTestId('toaster-polite')).toBeInTheDocument();
+      expect(screen.getByText(/Please log in/i)).toBeInTheDocument();
+    });
+
+    it('AC#3 negative: super_admin sees gated content (no toast)', () => {
+      setSession(SUPER);
+      renderGuardedAt('/console/audit', 'super_admin');
+      expect(screen.getByText('AUDIT CONTENT')).toBeInTheDocument();
+      expect(screen.queryByTestId('toaster-polite')).toBeNull();
+      expect(screen.queryByTestId('toaster-assertive')).toBeNull();
     });
   });
 
