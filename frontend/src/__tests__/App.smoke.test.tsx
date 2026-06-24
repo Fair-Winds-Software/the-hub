@@ -1,4 +1,5 @@
-// Authorized by HUB-1569 — smoke test: /console/login renders "HUB Console" without console errors
+// Authorized by HUB-1569 — smoke test: /console/login renders without console errors
+// Authorized by HUB-1576 — assertions updated for the real Login form replacing the placeholder
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { App } from '../App';
@@ -18,14 +19,16 @@ describe('App scaffold smoke test', () => {
   it('renders the /console/login placeholder', async () => {
     render(<App />);
     await waitFor(() => {
-      expect(screen.getByText('HUB Console')).toBeInTheDocument();
+      // HUB-1576 replaced HUB-1569's placeholder text with the real Login form.
+      expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
     });
   });
 
   it('does not emit console errors on mount', async () => {
     render(<App />);
     await waitFor(() => {
-      expect(screen.getByText('HUB Console')).toBeInTheDocument();
+      // HUB-1576 replaced HUB-1569's placeholder text with the real Login form.
+      expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
     });
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
@@ -34,7 +37,8 @@ describe('App scaffold smoke test', () => {
     window.history.pushState({}, '', '/unknown-route');
     render(<App />);
     await waitFor(() => {
-      expect(screen.getByText('HUB Console')).toBeInTheDocument();
+      // HUB-1576 replaced HUB-1569's placeholder text with the real Login form.
+      expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
     });
     expect(window.location.pathname).toBe('/console/login');
   });

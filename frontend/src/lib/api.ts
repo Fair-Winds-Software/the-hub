@@ -13,6 +13,10 @@ import {
 
 const ADMIN_PREFIX = '/api/v1/admin/';
 const REFRESH_PATH = '/api/v1/admin/auth/refresh';
+// HUB-1576: auth endpoints (login / refresh / logout) are the source of tokens, NOT consumers.
+// A 401 from these endpoints means "wrong credentials" / "refresh token expired" — propagate
+// as-is rather than triggering a refresh-and-retry loop.
+const AUTH_PREFIX = '/api/v1/admin/auth/';
 
 export interface RequestOptions {
   headers?: Record<string, string>;
@@ -89,8 +93,13 @@ async function request<T>(
 
   let res = await fetch(path, init);
 
-  // Refresh-and-retry path (ACs #2, #3, #4) — admin endpoints only (AC#5).
-  if (res.status === 401 && path.startsWith(ADMIN_PREFIX)) {
+  // Refresh-and-retry path (HUB-1573 ACs #2, #3, #4) — admin endpoints only (AC#5).
+  // Auth endpoints themselves are excluded (HUB-1576): they ARE the token source, not consumers.
+  if (
+    res.status === 401 &&
+    path.startsWith(ADMIN_PREFIX) &&
+    !path.startsWith(AUTH_PREFIX)
+  ) {
     if (!refreshPromise) {
       refreshPromise = internalRefreshAndUpdateStore().finally(() => {
         refreshPromise = null;

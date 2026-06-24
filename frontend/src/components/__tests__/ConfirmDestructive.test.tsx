@@ -1,5 +1,5 @@
 // Authorized by HUB-1575 — ConfirmDestructive component tests (covers ACs #1-#7 + axe a11y)
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { axe } from 'vitest-axe';
 import { ConfirmDestructive } from '../ConfirmDestructive';

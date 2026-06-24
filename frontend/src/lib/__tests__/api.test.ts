@@ -138,6 +138,21 @@ describe('apiClient (HUB-1573)', () => {
     });
   });
 
+  describe('HUB-1576: 401 on auth endpoints does NOT trigger refresh (login/refresh/logout are token sources)', () => {
+    it('401 from /api/v1/admin/auth/login propagates as SessionExpiredError without refresh', async () => {
+      fetchMock.mockResolvedValueOnce(mockResponse(401, { error: 'invalid_credentials' }));
+
+      await expect(
+        apiClient.post('/api/v1/admin/auth/login', { email: 'x', password: 'y' }),
+      ).rejects.toBeInstanceOf(SessionExpiredError);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const refreshCalls = fetchMock.mock.calls.filter(
+        (call) => call[0] === '/api/v1/admin/auth/refresh',
+      );
+      expect(refreshCalls).toHaveLength(0);
+    });
+  });
+
   describe('AC#5: 401 on non-admin endpoints does NOT trigger refresh', () => {
     it('propagates SessionExpiredError without calling refresh', async () => {
       fetchMock.mockResolvedValueOnce(mockResponse(401, {}));

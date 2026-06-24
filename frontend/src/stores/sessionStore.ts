@@ -110,3 +110,7 @@ export const useRole = (): OperatorRole | null => useSessionStore((s) => s.opera
 export const useAccessToken = (): string | null => useSessionStore((s) => s.accessToken);
 
 export const useIsHydrating = (): boolean => useSessionStore((s) => s.isHydrating);
+
+// Authorized by HUB-1576 — granular selector hook for already-authenticated mount-time check.
+// Prefer this over useSession() when only the boolean is needed (avoids whole-object re-renders).
+export const useIsAuthenticated = (): boolean => useSessionStore((s) => s.isAuthenticated);
