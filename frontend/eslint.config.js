@@ -1,4 +1,5 @@
 // Authorized by HUB-1569 — ESLint 9 flat config; TS + React + Hooks + a11y; .tsx only (AC#4)
+// Authorized by HUB-1573 — adds no-raw-admin-fetch rule (AC#1: callers must use apiClient from src/lib/api.ts)
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import reactPlugin from 'eslint-plugin-react';
@@ -32,6 +33,23 @@ export default [
     },
     settings: {
       react: { version: 'detect' },
+    },
+  },
+  {
+    // HUB-1573 AC#1: ban direct fetch on /api/v1/admin/* — callers must use apiClient.
+    // apiClient itself (src/lib/api.ts) uses fetch internally; the rule excludes that file.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/lib/api.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.name='fetch'][arguments.0.type='Literal'][arguments.0.value=/^\\u002Fapi\\u002Fv1\\u002Fadmin\\u002F/]",
+          message:
+            'HUB-1573 AC#1: Direct fetch on /api/v1/admin/* is forbidden. Use apiClient from src/lib/api.ts so the 401-refresh-retry contract is honored.',
+        },
+      ],
     },
   },
   {
