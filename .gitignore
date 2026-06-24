@@ -5,6 +5,8 @@ coverage/
 *.js.map
 desktop.ini
 *.html
+# Authorized by HUB-1569 — Vite SPA entry must be tracked
+!frontend/index.html
 
 # Infra audit (2026-06-20) - local Postgres dump backups, never commit
 hub_dev_backup_*.dump

@@ -17,7 +17,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint src/ packages/"
+    "lint": "eslint src/ packages/",
+    "frontend:install": "cd frontend && npm install",
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:build": "cd frontend && npm run build",
+    "frontend:preview": "cd frontend && npm run preview",
+    "frontend:test": "cd frontend && npm run test",
+    "frontend:typecheck": "cd frontend && npm run typecheck",
+    "frontend:lint": "cd frontend && npm run lint"
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",

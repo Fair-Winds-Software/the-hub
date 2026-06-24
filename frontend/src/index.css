@@ -1,0 +1,19 @@
+/* Authorized by HUB-1569 — minimal CSS reset; Tailwind tokens come in HUB-1571 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
