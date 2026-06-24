@@ -1,4 +1,24 @@
-/* Authorized by HUB-1569 — minimal CSS reset; Tailwind tokens come in HUB-1571 */
+/* Authorized by HUB-1571 — Tailwind base layer + CSS custom properties for non-Tailwind consumers (AC#4) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary-navy: #1C2A44;
+  --color-accent-brass: #A67813;
+  --color-secondary-blue: #5A799E;
+  --color-sailcloth: #F7F5EF;
+  --color-deep-charcoal: #4E4C4C;
+  --color-seafoam: #6DA47F;
+  --color-ironwake: #771A1A;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+}
+
+/* Authorized by HUB-1571 AC#3 — global root font + base background + base text + font-feature-settings */
 *,
 *::before,
 *::after {
@@ -10,10 +30,26 @@ body,
 #root {
   margin: 0;
   padding: 0;
-  height: 100%;
+  min-height: 100%;
+}
+
+body {
   font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
+    'Libre Franklin', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  background-color: var(--color-sailcloth);
+  color: var(--color-deep-charcoal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: Cinzel, Georgia, serif;
+  color: var(--color-primary-navy);
+  margin: 0;
 }
