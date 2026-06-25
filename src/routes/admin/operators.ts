@@ -24,7 +24,7 @@ const adminOperatorRoutes: FastifyPluginAsync = async (fastify) => {
     const operator = await createOperator({
       email: body?.email as string,
       password: body?.password as string,
-      role: body?.role as 'super_admin' | 'tenant_admin',
+      role: body?.role as 'super_admin' | 'product_admin',
       tenant_id: body?.tenant_id as string | null | undefined,
     });
     return reply.status(201).send(operator);
@@ -74,7 +74,7 @@ const adminOperatorRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(
       await assignOperatorRole(
         id,
-        body?.role as 'super_admin' | 'tenant_admin',
+        body?.role as 'super_admin' | 'product_admin',
         body?.tenant_id as string | null | undefined,
         request.operatorUser.operator_id,
       ),

@@ -35,7 +35,7 @@ export const SETTINGS_CATALOG: readonly SettingsCatalogEntry[] = [
     default: true,
     type: 'boolean',
     description:
-      'Backward-compat window for tenant_admin → product_admin role rename. When true, JWT issuance + RBAC accept either role string. Flip to false after all in-flight JWTs have rotated past their TTL.',
+      'Backward-compat window for tenant_admin → product_admin role rename. When true, JWT issuance + RBAC accept either role string. Flip to false after all in-flight JWTs have rotated past their TTL.', // tenant-admin-rename:historical
     introducedBy: 'HUB-1588',
   },
   {

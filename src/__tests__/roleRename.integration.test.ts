@@ -28,24 +28,24 @@ const HUB_INTERNAL_TENANT_ID = '00000000-0000-0000-0000-0000000000a1';
       const def = rows[0]!.pg_get_constraintdef;
       expect(def).toContain("'super_admin'");
       expect(def).toContain("'product_admin'");
-      expect(def).not.toContain("'tenant_admin'");
+      expect(def).not.toContain("'tenant_admin'"); // tenant-admin-rename:fixture
     });
 
-    it('no rows with role=tenant_admin remain after Step 2', async () => {
+    it('no rows with role=tenant_admin remain after Step 2', async () => { // tenant-admin-rename:fixture
       const { getPool } = await import('../db/pool.js');
       const { rows } = await getPool().query<{ count: string }>(
-        `SELECT COUNT(*)::text AS count FROM operator_accounts WHERE role = 'tenant_admin'`,
+        `SELECT COUNT(*)::text AS count FROM operator_accounts WHERE role = 'tenant_admin'`, // tenant-admin-rename:fixture
       );
       expect(rows[0]?.count).toBe('0');
     });
 
-    it('INSERT with role=tenant_admin fails with check_violation (23514)', async () => {
+    it('INSERT with role=tenant_admin fails with check_violation (23514)', async () => { // tenant-admin-rename:fixture
       const { getPool } = await import('../db/pool.js');
       let errCode: string | undefined;
       try {
         await getPool().query(
           `INSERT INTO operator_accounts (id, email, password_hash, role, active)
-           VALUES (gen_random_uuid(), 'hub-1586-rejected@example.test', 'hash', 'tenant_admin', true)`,
+           VALUES (gen_random_uuid(), 'hub-1586-rejected@example.test', 'hash', 'tenant_admin', true)`, // tenant-admin-rename:fixture
         );
       } catch (err) {
         errCode = (err as { code?: string }).code;

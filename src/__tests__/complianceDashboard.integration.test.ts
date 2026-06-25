@@ -67,7 +67,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         { expiresIn: '1h' },
       );
       tenantAdminToken = jwt.default.sign(
-        { operator_id: '00000000-0000-0000-0000-000000000003', role: 'tenant_admin', tenant_id: tenantId },
+        { operator_id: '00000000-0000-0000-0000-000000000003', role: 'product_admin', tenant_id: tenantId },
         secret,
         { expiresIn: '1h' },
       );
@@ -181,10 +181,10 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       });
     });
 
-    // ── 3. Overview endpoint — tenant_admin sees only own tenant ──────────────
+    // ── 3. Overview endpoint — product_admin sees only own tenant ──────────────
 
-    describe('GET /api/v1/admin/compliance/dashboard/overview — tenant_admin scope', () => {
-      it('tenant_admin only receives products from own tenant', async () => {
+    describe('GET /api/v1/admin/compliance/dashboard/overview — product_admin scope', () => {
+      it('product_admin only receives products from own tenant', async () => {
         const res = await app.inject({
           method: 'GET',
           url: '/api/v1/admin/compliance/dashboard/overview',
@@ -245,7 +245,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         expect(res.statusCode).toBe(404);
       });
 
-      it('returns 403 when tenant_admin accesses another tenant product', async () => {
+      it('returns 403 when product_admin accesses another tenant product', async () => {
         const res = await app.inject({
           method: 'GET',
           url: `/api/v1/admin/compliance/dashboard/products/${otherProductId}`,

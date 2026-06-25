@@ -58,18 +58,18 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         [hash],
       );
 
-      // Seed tenant_admin scoped to main tenant
+      // Seed product_admin scoped to main tenant
       await pool.query(
         `INSERT INTO operator_accounts (email, password_hash, role, tenant_id)
-         VALUES ('test-e28-admin@integration.test', $1, 'tenant_admin', $2)
+         VALUES ('test-e28-admin@integration.test', $1, 'product_admin', $2)
          ON CONFLICT DO NOTHING`,
         [hash, tenantId],
       );
 
-      // Seed tenant_admin scoped to foreign tenant
+      // Seed product_admin scoped to foreign tenant
       await pool.query(
         `INSERT INTO operator_accounts (email, password_hash, role, tenant_id)
-         VALUES ('test-e28-foreign@integration.test', $1, 'tenant_admin', $2)
+         VALUES ('test-e28-foreign@integration.test', $1, 'product_admin', $2)
          ON CONFLICT DO NOTHING`,
         [hash, foreignTenantId],
       );
@@ -82,7 +82,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       });
       superAdminToken = (JSON.parse(superRes.body) as { accessToken: string }).accessToken;
 
-      // Login tenant_admin
+      // Login product_admin
       const taRes = await app.inject({
         method: 'POST',
         url: '/api/v1/admin/auth/login',
@@ -90,7 +90,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       });
       tenantAdminToken = (JSON.parse(taRes.body) as { accessToken: string }).accessToken;
 
-      // Login foreign tenant_admin
+      // Login foreign product_admin
       const ftaRes = await app.inject({
         method: 'POST',
         url: '/api/v1/admin/auth/login',
@@ -128,7 +128,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         expect(Array.isArray(body.recent_unacknowledged)).toBe(true);
       });
 
-      it('tenant_admin can read own tenant summary', async () => {
+      it('product_admin can read own tenant summary', async () => {
         const res = await app.inject({
           method: 'GET',
           url: `/api/v1/admin/alerts/summary/${tenantId}`,
@@ -137,7 +137,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         expect(res.statusCode).toBe(200);
       });
 
-      it('foreign tenant_admin receives 403 on summary', async () => {
+      it('foreign product_admin receives 403 on summary', async () => {
         const res = await app.inject({
           method: 'GET',
           url: `/api/v1/admin/alerts/summary/${tenantId}`,
@@ -149,10 +149,10 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
     // ── RBAC: alert ack/resolve ──────────────────────────────────────────────
 
-    describe('RBAC — foreign tenant_admin receives 403 on alert routes', () => {
+    describe('RBAC — foreign product_admin receives 403 on alert routes', () => {
       const fakeAlertId = '00000000-0000-0000-0000-000000000099';
 
-      it('POST acknowledge → 403 for foreign tenant_admin', async () => {
+      it('POST acknowledge → 403 for foreign product_admin', async () => {
         const res = await app.inject({
           method: 'POST',
           url: `/api/v1/admin/alerts/${tenantId}/${fakeAlertId}/acknowledge`,
@@ -161,7 +161,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         expect(res.statusCode).toBe(403);
       });
 
-      it('POST resolve → 403 for foreign tenant_admin', async () => {
+      it('POST resolve → 403 for foreign product_admin', async () => {
         const res = await app.inject({
           method: 'POST',
           url: `/api/v1/admin/alerts/${tenantId}/${fakeAlertId}/resolve`,
@@ -170,7 +170,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         expect(res.statusCode).toBe(403);
       });
 
-      it('GET alert list → 403 for foreign tenant_admin', async () => {
+      it('GET alert list → 403 for foreign product_admin', async () => {
         const res = await app.inject({
           method: 'GET',
           url: `/api/v1/admin/alerts/${tenantId}`,
@@ -224,7 +224,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         expect(body.action).toBe('updated');
       });
 
-      it('foreign tenant_admin receives 403', async () => {
+      it('foreign product_admin receives 403', async () => {
         const res = await app.inject({
           method: 'POST',
           url: `/api/v1/admin/notifications/${tenantId}/${productId}/channels`,
@@ -347,7 +347,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         }
       });
 
-      it('foreign tenant_admin receives 403 on GET hooks', async () => {
+      it('foreign product_admin receives 403 on GET hooks', async () => {
         const res = await app.inject({
           method: 'GET',
           url: `/api/v1/admin/hooks/${tenantId}`,

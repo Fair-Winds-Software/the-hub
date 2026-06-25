@@ -27,7 +27,7 @@ interface LoginResult {
 interface OperatorRow {
   id: string;
   password_hash: string;
-  role: 'super_admin' | 'tenant_admin';
+  role: 'super_admin' | 'product_admin';
   tenant_id: string | null;
   active: boolean;
 }
@@ -99,7 +99,7 @@ export async function loginOperator(
 
 async function issueTokenPair(
   operatorId: string,
-  role: 'super_admin' | 'tenant_admin',
+  role: 'super_admin' | 'product_admin',
   tenantId: string | null,
 ): Promise<LoginResult> {
   const pool = getPool();
@@ -154,7 +154,7 @@ export async function refreshOperatorToken(
   // Reload current claims — role may have changed since original login
   const { rows: opRows } = await pool.query<{
     id: string;
-    role: 'super_admin' | 'tenant_admin';
+    role: 'super_admin' | 'product_admin';
     tenant_id: string | null;
   }>(
     `SELECT id, role, tenant_id FROM operator_accounts WHERE id = $1 AND active = true`,

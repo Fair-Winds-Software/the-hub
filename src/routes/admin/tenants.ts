@@ -1,4 +1,4 @@
-// Authorized by HUB-1086 — tenant CRUD routes; super_admin full; tenant_admin read-own
+// Authorized by HUB-1086 — tenant CRUD routes; super_admin full; product_admin read-own
 // Authorized by HUB-1127 — DELETE cascades products; returns products_deactivated count
 import type { FastifyPluginAsync } from 'fastify';
 import { AppError } from '../../errors/AppError.js';
@@ -38,7 +38,7 @@ const adminTenantRoutes: FastifyPluginAsync = async (fastify) => {
     const { tenantId } = request.params as { tenantId: string };
     assertUUID(tenantId, 'tenantId');
     const op = request.operatorUser!;
-    if (op.role === 'tenant_admin' && op.tenant_id !== tenantId) {
+    if (op.role === 'product_admin' && op.tenant_id !== tenantId) {
       throw new AppError(403, 'Forbidden');
     }
     return reply.send(await getTenant(tenantId));

@@ -78,7 +78,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         const jwt = await import('jsonwebtoken');
         const secret = process.env.OPERATOR_JWT_SECRET ?? 'test-operator-secret';
         const tenantAdminToken = jwt.default.sign(
-          { operator_id: '00000000-0000-0000-0000-000000000002', role: 'tenant_admin', tenant_id: tenantId },
+          { operator_id: '00000000-0000-0000-0000-000000000002', role: 'product_admin', tenant_id: tenantId },
           secret,
           { expiresIn: '1h' },
         );

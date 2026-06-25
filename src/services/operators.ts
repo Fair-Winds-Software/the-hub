@@ -10,7 +10,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export interface OperatorRecord {
   id: string;
   email: string;
-  role: 'super_admin' | 'tenant_admin';
+  role: 'super_admin' | 'product_admin';
   tenant_id: string | null;
   active: boolean;
   created_at: string;
@@ -21,15 +21,15 @@ const SELECT_COLS = 'id, email, role, tenant_id, active, created_at';
 export async function createOperator(data: {
   email: string;
   password: string;
-  role: 'super_admin' | 'tenant_admin';
+  role: 'super_admin' | 'product_admin';
   tenant_id?: string | null;
 }): Promise<OperatorRecord> {
   if (!data.email || !EMAIL_RE.test(data.email)) throw new AppError(400, 'Invalid email format');
   if (!data.password) throw new AppError(400, 'password is required');
-  if (!['super_admin', 'tenant_admin'].includes(data.role)) throw new AppError(400, 'Invalid role');
-  if (data.role === 'tenant_admin') {
+  if (!['super_admin', 'product_admin'].includes(data.role)) throw new AppError(400, 'Invalid role');
+  if (data.role === 'product_admin') {
     if (!data.tenant_id || !UUID_RE.test(data.tenant_id)) {
-      throw new AppError(400, 'tenant_id is required for tenant_admin and must be a UUID');
+      throw new AppError(400, 'tenant_id is required for product_admin and must be a UUID');
     }
   }
 
@@ -111,19 +111,19 @@ export async function deactivateOperator(id: string, requestingOperatorId: strin
 
 export async function assignOperatorRole(
   operatorId: string,
-  role: 'super_admin' | 'tenant_admin',
+  role: 'super_admin' | 'product_admin',
   tenantId: string | null | undefined,
   requestingOperatorId: string,
 ): Promise<OperatorRecord> {
   if (operatorId === requestingOperatorId) throw new AppError(400, 'Cannot change your own role');
-  if (!['super_admin', 'tenant_admin'].includes(role)) throw new AppError(400, 'Invalid role');
+  if (!['super_admin', 'product_admin'].includes(role)) throw new AppError(400, 'Invalid role');
 
   const pool = getPool();
   let resolvedTenantId: string | null = null;
 
-  if (role === 'tenant_admin') {
+  if (role === 'product_admin') {
     if (!tenantId || !UUID_RE.test(tenantId)) {
-      throw new AppError(400, 'tenant_id is required for tenant_admin and must be a UUID');
+      throw new AppError(400, 'tenant_id is required for product_admin and must be a UUID');
     }
     const { rows } = await pool.query(`SELECT id FROM tenants WHERE id = $1`, [tenantId]);
     if (!rows[0]) throw new AppError(400, 'Tenant not found');

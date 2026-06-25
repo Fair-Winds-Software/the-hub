@@ -78,8 +78,8 @@ describe('loginOperator()', () => {
     expect(result.expiresIn).toBe(900);
   });
 
-  it('includes tenant_id in JWT payload for tenant_admin', async () => {
-    const tenantAdminRow = { ...OPERATOR_ROW, role: 'tenant_admin' as const, tenant_id: 'tenant-uuid-1' };
+  it('includes tenant_id in JWT payload for product_admin', async () => {
+    const tenantAdminRow = { ...OPERATOR_ROW, role: 'product_admin' as const, tenant_id: 'tenant-uuid-1' };
     mockPoolQuery
       .mockResolvedValueOnce({ rows: [tenantAdminRow] })
       .mockResolvedValueOnce({ rows: [{ id: 'refresh-row-2' }] });
@@ -87,7 +87,7 @@ describe('loginOperator()', () => {
     await loginOperator('tenant@example.com', 'password');
 
     expect(mockJwtSign).toHaveBeenCalledWith(
-      expect.objectContaining({ tenant_id: 'tenant-uuid-1', role: 'tenant_admin' }),
+      expect.objectContaining({ tenant_id: 'tenant-uuid-1', role: 'product_admin' }),
       expect.any(String),
       expect.any(Object),
     );

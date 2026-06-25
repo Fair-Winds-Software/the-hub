@@ -72,6 +72,17 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: tenant_admin rename gate (HUB-1587)
+        # CR-4 rename gate: src/ must contain zero `tenant_admin` matches outside the
+        # `tenant-admin-rename:historical` / `tenant-admin-rename:fixture` allowlist
+        # comments. Migration history under db/migrations/ is intentionally excluded.
+        run: |
+          if grep -rn "tenant_admin" src --include='*.ts' --include='*.tsx' | grep -v 'tenant-admin-rename'; then
+            echo "::error::tenant_admin → product_admin rename incomplete; see matches above. Mark intentional retentions with the allowlist comment per HUB-1587 R1 FIX#1."
+            exit 1
+          fi
+          echo "tenant_admin rename gate: 0 unmarked matches in src/"
+
       - name: Run migrations
         run: npm run migrate
 

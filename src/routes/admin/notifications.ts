@@ -23,7 +23,7 @@ function assertTenantAccess(
   tenantId: string,
 ): void {
   const op = request.operatorUser!;
-  if (op.role === 'tenant_admin' && op.tenant_id !== tenantId) {
+  if (op.role === 'product_admin' && op.tenant_id !== tenantId) {
     throw new AppError(403, 'Forbidden');
   }
 }

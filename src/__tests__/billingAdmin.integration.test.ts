@@ -48,10 +48,10 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       );
       productId = pRows[0]!.id;
 
-      // Seed tenant_admin scoped to this tenant
+      // Seed product_admin scoped to this tenant
       await pool.query(
         `INSERT INTO operator_accounts (email, password_hash, role, tenant_id)
-         VALUES ('test-e27-admin@integration.test', $1, 'tenant_admin', $2)
+         VALUES ('test-e27-admin@integration.test', $1, 'product_admin', $2)
          ON CONFLICT DO NOTHING`,
         [hash, tenantId],
       );
@@ -64,7 +64,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       });
       superAdminToken = (JSON.parse(superRes.body) as { accessToken: string }).accessToken;
 
-      // Login tenant_admin
+      // Login product_admin
       const taRes = await app.inject({
         method: 'POST',
         url: '/api/v1/admin/auth/login',
@@ -96,7 +96,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         expect(res.statusCode).toBe(404);
       });
 
-      it('tenant_admin can read own tenant pricing (404 = no model, not forbidden)', async () => {
+      it('product_admin can read own tenant pricing (404 = no model, not forbidden)', async () => {
         const res = await app.inject({
           method: 'GET',
           url: `/api/v1/admin/tenants/${tenantId}/products/${productId}/pricing`,
@@ -108,8 +108,8 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
     // ── RBAC: super_admin-only writes ────────────────────────────────────────
 
-    describe('RBAC — tenant_admin receives 403 on write/freeze/stripe endpoints', () => {
-      it('PUT pricing → 403 for tenant_admin', async () => {
+    describe('RBAC — product_admin receives 403 on write/freeze/stripe endpoints', () => {
+      it('PUT pricing → 403 for product_admin', async () => {
         const res = await app.inject({
           method: 'PUT',
           url: `/api/v1/admin/tenants/${tenantId}/products/${productId}/pricing`,
@@ -119,7 +119,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         expect(res.statusCode).toBe(403);
       });
 
-      it('POST freeze → 403 for tenant_admin', async () => {
+      it('POST freeze → 403 for product_admin', async () => {
         const res = await app.inject({
           method: 'POST',
           url: `/api/v1/admin/tenants/${tenantId}/products/${productId}/freeze`,
@@ -128,7 +128,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         expect(res.statusCode).toBe(403);
       });
 
-      it('DELETE freeze → 403 for tenant_admin', async () => {
+      it('DELETE freeze → 403 for product_admin', async () => {
         const res = await app.inject({
           method: 'DELETE',
           url: `/api/v1/admin/tenants/${tenantId}/products/${productId}/freeze`,
@@ -137,7 +137,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         expect(res.statusCode).toBe(403);
       });
 
-      it('GET stripe-customer → 403 for tenant_admin', async () => {
+      it('GET stripe-customer → 403 for product_admin', async () => {
         const res = await app.inject({
           method: 'GET',
           url: `/api/v1/admin/tenants/${tenantId}/stripe-customer`,

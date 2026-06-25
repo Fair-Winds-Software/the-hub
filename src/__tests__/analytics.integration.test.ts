@@ -79,7 +79,7 @@ const RUN_INTEGRATION = process.env["RUN_INTEGRATION"] === "1";
         { expiresIn: 3600 },
       );
       tenantAdminAToken = jwt.sign(
-        { operator_id: "analytics-tenant-a-id", role: "tenant_admin", tenant_id: tenantAId },
+        { operator_id: "analytics-tenant-a-id", role: "product_admin", tenant_id: tenantAId },
         OPERATOR_JWT_SECRET,
         { expiresIn: 3600 },
       );
@@ -139,8 +139,8 @@ const RUN_INTEGRATION = process.env["RUN_INTEGRATION"] === "1";
 
     // ── §2 Tenant isolation ───────────────────────────────────────────────────
 
-    describe("§2 tenant_admin scoping — returns 403 for other tenant", () => {
-      it("tenant_admin JWT returns 403 when querying tenant-B usage", async () => {
+    describe("§2 product_admin scoping — returns 403 for other tenant", () => {
+      it("product_admin JWT returns 403 when querying tenant-B usage", async () => {
         const now = new Date();
         const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const to = now.toISOString();
@@ -209,7 +209,7 @@ const RUN_INTEGRATION = process.env["RUN_INTEGRATION"] === "1";
         }
       });
 
-      it("returns 403 when tenant_admin calls billing endpoint", async () => {
+      it("returns 403 when product_admin calls billing endpoint", async () => {
         const now = new Date();
         const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const to = now.toISOString();

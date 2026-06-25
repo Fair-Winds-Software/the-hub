@@ -10,7 +10,7 @@ import { AppError } from "../errors/AppError.js";
 
 interface OperatorClaims {
   operator_id: string;
-  role: "super_admin" | "tenant_admin";
+  role: "super_admin" | "product_admin";
   tenant_id: string | null;
 }
 
@@ -61,9 +61,9 @@ const auditRoutes: FastifyPluginAsync = async (fastify) => {
 
       let tenant_id: string | undefined;
 
-      if (op.role === "tenant_admin") {
+      if (op.role === "product_admin") {
         const requested = q["tenant_id"];
-        // tenant_admin may only query their own tenant — WHERE clause enforcement, not UI guard
+        // product_admin may only query their own tenant — WHERE clause enforcement, not UI guard
         if (requested && requested !== op.tenant_id) {
           throw new AppError(403, "Forbidden");
         }

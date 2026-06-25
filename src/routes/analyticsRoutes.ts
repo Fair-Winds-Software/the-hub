@@ -8,7 +8,7 @@ import { AppError } from '../errors/AppError.js';
 
 interface OperatorClaims {
   operator_id: string;
-  role: 'super_admin' | 'tenant_admin';
+  role: 'super_admin' | 'product_admin';
   tenant_id: string | null;
 }
 
@@ -56,8 +56,8 @@ const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       const { from, to } = parseDateParams(q);
 
       let tenantId: string | undefined;
-      if (op.role === 'tenant_admin') {
-        // tenant_admin may only query their own tenant
+      if (op.role === 'product_admin') {
+        // product_admin may only query their own tenant
         const requested = q['tenant_id'];
         if (requested && requested !== op.tenant_id) throw new AppError(403, 'Forbidden');
         if (!op.tenant_id) throw new AppError(403, 'Forbidden');

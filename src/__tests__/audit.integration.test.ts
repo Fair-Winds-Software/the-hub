@@ -53,10 +53,10 @@ const RUN_INTEGRATION = process.env["RUN_INTEGRATION"] === "1";
         [hash],
       );
 
-      // Create a tenant_admin scoped to tenant A
+      // Create a product_admin scoped to tenant A
       await pool.query(
         `INSERT INTO operator_accounts (email, password_hash, role, tenant_id, active)
-         VALUES ('audit-tenant-a@integration.test', $1, 'tenant_admin', $2, true)
+         VALUES ('audit-tenant-a@integration.test', $1, 'product_admin', $2, true)
          ON CONFLICT DO NOTHING`,
         [hash, tenantAId],
       );
@@ -70,7 +70,7 @@ const RUN_INTEGRATION = process.env["RUN_INTEGRATION"] === "1";
       tenantAdminAToken = jwt.sign(
         {
           operator_id: "audit-tenant-a-id",
-          role: "tenant_admin",
+          role: "product_admin",
           tenant_id: tenantAId,
         },
         OPERATOR_JWT_SECRET,
@@ -227,8 +227,8 @@ const RUN_INTEGRATION = process.env["RUN_INTEGRATION"] === "1";
 
     // ── §4 Tenant isolation ───────────────────────────────────────────────────
 
-    describe("§4 tenant_admin scoping — returns 403 for other tenant", () => {
-      it("tenant_admin JWT for tenant-A returns 403 when querying tenant-B audit", async () => {
+    describe("§4 product_admin scoping — returns 403 for other tenant", () => {
+      it("product_admin JWT for tenant-A returns 403 when querying tenant-B audit", async () => {
         const now = new Date();
         const from = new Date(now.getTime() - 3600 * 1000).toISOString();
         const to = now.toISOString();

@@ -1,5 +1,5 @@
 // Authorized by HUB-4.1 L2 — Red Team H2: wrap business operator routes under operatorRbacHook
-// to enforce tenant_admin cannot cross-access other tenants' data.
+// to enforce product_admin cannot cross-access other tenants' data.
 // Pattern mirrors adminRoutesPlugin: scoped inner plugin so the hook stays within this scope only.
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
@@ -17,9 +17,9 @@ import hookRoutes from '../routes/hookRoutes.js';
 
 const businessOperatorRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Scoped inner plugin — operatorRbacHook stays within this scope.
-  // Routes that use :tenantId enforce tenant_admin isolation via the hook.
+  // Routes that use :tenantId enforce product_admin isolation via the hook.
   // Routes without :tenantId (versionsRoutes, pricingModelRoutes, marginRoutes)
-  // become implicitly super_admin-only: tenant_admin receives 403, which is correct.
+  // become implicitly super_admin-only: product_admin receives 403, which is correct.
   await fastify.register(async (scope) => {
     scope.addHook('onRequest', operatorRbacHook);
     await scope.register(billingRoutes);

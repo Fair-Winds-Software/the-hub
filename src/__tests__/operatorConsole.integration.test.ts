@@ -125,8 +125,8 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
     // ── Cross-tenant rejection ─────────────────────────────────────────────────
 
-    describe('cross-tenant rejection — tenant_admin JWT rejected for other tenant', () => {
-      it('tenant_admin with tenant X cannot access routes for tenant Y', async () => {
+    describe('cross-tenant rejection — product_admin JWT rejected for other tenant', () => {
+      it('product_admin with tenant X cannot access routes for tenant Y', async () => {
         const { getPool } = await import('../db/pool.js');
         const bcrypt = await import('bcryptjs');
         const jwt = await import('jsonwebtoken');
@@ -142,12 +142,12 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
         const hash = await bcrypt.hash('Pass1!', 12);
         await getPool().query(
-          `INSERT INTO operator_accounts (email, password_hash, role, tenant_id) VALUES ($1, $2, 'tenant_admin', $3)`,
+          `INSERT INTO operator_accounts (email, password_hash, role, tenant_id) VALUES ($1, $2, 'product_admin', $3)`,
           ['test-tadmin@integration.test', hash, tenantA],
         );
 
         const token = jwt.sign(
-          { operator_id: crypto.randomUUID(), role: 'tenant_admin', tenant_id: tenantA },
+          { operator_id: crypto.randomUUID(), role: 'product_admin', tenant_id: tenantA },
           process.env.OPERATOR_JWT_SECRET!,
           { expiresIn: 900 },
         );

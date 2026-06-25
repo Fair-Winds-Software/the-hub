@@ -1,4 +1,4 @@
-// Authorized by HUB-1034 — operatorRbacHook; super_admin unrestricted; tenant_admin scoped to tenant_id
+// Authorized by HUB-1034 — operatorRbacHook; super_admin unrestricted; product_admin scoped to tenant_id
 // Authorized by HUB-4.1 L2 — Red Team M1/L3: explicit exp check so non-expiring crafted tokens are rejected
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
@@ -8,7 +8,7 @@ declare module 'fastify' {
   interface FastifyRequest {
     operatorUser?: {
       operator_id: string;
-      role: 'super_admin' | 'tenant_admin';
+      role: 'super_admin' | 'product_admin';
       tenant_id: string | null;
     };
   }
@@ -16,7 +16,7 @@ declare module 'fastify' {
 
 interface OperatorJwtClaims {
   operator_id: string;
-  role: 'super_admin' | 'tenant_admin';
+  role: 'super_admin' | 'product_admin';
   tenant_id: string | null;
   iat: number;
   exp: number;
@@ -51,7 +51,7 @@ export async function operatorRbacHook(
 
   if (claims.role === 'super_admin') return;
 
-  // tenant_admin: derive resource tenant_id from route — path param takes precedence over body
+  // product_admin: derive resource tenant_id from route — path param takes precedence over body
   const params = request.params as Record<string, unknown>;
   const body = request.body as Record<string, unknown> | null;
 
