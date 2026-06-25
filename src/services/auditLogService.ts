@@ -1,4 +1,6 @@
 // Authorized by HUB-1517 — writeAuditEntry; sensitive field redaction; never-throws contract
+// Authorized by HUB-1704 — event_type field (non-CRUD auth audit events); REDACT_FIELDS includes
+// 'password' for login.failure audit entries that record the attempted email.
 
 import { getPool } from "../db/pool.js";
 import logger from "../lib/logger.js";
@@ -6,9 +8,16 @@ import logger from "../lib/logger.js";
 const REDACT_FIELDS = new Set([
   "client_secret_hash",
   "password_hash",
+  "password",
   "secret",
   "token",
 ]);
+
+export type AuditEventType =
+  | "auth.login.success"
+  | "auth.login.failure"
+  | "auth.logout"
+  | "auth.refresh_token.revoked";
 
 export interface AuditEntry {
   tenant_id: string;
@@ -24,6 +33,12 @@ export interface AuditEntry {
   ip_address?: string | null;
   trace_id?: string | null;
   occurred_at?: Date;
+  /**
+   * HUB-1704: non-CRUD event classifier. Populated for auth flows
+   * (login.success / login.failure / logout / refresh_token.revoked); NULL for
+   * CRUD audit entries (which classify via `operation` + `table_name`).
+   */
+  event_type?: AuditEventType | null;
 }
 
 function redactSensitiveFields(
@@ -47,8 +62,8 @@ export async function writeAuditEntry(entry: AuditEntry): Promise<void> {
     await getPool().query(
       `INSERT INTO audit_log
          (tenant_id, product_id, actor_id, actor_type, operation, table_name, record_id,
-          old_values, new_values, delta_data, ip_address, trace_id, occurred_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          old_values, new_values, delta_data, ip_address, trace_id, occurred_at, event_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
       [
         entry.tenant_id,
         entry.product_id ?? null,
@@ -65,6 +80,7 @@ export async function writeAuditEntry(entry: AuditEntry): Promise<void> {
         entry.ip_address ?? null,
         entry.trace_id ?? null,
         entry.occurred_at ?? new Date(),
+        entry.event_type ?? null,
       ],
     );
   } catch (err: unknown) {

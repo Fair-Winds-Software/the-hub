@@ -30,6 +30,14 @@ vi.mock('../../lib/logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+// HUB-1704: operatorAuth now writes audit entries on login/logout/refresh, but unit
+// behavior is unchanged. Mock writeAuditEntry to a no-op so pool.query mocks remain
+// tight against the auth flow's own queries. Audit-write integration coverage lives
+// in __tests__/authAuditTrail.integration.test.ts.
+vi.mock('../auditLogService.js', () => ({
+  writeAuditEntry: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { loginOperator, refreshOperatorToken, logoutOperator } from '../operatorAuth.js';
 
 const OPERATOR_ROW = {

@@ -1,13 +1,22 @@
 // Authorized by HUB-1032 — loginOperator; bcrypt verify; JWT with role+tenant_id; refresh token issuance
 // Authorized by HUB-1033 — refreshOperatorToken; token rotation in pg transaction; logoutOperator; revoke-on-use
+// Authorized by HUB-1704 (CR-6 under HUB-1556) — audit writes (login.success/failure, logout,
+//   refresh_token.revoked) per HUB-1580 R1 (D-HUB-SCOPE-028). Audit calls use the never-throws
+//   writeAuditEntry contract (HUB-1517) — DB failures are logged but do not break the auth flow.
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getPool } from '../db/pool.js';
 import { AppError } from '../errors/AppError.js';
+import { writeAuditEntry } from './auditLogService.js';
 
 const REFRESH_BCRYPT_COST = 10;
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// HUB-1704: HUB-internal events are not scoped to a customer tenant. Use a sentinel UUID
+// so the NOT NULL tenant_id constraint is satisfied; no FK on audit_log.tenant_id so no
+// seed row is required. The sentinel mnemonic "0...0a1" = "auth internal" (a1 → "auth 1").
+const HUB_INTERNAL_TENANT_ID = '00000000-0000-0000-0000-0000000000a1';
 
 interface LoginResult {
   accessToken: string;
@@ -23,7 +32,22 @@ interface OperatorRow {
   active: boolean;
 }
 
-export async function loginOperator(email: string, password: string): Promise<LoginResult> {
+/**
+ * HUB-1704: per-call audit context propagated from the Fastify route handlers
+ * (request.ip, request.id). Optional so that internal callers without HTTP context
+ * (e.g., scripts, migrations) can still call the service; in those cases the audit
+ * row records null ip/trace which is acceptable for non-HTTP origin events.
+ */
+export interface AuditContext {
+  ip?: string | null;
+  trace_id?: string | null;
+}
+
+export async function loginOperator(
+  email: string,
+  password: string,
+  audit_context: AuditContext = {},
+): Promise<LoginResult> {
   const pool = getPool();
   const DUMMY_HASH = await bcrypt.hash('__hub_admin_dummy__', 12);
 
@@ -37,8 +61,38 @@ export async function loginOperator(email: string, password: string): Promise<Lo
   const valid = await bcrypt.compare(password, row?.password_hash ?? DUMMY_HASH);
 
   if (!row || !valid || !row.active) {
+    // Classify the failure for SOC 2 evidence. The auth response is the same opaque
+    // 401 regardless — the failure reason is only persisted to audit_log, never returned.
+    const reason: 'invalid_credentials' | 'operator_deactivated' =
+      row && valid && !row.active ? 'operator_deactivated' : 'invalid_credentials';
+
+    await writeAuditEntry({
+      tenant_id: HUB_INTERNAL_TENANT_ID,
+      actor_id: row?.id ?? null,
+      actor_type: 'operator',
+      operation: 'INSERT',
+      table_name: 'operator_accounts',
+      event_type: 'auth.login.failure',
+      new_values: { email, reason },
+      ip_address: audit_context.ip ?? null,
+      trace_id: audit_context.trace_id ?? null,
+    });
+
     throw new AppError(401, 'Invalid credentials');
   }
+
+  await writeAuditEntry({
+    tenant_id: HUB_INTERNAL_TENANT_ID,
+    actor_id: row.id,
+    actor_type: 'operator',
+    operation: 'INSERT',
+    table_name: 'operator_accounts',
+    record_id: row.id,
+    event_type: 'auth.login.success',
+    new_values: { email, role: row.role },
+    ip_address: audit_context.ip ?? null,
+    trace_id: audit_context.trace_id ?? null,
+  });
 
   return issueTokenPair(row.id, row.role, row.tenant_id);
 }
@@ -78,7 +132,10 @@ function parseRefreshToken(refreshToken: string): { tokenId: string; rawHex: str
   return { tokenId: refreshToken.slice(0, dot), rawHex: refreshToken.slice(dot + 1) };
 }
 
-export async function refreshOperatorToken(refreshToken: string): Promise<LoginResult> {
+export async function refreshOperatorToken(
+  refreshToken: string,
+  audit_context: AuditContext = {},
+): Promise<LoginResult> {
   const pool = getPool();
   const { tokenId, rawHex } = parseRefreshToken(refreshToken);
 
@@ -124,6 +181,19 @@ export async function refreshOperatorToken(refreshToken: string): Promise<LoginR
     );
     await client.query('COMMIT');
 
+    // Audit the rotation (the OLD token was revoked; record_id captures it).
+    await writeAuditEntry({
+      tenant_id: HUB_INTERNAL_TENANT_ID,
+      actor_id: op.id,
+      actor_type: 'operator',
+      operation: 'UPDATE',
+      table_name: 'operator_refresh_tokens',
+      record_id: tokenId,
+      event_type: 'auth.refresh_token.revoked',
+      ip_address: audit_context.ip ?? null,
+      trace_id: audit_context.trace_id ?? null,
+    });
+
     const secret = process.env.OPERATOR_JWT_SECRET!;
     const ttl = parseInt(process.env.OPERATOR_JWT_TTL_SECONDS ?? '900', 10);
     const accessToken = jwt.sign(
@@ -141,16 +211,44 @@ export async function refreshOperatorToken(refreshToken: string): Promise<LoginR
   }
 }
 
-export async function logoutOperator(refreshToken: string): Promise<void> {
+export async function logoutOperator(
+  refreshToken: string,
+  audit_context: AuditContext = {},
+): Promise<void> {
   let tokenId: string;
   try {
     ({ tokenId } = parseRefreshToken(refreshToken));
   } catch {
-    return; // idempotent — malformed token treated as already logged out
+    return; // idempotent — malformed token treated as already logged out, no audit row
   }
   const pool = getPool();
+
+  // Resolve operator_id from the refresh token row BEFORE revoking, so the audit captures
+  // who logged out. If the token doesn't exist (already revoked, expired, never issued)
+  // we still complete the logout silently — but we skip the audit write since there is
+  // no actual session being ended.
+  const { rows } = await pool.query<{ operator_id: string }>(
+    `SELECT operator_id FROM operator_refresh_tokens WHERE id = $1`,
+    [tokenId],
+  );
+  const operatorId = rows[0]?.operator_id ?? null;
+
   await pool.query(
     `UPDATE operator_refresh_tokens SET revoked = true WHERE id = $1`,
     [tokenId],
   );
+
+  if (operatorId !== null) {
+    await writeAuditEntry({
+      tenant_id: HUB_INTERNAL_TENANT_ID,
+      actor_id: operatorId,
+      actor_type: 'operator',
+      operation: 'UPDATE',
+      table_name: 'operator_refresh_tokens',
+      record_id: tokenId,
+      event_type: 'auth.logout',
+      ip_address: audit_context.ip ?? null,
+      trace_id: audit_context.trace_id ?? null,
+    });
+  }
 }
