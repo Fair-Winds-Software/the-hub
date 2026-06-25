@@ -27,7 +27,8 @@
     "frontend:lint": "cd frontend && npm run lint",
     "frontend:e2e": "cd frontend && npm run e2e",
     "frontend:e2e:install": "cd frontend && npm run e2e:install",
-    "frontend:lighthouse": "cd frontend && npm run lighthouse"
+    "frontend:lighthouse": "cd frontend && npm run lighthouse",
+    "frontend:bundle-check": "cd frontend && npm run bundle-check"
   },
   "dependencies": {
     "@fastify/compress": "^8.0.1",

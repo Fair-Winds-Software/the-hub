@@ -38,6 +38,9 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Bundle-size guard (HUB-1702)
+        run: npm run bundle-check
+
       - name: Typecheck
         run: npm run typecheck
 

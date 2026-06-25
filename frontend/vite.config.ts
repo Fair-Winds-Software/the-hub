@@ -25,6 +25,9 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: true,
+    // HUB-1702: emit dist/.vite/manifest.json so the bundle-size CI guard can
+    // identify entry chunks + their sync imports without parsing rollup output.
+    manifest: true,
     rollupOptions: {
       output: {
         entryFileNames: 'assets/[name].[hash].js',
