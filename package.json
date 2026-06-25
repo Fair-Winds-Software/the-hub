@@ -24,7 +24,10 @@
     "frontend:preview": "cd frontend && npm run preview",
     "frontend:test": "cd frontend && npm run test",
     "frontend:typecheck": "cd frontend && npm run typecheck",
-    "frontend:lint": "cd frontend && npm run lint"
+    "frontend:lint": "cd frontend && npm run lint",
+    "frontend:e2e": "cd frontend && npm run e2e",
+    "frontend:e2e:install": "cd frontend && npm run e2e:install",
+    "frontend:lighthouse": "cd frontend && npm run lighthouse"
   },
   "dependencies": {
     "@fastify/compress": "^8.0.1",

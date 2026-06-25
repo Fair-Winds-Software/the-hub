@@ -41,9 +41,13 @@ export function TopNav(): React.ReactElement {
           </span>
           <span
             aria-label={`Role: ${operator.role}`}
+            // HUB-1581: brass-as-background fails WCAG 2.1 AA against any text color at 12px
+            // normal-weight (max ~3.94:1 vs white; ~3.63:1 vs navy). Use navy bg + sailcloth
+            // text (~12:1) with a brass border so the badge still communicates the
+            // "super admin" prestige association.
             className={`font-mono text-xs uppercase px-2 py-0.5 rounded-md ${
               isSuper
-                ? 'bg-accent-brass text-primary-navy'
+                ? 'bg-primary-navy text-sailcloth border border-accent-brass'
                 : 'bg-sailcloth/20 text-sailcloth'
             }`}
             data-testid="role-badge"

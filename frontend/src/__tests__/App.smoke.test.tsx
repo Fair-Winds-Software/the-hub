@@ -13,14 +13,22 @@ describe('App scaffold smoke test', () => {
     window.history.pushState({}, '', '/console/login');
     window.sessionStorage.clear();
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    // Use mockImplementation so each call gets a fresh Response (body can only be read once).
-    fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ success: true }), {
-          status: 200,
+    // Per-path mock: /refresh returns 401 (HUB-1581 hydrate-on-mount path — keeps the
+    // smoke test user unauthenticated). All other paths (including /logout for the drain
+    // test) return a fresh 200 Response each call (body can only be read once).
+    fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/api/v1/admin/auth/refresh')) {
+        return new Response(JSON.stringify({ error: 'no_refresh' }), {
+          status: 401,
           headers: { 'Content-Type': 'application/json' },
-        }),
-    );
+        });
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
     globalThis.fetch = fetchMock as unknown as typeof fetch;
   });
 
@@ -76,8 +84,12 @@ describe('App scaffold smoke test', () => {
     });
     // Drainer iterates serially; the queue is written back only after all entries are
     // processed, so we wait for the final cleared state rather than asserting eagerly.
+    // Total fetch count = 1 refresh (hydrate-on-mount per HUB-1581) + 2 logouts (drain).
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const logoutCalls = fetchMock.mock.calls.filter(
+        ([url]) => typeof url === 'string' && url.includes('/api/v1/admin/auth/logout'),
+      );
+      expect(logoutCalls).toHaveLength(2);
       expect(window.sessionStorage.getItem('hub.pendingRevokes')).toBeNull();
     });
   });

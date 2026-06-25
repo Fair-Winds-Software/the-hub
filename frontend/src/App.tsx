@@ -7,6 +7,9 @@
 //   by HUB-1558 + HUB-1564 per D-HUB-SCOPE-027 pattern
 // Authorized by HUB-1579 — drains pendingRevokes queue on mount (retry-on-reconnect for
 //   logout BE calls that failed during prior sessions); see D-HUB-SCOPE-050
+// Authorized by HUB-1581 — bootstrap hydrate-from-refresh on App mount (closes HUB-1572 R1
+//   wiring gap: without this, sessionStore.isHydrating stays true forever and ConsoleShell
+//   never advances past the skeleton; surfaced by S12 e2e tests)
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -14,6 +17,7 @@ import { GuardedRoute } from './components/GuardedRoute';
 import { Toaster } from './components/Toaster';
 import { apiClient } from './lib/api';
 import { drainPendingRevokes } from './lib/pendingRevokes';
+import { useSessionStore } from './stores/sessionStore';
 
 const Login = lazy(() => import('./routes/Login'));
 const DashboardStub = lazy(() => import('./routes/DashboardStub'));
@@ -27,6 +31,10 @@ export function App() {
     void drainPendingRevokes((refreshToken) =>
       apiClient.post('/api/v1/admin/auth/logout', { refreshToken }),
     );
+    // HUB-1581: bootstrap hydrate-from-refresh per HUB-1572 R1 contract. Either resolves
+    // with a fresh session (authenticated user reload) or rejects (no refresh cookie /
+    // expired) — both paths clear isHydrating so ConsoleShell can render past the skeleton.
+    void useSessionStore.getState().hydrateFromRefresh(() => apiClient.refresh());
   }, []);
 
   return (
