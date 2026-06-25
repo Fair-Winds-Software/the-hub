@@ -5,11 +5,15 @@
 // Authorized by HUB-1578 — GuardedRoute wraps every /console/* route (RBAC + toast emit);
 //   AuditStub + SettingsStub placeholder routes (super_admin only) — supersession owned
 //   by HUB-1558 + HUB-1564 per D-HUB-SCOPE-027 pattern
-import { lazy, Suspense } from 'react';
+// Authorized by HUB-1579 — drains pendingRevokes queue on mount (retry-on-reconnect for
+//   logout BE calls that failed during prior sessions); see D-HUB-SCOPE-050
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
 import { GuardedRoute } from './components/GuardedRoute';
 import { Toaster } from './components/Toaster';
+import { apiClient } from './lib/api';
+import { drainPendingRevokes } from './lib/pendingRevokes';
 
 const Login = lazy(() => import('./routes/Login'));
 const DashboardStub = lazy(() => import('./routes/DashboardStub'));
@@ -17,6 +21,14 @@ const AuditStub = lazy(() => import('./routes/AuditStub'));
 const SettingsStub = lazy(() => import('./routes/SettingsStub'));
 
 export function App() {
+  useEffect(() => {
+    // HUB-1579: drain any queued logout revocations from prior sessions / failed BE calls.
+    // Best-effort; remaining entries stay queued for the next bootstrap.
+    void drainPendingRevokes((refreshToken) =>
+      apiClient.post('/api/v1/admin/auth/logout', { refreshToken }),
+    );
+  }, []);
+
   return (
     <BrowserRouter>
       <Suspense fallback={<div>Loading…</div>}>

@@ -1,8 +1,10 @@
 // Authorized by HUB-1577 — Top nav for the Console Shell (S8 AC#2).
-// 56px tall; wordmark left; operator identity + role badge + logout button right.
-// HUB-1579 will replace the placeholder logout handler with real clearSession + nav.
+// Authorized by HUB-1579 — wires real logout flow per R1 D-HUB-SCOPE-028 + D-HUB-SCOPE-050.
+// 56px tall; wordmark left; operator identity + role badge + Sign Out button right.
 import { LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useOperator } from '../../stores/sessionStore';
+import { performLogout } from '../../lib/logout';
 
 function truncateName(fullName: string): string {
   if (fullName.length <= 24) return fullName;
@@ -13,14 +15,16 @@ function truncateName(fullName: string): string {
   return `${first} ${lastInitial}.`;
 }
 
-interface TopNavProps {
-  /** Placeholder until HUB-1579 wires the real logout flow. */
-  onLogout?: () => void;
-}
-
-export function TopNav({ onLogout }: TopNavProps): React.ReactElement {
+export function TopNav(): React.ReactElement {
   const operator = useOperator();
+  const navigate = useNavigate();
   const isSuper = operator?.role === 'super_admin';
+
+  const handleLogout = (): void => {
+    // Fire-and-forget per R1 AC#1 — performLogout clears local state synchronously,
+    // then the BE call runs in the background (failures enqueue in sessionStorage).
+    void performLogout({ navigate });
+  };
 
   return (
     <header className="h-14 flex items-center justify-between px-6 bg-primary-navy text-sailcloth shadow-md">
@@ -48,11 +52,13 @@ export function TopNav({ onLogout }: TopNavProps): React.ReactElement {
           </span>
           <button
             type="button"
-            onClick={onLogout}
-            aria-label="Log out"
-            className="p-2 rounded-md hover:bg-sailcloth/10 focus:outline-none focus:ring-2 focus:ring-sailcloth"
+            onClick={handleLogout}
+            aria-label="Sign Out"
+            data-testid="logout-button"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-sailcloth/10 focus:outline-none focus:ring-2 focus:ring-sailcloth font-body text-sm"
           >
-            <LogOut size={18} aria-hidden="true" />
+            <LogOut size={16} aria-hidden="true" />
+            <span className="hidden lg:inline">Sign Out</span>
           </button>
         </div>
       )}
