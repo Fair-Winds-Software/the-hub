@@ -44,11 +44,15 @@ import {
   getSubscriptions,
   handleSubscriptionUpdated,
   handleSubscriptionDeleted,
+  clearCreditModeCache,
 } from '../stripeService.js';
 import { AppError } from '../../errors/AppError.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // HUB-1589: reset the isCreditMode in-process memo so each test's pool mocks fully drive
+  // the flow. Tests for the credit-mode bypass live in stripeCreditMode.test.ts.
+  clearCreditModeCache();
   mockStripeIdempotencyKey.mockReturnValue('idempotency-key');
   mockGetStripe.mockReturnValue({
     customers: { create: mockCustomersCreate },
@@ -113,6 +117,8 @@ describe('createSubscription()', () => {
 
   describe('happy path', () => {
     beforeEach(() => {
+      // HUB-1589: isCreditMode → SELECT billing_mode (standard branch)
+      mockPoolQuery.mockResolvedValueOnce({ rows: [{ billing_mode: 'standard' }] });
       // ensureStripeCustomer: SELECT returns existing customer
       mockPoolQuery.mockResolvedValueOnce({ rows: [{ stripe_customer_id: 'cus_1' }] });
       // INSERT UPSERT for stripe_subscriptions
@@ -141,6 +147,7 @@ describe('createSubscription()', () => {
   describe('plan validation errors', () => {
     it('throws AppError(400) when plan is archived', async () => {
       mockGetPlanById.mockResolvedValueOnce({ id: 'plan-1', stripe_price_id: 'price_1', active: false });
+      // HUB-1589: the archived check runs before isCreditMode so no pool mock is needed here.
       await expect(createSubscription('tenant-1', 'product-1', 'plan-1', 'owner@example.com')).rejects.toMatchObject({
         statusCode: 400,
       });

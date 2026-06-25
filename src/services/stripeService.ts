@@ -3,12 +3,70 @@
 // Authorized by HUB-428 — handleSubscriptionUpdated, handleSubscriptionDeleted webhook processors
 // Authorized by HUB-1491 — handleSubscriptionUpdated enqueues confirm-plan-change BullMQ job
 // Authorized by HUB-1470 — BILL-004 wire-up: createSubscription accepts planId; resolves stripe_price_id internally
+// Authorized by HUB-1589 (E-BE-1 S6, CR-2) — isCreditMode(planId) guard + credit-mode bypass branches
+//   in createSubscription/cancelSubscription. Runtime Stripe SDK calls in HUB land via getStripe()
+//   from src/stripe/client.ts (the single boundary file); the ESLint rule + scripts/lint-stripe-boundary.ts
+//   gate enforce that no other module imports the runtime SDK. Type-only `import type Stripe from 'stripe'`
+//   is permitted everywhere — type imports erase at runtime and cannot make Stripe calls.
+//
+// INVARIANT: Plans with billing_mode='credit' MUST NOT produce any Stripe SDK calls. Verified by
+// __tests__/billingMode.guard.integration.test.ts asserting zero mock invocations on the Stripe SDK
+// for credit-mode createSubscription/cancelSubscription.
 import type Stripe from 'stripe';
+import crypto from 'crypto';
 import { getPool } from '../db/pool.js';
 import { getStripe, stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../lib/logger.js';
 import { getPlanById } from './planCatalogService.js';
+
+// HUB-1589: synthetic stripe_subscription_id + stripe_price_id markers used for credit-mode
+// subscriptions. Downstream consumers (HUB-1590 invoiceService, HUB-1591 planChangeService)
+// branch on this prefix to skip Stripe-coupled paths.
+const CREDIT_SUB_ID_PREFIX = 'internal:credit:';
+const CREDIT_PRICE_ID_PREFIX = 'internal:credit-price:';
+
+// HUB-1589 R1 FIX#1: in-process memo for plans.billing_mode lookups. A plan's billing_mode
+// can be re-configured by an operator while the process is up; the cache is intentionally
+// process-lifetime (no TTL) at v0.1 single-tenant scale. Tests call clearCreditModeCache()
+// to reset between scenarios. v0.2 with multi-tenant scale: switch to per-request memo
+// (Fastify request-decorator or a small TTL of ≤60s).
+const creditModeCache = new Map<string, boolean>();
+
+export function clearCreditModeCache(): void {
+  creditModeCache.clear();
+}
+
+/**
+ * HUB-1589 (CR-2): returns true if the given plan is credit-mode (no Stripe SDK writes).
+ * Reads `plans.billing_mode` with in-process memoization (see cache comment above).
+ *
+ * Throws AppError(404) if the plan does not exist — propagating to the caller so credit-mode
+ * checks fail closed rather than defaulting to standard (which would risk a Stripe call against
+ * an unknown plan).
+ */
+export async function isCreditMode(planId: string): Promise<boolean> {
+  const cached = creditModeCache.get(planId);
+  if (cached !== undefined) return cached;
+
+  const { rows } = await getPool().query<{ billing_mode: string }>(
+    `SELECT billing_mode FROM plans WHERE id = $1`,
+    [planId],
+  );
+  if (!rows[0]) throw new AppError(404, 'Plan not found');
+
+  const isCredit = rows[0].billing_mode === 'credit';
+  creditModeCache.set(planId, isCredit);
+  return isCredit;
+}
+
+/**
+ * Helper used by cancelSubscription + downstream readers to short-circuit any Stripe SDK
+ * call when the subscription row already carries an internal-credit synthetic ID.
+ */
+function isCreditSubscriptionId(stripeSubscriptionId: string): boolean {
+  return stripeSubscriptionId.startsWith(CREDIT_SUB_ID_PREFIX);
+}
 
 export interface StripeSubscriptionRow {
   id: string;
@@ -71,8 +129,42 @@ export async function createSubscription(
 ): Promise<StripeSubscriptionRow> {
   const plan = await getPlanById(planId);
   if (!plan.active) throw new AppError(400, 'Plan is archived');
-  const priceId = plan.stripe_price_id;
 
+  // HUB-1589 (CR-2): credit-mode bypass. Skip ensureStripeCustomer + stripe.subscriptions.create
+  // entirely; insert a stripe_subscriptions row with synthetic internal IDs so HUB-1590
+  // invoiceService et al see a consistent row shape. The boundary CI script
+  // (scripts/lint-stripe-boundary.ts) verifies no module outside src/stripe/client.ts
+  // imports the runtime SDK, so this bypass is structurally enforced.
+  if (await isCreditMode(planId)) {
+    const pool = getPool();
+    const synthSubId = `${CREDIT_SUB_ID_PREFIX}${crypto.randomUUID()}`;
+    const synthPriceId = `${CREDIT_PRICE_ID_PREFIX}${planId}`;
+    const now = new Date();
+    const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const { rows } = await pool.query<StripeSubscriptionRow>(
+      `INSERT INTO stripe_subscriptions
+         (tenant_id, product_id, plan_id, stripe_subscription_id, stripe_price_id, status,
+          current_period_start, current_period_end, cancel_at_period_end)
+       VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, false)
+       ON CONFLICT (tenant_id, product_id) DO UPDATE
+         SET plan_id                = EXCLUDED.plan_id,
+             stripe_subscription_id = EXCLUDED.stripe_subscription_id,
+             stripe_price_id        = EXCLUDED.stripe_price_id,
+             status                 = EXCLUDED.status,
+             current_period_start   = EXCLUDED.current_period_start,
+             current_period_end     = EXCLUDED.current_period_end,
+             cancel_at_period_end   = EXCLUDED.cancel_at_period_end
+       RETURNING *`,
+      [tenantId, productId, planId, synthSubId, synthPriceId, now, periodEnd],
+    );
+    logger.info(
+      { tenantId, productId, planId, event: 'subscription.credit_mode.created' },
+      'CR-2 credit-mode subscription — Stripe SDK bypassed',
+    );
+    return rows[0]!;
+  }
+
+  const priceId = plan.stripe_price_id;
   const customerId = await ensureStripeCustomer(tenantId, email);
   const stripe = getStripe();
 
@@ -137,6 +229,30 @@ export async function cancelSubscription(
 
   if (!rows[0]) {
     throw new AppError(404, 'Subscription not found');
+  }
+
+  // HUB-1589 (CR-2): credit-mode subscriptions carry an internal synthetic stripe_subscription_id;
+  // detect via the prefix and skip the Stripe SDK call entirely. Local DB state is still updated
+  // so the operator-facing subscription status reflects the cancellation.
+  if (isCreditSubscriptionId(rows[0].stripe_subscription_id)) {
+    if (immediate) {
+      const { rows: updated } = await pool.query<StripeSubscriptionRow>(
+        `UPDATE stripe_subscriptions
+         SET status = 'canceled', cancelled_at = NOW()
+         WHERE tenant_id = $1 AND product_id = $2
+         RETURNING *`,
+        [tenantId, productId],
+      );
+      return updated[0]!;
+    }
+    const { rows: updated } = await pool.query<StripeSubscriptionRow>(
+      `UPDATE stripe_subscriptions
+       SET cancel_at_period_end = true
+       WHERE tenant_id = $1 AND product_id = $2
+       RETURNING *`,
+      [tenantId, productId],
+    );
+    return updated[0]!;
   }
 
   const stripe = getStripe();

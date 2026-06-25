@@ -72,6 +72,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Stripe SDK boundary gate (HUB-1589)
+        # CR-2 boundary gate: runtime `import ... from 'stripe'` allowed only from
+        # src/stripe/client.ts. Type-only imports unrestricted (erase at runtime).
+        run: npm run lint:stripe-boundary
+
       - name: tenant_admin rename gate (HUB-1587)
         # CR-4 rename gate: src/ must contain zero `tenant_admin` matches outside the
         # `tenant-admin-rename:historical` / `tenant-admin-rename:fixture` allowlist

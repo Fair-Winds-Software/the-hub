@@ -18,6 +18,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src/ packages/",
+    "lint:stripe-boundary": "node scripts/lint-stripe-boundary.mjs",
     "frontend:install": "cd frontend && npm install",
     "frontend:dev": "cd frontend && npm run dev",
     "frontend:build": "cd frontend && npm run build",
