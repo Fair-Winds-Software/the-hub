@@ -1,4 +1,5 @@
 // Authorized by HUB-1060 — getSettings all (Redis SCAN/MGET first, DB fallback); updateSetting (DB upsert + Redis write)
+// Authorized by HUB-1588 — getSetting(key) single-key Redis-first read (used by operatorRbac compat window check)
 import { getPool } from '../db/pool.js';
 import { getRedisClient, isRedisConnected } from '../redis/client.js';
 import { AppError } from '../errors/AppError.js';
@@ -62,6 +63,41 @@ export async function getSettings(): Promise<Record<string, JsonValue>> {
     }
   }
   return result;
+}
+
+/**
+ * HUB-1588: single-key Redis-first read with DB fallback. Returns undefined when the key
+ * is not present in either store (the caller decides fail-open vs fail-secure). Designed
+ * for hot-path use (e.g., the operatorRbac compat-window flag check on every request);
+ * Redis hit is sub-ms and DB miss is a single indexed lookup on (key UNIQUE).
+ */
+export async function getSetting(key: string): Promise<JsonValue | undefined> {
+  if (!KEY_REGEX.test(key)) throw new AppError(400, 'Invalid setting key');
+
+  if (isRedisConnected()) {
+    try {
+      const raw = await getRedisClient().get(`${KEY_PREFIX}${key}`);
+      if (raw !== null) return JSON.parse(raw) as JsonValue;
+    } catch {
+      // fall through to DB
+    }
+  }
+
+  const { rows } = await getPool().query<{ value: JsonValue }>(
+    `SELECT value FROM settings WHERE key = $1`,
+    [key],
+  );
+  const row = rows[0];
+  if (!row) return undefined;
+
+  if (isRedisConnected()) {
+    try {
+      await getRedisClient().set(`${KEY_PREFIX}${key}`, JSON.stringify(row.value));
+    } catch {
+      // ignore Redis write failure
+    }
+  }
+  return row.value;
 }
 
 export async function updateSetting(
