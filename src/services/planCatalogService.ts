@@ -2,10 +2,18 @@
 // Authorized by HUB-1467 — archivePlan(): soft-archive + immutable ledger entry
 // Authorized by HUB-1468 — getPlans(), getPlanById(): plan list and BILL-004 planId resolution
 // Authorized by HUB-1489 — archivePlan() enqueues grandfather-subscribers BullMQ job
+// Authorized by HUB-1591 (E-BE-1 S8, CR-2) — updatePlanBillingMode(): operator-driven flip of
+//   plans.billing_mode between 'standard' and 'credit'. Per R1: no compensating transactions
+//   in v0.1 (existing Stripe subscriptions on flipped plans stay until renewal; new invoices
+//   match the post-flip mode). Audit row written; isCreditMode cache invalidated.
 import type Stripe from 'stripe';
 import { getPool } from '../db/pool.js';
 import { getStripe, stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
 import { AppError } from '../errors/AppError.js';
+import { clearCreditModeCacheEntry } from './stripeService.js';
+import { writeAuditEntry } from './auditLogService.js';
+
+export type BillingMode = 'standard' | 'credit';
 
 export type BillingType = 'flat_rate' | 'per_seat' | 'metered' | 'tiered' | 'one_time';
 export type BillingInterval = 'month' | 'quarter' | 'year' | 'one_time';
@@ -263,6 +271,86 @@ export async function getPlans(
 }
 
 // Resolves a planId to its full PlanRow, including stripe_price_id (BILL-004 resolver).
+/**
+ * HUB-1591 (CR-2): operator-driven flip of a plan's billing_mode. The 4 sub-cases form the
+ * R1-locked transition matrix:
+ *
+ *   S → S  : no-op (returns the existing row; no UPDATE, no audit, no cache evict)
+ *   C → C  : no-op (same)
+ *   S → C  : UPDATE plans.billing_mode = 'credit'; audit row; cache evict for planId
+ *   C → S  : UPDATE plans.billing_mode = 'standard'; audit row; cache evict for planId
+ *
+ * Per R1: no compensating transactions in v0.1. Existing Stripe subscriptions on plans
+ * flipped S→C stay in Stripe until their natural renewal; new invoices on this plan after
+ * the flip take the HUB-internal path (per HUB-1590 createInternalInvoice). Operator-facing
+ * confirmation modal copy lives in the FE (HUB-1563).
+ *
+ * Throws 404 if the plan does not exist. Throws 400 if newMode is not 'standard' | 'credit'
+ * (defensive against caller misuse; the route layer also validates the body).
+ */
+export async function updatePlanBillingMode(
+  planId: string,
+  newMode: BillingMode,
+  actorId: string,
+): Promise<PlanRow> {
+  if (newMode !== 'standard' && newMode !== 'credit') {
+    throw new AppError(400, 'billing_mode must be one of standard | credit');
+  }
+
+  const pool = getPool();
+  const { rows: existing } = await pool.query<PlanRow & { billing_mode: BillingMode }>(
+    `SELECT id, product_id, key, name, description, billing_type, billing_interval,
+            unit_amount_cents, tiers, stripe_product_id, stripe_price_id, entitlements,
+            active, metadata, delta_data, created_at, updated_at, billing_mode
+       FROM plans
+      WHERE id = $1`,
+    [planId],
+  );
+  if (!existing[0]) {
+    throw new AppError(404, 'Plan not found');
+  }
+
+  const oldMode: BillingMode = existing[0].billing_mode;
+
+  // S→S and C→C: no-op early return. Returning the existing row (minus the billing_mode
+  // discriminator field that PlanRow doesn't expose) keeps the call idempotent for the
+  // operator UI (PUT can be safely retried).
+  if (oldMode === newMode) {
+    const { billing_mode: _bm, ...rest } = existing[0];
+    return rest;
+  }
+
+  const { rows: updated } = await pool.query<PlanRow>(
+    `UPDATE plans SET billing_mode = $2, updated_at = NOW() WHERE id = $1
+     RETURNING id, product_id, key, name, description, billing_type, billing_interval,
+       unit_amount_cents, tiers, stripe_product_id, stripe_price_id, entitlements,
+       active, metadata, delta_data, created_at, updated_at`,
+    [planId, newMode],
+  );
+
+  await writeAuditEntry({
+    tenant_id: '00000000-0000-0000-0000-0000000000a1',
+    product_id: existing[0].product_id,
+    actor_id: actorId,
+    actor_type: 'operator',
+    operation: 'UPDATE',
+    table_name: 'plans',
+    record_id: planId,
+    old_values: { billing_mode: oldMode },
+    new_values: {
+      billing_mode: newMode,
+      event: 'plan.billing_mode.changed',
+      from: oldMode,
+      to: newMode,
+    },
+  });
+
+  // Targeted cache invalidation — next isCreditMode(planId) re-reads from DB.
+  clearCreditModeCacheEntry(planId);
+
+  return updated[0]!;
+}
+
 export async function getPlanById(planId: string): Promise<PlanRow> {
   const pool = getPool();
   const { rows } = await pool.query<PlanRow>(

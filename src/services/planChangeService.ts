@@ -1,8 +1,11 @@
 // Authorized by HUB-1488 — schedulePlanChange(): immediate/next_cycle Stripe transitions with add-on/discount/override carry-through
+// Authorized by HUB-1591 (E-BE-1 S8, CR-2) — defensive guard rejects tenant plan changes
+//   crossing billing_mode in v0.1 (no compensating transactions per R1; reserved for v0.2)
 // Authorized by HUB-1489 — grandfatherExistingSubscribers(): BullMQ job + idempotency guard
 // Authorized by HUB-1490 — getPlanChangeHistory(): ledger read
 // Authorized by HUB-1491 — confirmPlanChange(): webhook-driven applied_at confirmation
 import type Stripe from 'stripe';
+import { isCreditMode } from './stripeService.js';
 import { getPool } from '../db/pool.js';
 import { getStripe, mapStripeError } from '../stripe/client.js';
 import { getCurrentOverride } from './priceOverrideService.js';
@@ -83,6 +86,25 @@ export async function schedulePlanChange(
   );
   if (!subRows[0]) throw new AppError(400, 'No active subscription for tenant');
   const sub = subRows[0];
+
+  // HUB-1591 (CR-2) v0.1 limitation: tenant subscription changes across billing_mode are NOT
+  // supported. R1 explicitly defers compensating transactions (Stripe cancel + internal create,
+  // or vice versa) to v0.2. We reject EITHER (a) target plan is credit-mode, OR (b) the existing
+  // subscription is already on the internal-credit path (synthetic stripe_subscription_id).
+  // Operators handle the transition manually by cancelling the existing subscription and
+  // creating a new one against the target plan.
+  if (await isCreditMode(targetPlanId)) {
+    throw new AppError(
+      400,
+      'Tenant plan changes to a credit-mode plan are not supported in v0.1. Cancel the existing subscription and create a new one against the target plan via the credit-mode flow.',
+    );
+  }
+  if (sub.stripe_subscription_id.startsWith('internal:credit:')) {
+    throw new AppError(
+      400,
+      'Tenant plan changes FROM a credit-mode (internal) subscription are not supported in v0.1. Cancel the existing internal subscription and create a new one against the target plan.',
+    );
+  }
 
   // Resolve price override: use inline price_data if active override exists
   const override = await getCurrentOverride(tenantId, productId, targetPlanId);

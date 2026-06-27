@@ -1,7 +1,10 @@
 // Authorized by HUB-1469 — POST/GET/PATCH /api/v1/catalog/plans; operator JWT auth; Fastify fp() plugin
+// Authorized by HUB-1591 (E-BE-1 S8, CR-2) — PATCH /api/v1/catalog/plans/:planId/billing-mode;
+//   super_admin only; flips plans.billing_mode between 'standard' and 'credit'
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
-import { createPlan, archivePlan, getPlans } from '../../services/planCatalogService.js';
+import { createPlan, archivePlan, getPlans, updatePlanBillingMode } from '../../services/planCatalogService.js';
+import { AppError } from '../../errors/AppError.js';
 
 const catalogPlanRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
@@ -85,6 +88,36 @@ const catalogPlanRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const body = (request.body ?? {}) as { reason?: string; archivedBy?: string };
       const plan = await archivePlan(request.params.planId, body.reason, body.archivedBy);
+      return reply.send(plan);
+    },
+  );
+
+  // HUB-1591 (CR-2): operator-driven billing_mode flip. super_admin only — product_admin's
+  // tenant_id scope does not extend to plan-level catalog operations. S→S / C→C return the
+  // existing row idempotently. S→C / C→S UPDATE + audit + invalidate isCreditMode cache.
+  fastify.patch<{ Params: { planId: string }; Body: { billing_mode: 'standard' | 'credit' } }>(
+    '/api/v1/catalog/plans/:planId/billing-mode',
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['billing_mode'],
+          properties: {
+            billing_mode: { type: 'string', enum: ['standard', 'credit'] },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const operator = request.operatorUser;
+      if (operator?.role !== 'super_admin') throw new AppError(403, 'Forbidden');
+      const plan = await updatePlanBillingMode(
+        request.params.planId,
+        request.body.billing_mode,
+        operator.operator_id,
+      );
       return reply.send(plan);
     },
   );

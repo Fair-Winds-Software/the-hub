@@ -38,6 +38,15 @@ export function clearCreditModeCache(): void {
 }
 
 /**
+ * HUB-1591: targeted invalidation of a single planId's cached billing_mode. Called by
+ * `planCatalogService.updatePlanBillingMode` after the column UPDATE commits so the next
+ * `isCreditMode(planId)` call re-reads from the DB.
+ */
+export function clearCreditModeCacheEntry(planId: string): void {
+  creditModeCache.delete(planId);
+}
+
+/**
  * HUB-1589 (CR-2): returns true if the given plan is credit-mode (no Stripe SDK writes).
  * Reads `plans.billing_mode` with in-process memoization (see cache comment above).
  *
