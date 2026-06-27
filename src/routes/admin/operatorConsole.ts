@@ -5,6 +5,13 @@
 //   on `operator_audit_log` (HUB-1147 era; story's generic "audit_log" naming clarified in service
 //   layer). product_admin scope uses tenant_id (no scoped_products JWT claim exists in v0.1);
 //   requested product_id must belong to operator's tenant via products.tenant_id match.
+// Authorized by HUB-1700 (E-BE-1 S23) — GET /api/v1/admin/portfolio/products portfolio-wide
+//   products endpoint. RBAC: super_admin returns all products; product_admin returns products
+//   where tenant_id = operator.tenant_id (single-tenant model — matches assertTenantAccess in
+//   products.ts). v0.1 scoping model LOCKED: NO scoped_products[] JWT claim expansion (D-HUB-
+//   SCOPE-035 v0.1 lock). v0.2 candidate if multi-product operators emerge. No migration
+//   needed: products_tenant_name_unique (migration 027) implicitly creates the composite
+//   (tenant_id, name) B-tree index the AC#5 lookup pattern relies on.
 import type { FastifyPluginAsync } from 'fastify';
 import { AppError } from '../../errors/AppError.js';
 import { getPool } from '../../db/pool.js';
@@ -21,6 +28,7 @@ import {
   deleteOverride,
   getAuditLog,
 } from '../../services/operatorConsoleService.js';
+import { getPortfolioProducts } from '../../services/portfolioService.js';
 
 const MAX_RANGE_DAYS_AUDIT = 365;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -248,6 +256,37 @@ const adminOperatorConsoleRoutes: FastifyPluginAsync = async (fastify) => {
 
     await deleteOverride(overrideId, operatorId(request));
     return reply.status(204).send();
+  });
+
+  // ── HUB-1700: Portfolio-wide products (single-tenant RBAC model) ──────────────
+
+  fastify.get('/api/v1/admin/portfolio/products', async (request, reply) => {
+    const op = request.operatorUser;
+    const q = request.query as Record<string, string | undefined>;
+
+    let operatorTenantId: string | null = null;
+    if (op?.role === 'product_admin') {
+      // Defensive: a product_admin JWT with null tenant_id should never reach here,
+      // but if mis-issuance happens, fail closed rather than leak all products.
+      if (!op.tenant_id) {
+        throw new AppError(
+          403,
+          'FORBIDDEN: product_admin requires a tenant_id claim',
+        );
+      }
+      operatorTenantId = op.tenant_id;
+    }
+
+    const limit = Math.min(parseInt(q.limit ?? '100', 10) || 100, 200);
+    const offset = Math.max(parseInt(q.offset ?? '0', 10) || 0, 0);
+
+    const result = await getPortfolioProducts({
+      operatorTenantId,
+      search: q.search,
+      limit,
+      offset,
+    });
+    return reply.status(200).send(result);
   });
 
   // ── HUB-1147: Audit log ───────────────────────────────────────────────────────
