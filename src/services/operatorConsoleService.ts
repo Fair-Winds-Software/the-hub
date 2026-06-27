@@ -600,16 +600,27 @@ export async function deleteOverride(overrideId: string, operatorId?: string): P
 }
 
 // ── getAuditLog ───────────────────────────────────────────────────────────────
+// HUB-1697 (E-BE-1 S20): extended with actor / actions / entityTypes / from / to / sort.
+// Backing table is `operator_audit_log` (HUB-1147 era). Story spec used the generic name
+// "audit_log" — there's a separate `audit_log` table (HUB-1516) used by services; this
+// endpoint stays on operator_audit_log per the existing E-FE-12 consumer contract.
 
 export async function getAuditLog(opts: {
   tenantId?: string;
   productId?: string;
+  actor?: string;
+  actions?: string[];
+  entityTypes?: string[];
+  from?: Date;
+  to?: Date;
+  sort?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
 }): Promise<{ data: AuditLogEntry[]; total: number; limit: number; offset: number }> {
   const pool = getPool();
   const limit = opts.limit ?? 50;
   const offset = opts.offset ?? 0;
+  const sortDir = opts.sort === 'asc' ? 'ASC' : 'DESC';
 
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -622,6 +633,29 @@ export async function getAuditLog(opts: {
   if (opts.productId) {
     conditions.push(`product_id = $${idx++}`);
     params.push(opts.productId);
+  }
+  // actor: substring match on operator_id::text (UUID column). Spec said "audit_log.actor"
+  // — mapped to operator_id per column-deviation note in HUB-1697. ILIKE supports partial
+  // UUID prefix lookup for FE typeahead.
+  if (opts.actor) {
+    conditions.push(`operator_id::text ILIKE $${idx++}`);
+    params.push(`%${opts.actor}%`);
+  }
+  if (opts.actions && opts.actions.length > 0) {
+    conditions.push(`action = ANY($${idx++}::text[])`);
+    params.push(opts.actions);
+  }
+  if (opts.entityTypes && opts.entityTypes.length > 0) {
+    conditions.push(`entity_type = ANY($${idx++}::text[])`);
+    params.push(opts.entityTypes);
+  }
+  if (opts.from) {
+    conditions.push(`created_at >= $${idx++}`);
+    params.push(opts.from);
+  }
+  if (opts.to) {
+    conditions.push(`created_at <= $${idx++}`);
+    params.push(opts.to);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -651,7 +685,7 @@ export async function getAuditLog(opts: {
             recommendation_id, created_at
      FROM operator_audit_log
      ${where}
-     ORDER BY created_at DESC
+     ORDER BY created_at ${sortDir}
      LIMIT $${idx++} OFFSET $${idx}`,
     [...params, limit, offset],
   );

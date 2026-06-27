@@ -3,6 +3,12 @@
 // Authorized by HUB-1588 — backward-compat window for CR-4 role rename: accept legacy
 //   `tenant_admin` JWT claims when settings.role_rename_compat_window_enabled = true, // tenant-admin-rename:historical
 //   normalize to `product_admin`, and log telemetry. Fail-secure on settings fetch error.
+// Authorized by HUB-1697 (E-BE-1 S20) — extend resourceTenantId derivation to also read
+//   request.query.tenant_id. Closes a latent gap where GET routes that scope by query string
+//   (e.g., /admin/console/audit-log) always 403'd for product_admin because the hook only
+//   consulted params + body. No existing admin GET is currently used by product_admin with
+//   query-based tenant scoping; this unblocks HUB-1697's RBAC ACs without behavioral change
+//   to existing callers.
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { AppError } from '../errors/AppError.js';
@@ -104,13 +110,15 @@ export async function operatorRbacHook(
 
   if (normalizedRole === 'super_admin') return;
 
-  // product_admin: derive resource tenant_id from route — path param takes precedence over body
+  // product_admin: derive resource tenant_id from route — precedence: path param → body → query
   const params = request.params as Record<string, unknown>;
   const body = request.body as Record<string, unknown> | null;
+  const query = request.query as Record<string, unknown> | undefined;
 
   const resourceTenantId =
     (typeof params.tenantId === 'string' ? params.tenantId : undefined) ??
-    (body !== null && typeof body?.tenant_id === 'string' ? body.tenant_id : undefined);
+    (body !== null && typeof body?.tenant_id === 'string' ? body.tenant_id : undefined) ??
+    (query !== undefined && typeof query.tenant_id === 'string' ? query.tenant_id : undefined);
 
   if (!resourceTenantId || resourceTenantId !== claims.tenant_id) {
     throw new AppError(403, 'Forbidden');

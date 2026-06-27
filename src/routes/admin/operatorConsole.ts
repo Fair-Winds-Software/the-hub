@@ -1,7 +1,13 @@
 // Authorized by HUB-1146 — GET /api/v1/admin/console/pricing/:productId/overview
 // Authorized by HUB-1147 — tenant list, plan assignment (single + bulk), discounts, overrides, audit log
+// Authorized by HUB-1697 (E-BE-1 S20) — audit-log endpoint extended with actor/action/entity_type/
+//   from/to/sort filters and per-product RBAC enforcement for product_admin. Backing table stays
+//   on `operator_audit_log` (HUB-1147 era; story's generic "audit_log" naming clarified in service
+//   layer). product_admin scope uses tenant_id (no scoped_products JWT claim exists in v0.1);
+//   requested product_id must belong to operator's tenant via products.tenant_id match.
 import type { FastifyPluginAsync } from 'fastify';
 import { AppError } from '../../errors/AppError.js';
+import { getPool } from '../../db/pool.js';
 import {
   getPricingOverview,
   getTenantList,
@@ -15,6 +21,9 @@ import {
   deleteOverride,
   getAuditLog,
 } from '../../services/operatorConsoleService.js';
+
+const MAX_RANGE_DAYS_AUDIT = 365;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -254,7 +263,77 @@ const adminOperatorConsoleRoutes: FastifyPluginAsync = async (fastify) => {
     if (tenantId && !UUID_RE.test(tenantId)) throw new AppError(400, 'tenant_id must be a valid UUID');
     if (productId && !UUID_RE.test(productId)) throw new AppError(400, 'product_id must be a valid UUID');
 
-    const result = await getAuditLog({ tenantId, productId, limit, offset });
+    // RBAC: per HUB-1697, product_admin must specify product_id and may only query products
+    // owned by their tenant. operatorRbacHook already enforces query.tenant_id == claim.tenant_id;
+    // this handler adds the product_id presence + tenant-ownership check.
+    const op = request.operatorUser;
+    if (op?.role === 'product_admin') {
+      if (!productId) {
+        throw new AppError(
+          400,
+          'PRODUCT_ID_REQUIRED: product_admin must specify product_id',
+        );
+      }
+      const ownerRes = await getPool().query<{ id: string }>(
+        `SELECT id FROM products WHERE id = $1 AND tenant_id = $2 LIMIT 1`,
+        [productId, op.tenant_id],
+      );
+      if (ownerRes.rows.length === 0) {
+        throw new AppError(403, "FORBIDDEN: You do not have access to this product's audit log");
+      }
+    }
+
+    // sort param: only 'created_at:desc' (default) or 'created_at:asc'
+    const sortRaw = q.sort;
+    let sort: 'asc' | 'desc' = 'desc';
+    if (sortRaw !== undefined) {
+      if (sortRaw === 'created_at:desc') sort = 'desc';
+      else if (sortRaw === 'created_at:asc') sort = 'asc';
+      else throw new AppError(400, 'sort must be created_at:desc or created_at:asc');
+    }
+
+    // Date range parsing + validation
+    let from: Date | undefined;
+    let to: Date | undefined;
+    if (q.from !== undefined) {
+      from = new Date(q.from);
+      if (isNaN(from.getTime())) throw new AppError(400, 'from must be a valid ISO8601 date');
+    }
+    if (q.to !== undefined) {
+      to = new Date(q.to);
+      if (isNaN(to.getTime())) throw new AppError(400, 'to must be a valid ISO8601 date');
+    }
+    if (from && to) {
+      if (from.getTime() > to.getTime()) {
+        throw new AppError(400, 'INVALID_DATE_RANGE: "from" must be <= "to"');
+      }
+      if ((to.getTime() - from.getTime()) / MS_PER_DAY > MAX_RANGE_DAYS_AUDIT) {
+        throw new AppError(
+          400,
+          `RANGE_TOO_LARGE: range may not exceed ${MAX_RANGE_DAYS_AUDIT} days`,
+        );
+      }
+    }
+
+    const actions = q.action
+      ? q.action.split(',').map((s) => s.trim()).filter((s) => s.length > 0)
+      : undefined;
+    const entityTypes = q.entity_type
+      ? q.entity_type.split(',').map((s) => s.trim()).filter((s) => s.length > 0)
+      : undefined;
+
+    const result = await getAuditLog({
+      tenantId,
+      productId,
+      actor: q.actor,
+      actions,
+      entityTypes,
+      from,
+      to,
+      sort,
+      limit,
+      offset,
+    });
     return reply.send(result);
   });
 };
