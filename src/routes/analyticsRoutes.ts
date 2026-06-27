@@ -1,10 +1,16 @@
 // Authorized by HUB-1521 — GET /api/v1/analytics/usage, /billing, /health; operator JWT; tenant scoping
+// Authorized by HUB-1596 (E-BE-1 S13, CR-3) — GET /api/v1/analytics/portfolio-margin; both
+//   super_admin + product_admin may read. Path matches the file's existing convention
+//   (/api/v1/analytics/...) — the story spec said /api/v1/admin/analytics/... but the actual
+//   file does not use /admin/ for analytics; matching siblings here. R1 cross-Epic contract
+//   (200 + {available:false}) applied for upstream failures.
 
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import jwt from 'jsonwebtoken';
-import { getUsageAnalytics, getBillingAnalytics } from '../services/analyticsService.js';
+import { getUsageAnalytics, getBillingAnalytics, getPortfolioMargin } from '../services/analyticsService.js';
 import { AppError } from '../errors/AppError.js';
+import logger from '../lib/logger.js';
 
 interface OperatorClaims {
   operator_id: string;
@@ -32,6 +38,12 @@ async function requireOperatorJwt(
   } catch {
     throw new AppError(401, 'Unauthorized');
   }
+}
+
+function parseIsoDate(raw: string, label: string): Date {
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) throw new AppError(400, `${label} is not a valid ISO8601 date`);
+  return d;
 }
 
 function parseDateParams(q: Record<string, string | undefined>): { from: Date; to: Date } {
@@ -101,6 +113,50 @@ const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       return reply.status(200).send(result);
+    },
+  );
+
+  // HUB-1596 (E-BE-1 S13, CR-3): portfolio margin endpoint over HUB-1595's aggregator.
+  //
+  // Query params:
+  //   from, to — optional ISO8601 dates. Default: last 30 days.
+  //   Range MUST be ≤ 90 days (R1 FIX; getPortfolioMargin enforces via validateRange).
+  //
+  // RBAC: super_admin + product_admin both allowed (read-only signal, no PII).
+  //
+  // Degraded contract (R1, mirrors HUB-1594): genuine validation errors → 400 with code;
+  // upstream errors (DB unreachable, query timeout) → 200 with {available:false, reason}
+  // so the dashboard tile renders "—" without an error state.
+  fastify.get(
+    '/api/v1/analytics/portfolio-margin',
+    { preHandler: [requireOperatorJwt] },
+    async (request, reply) => {
+      const q = request.query as Record<string, string | undefined>;
+      const now = new Date();
+      const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      let from: Date;
+      let to: Date;
+      try {
+        from = q['from'] ? parseIsoDate(q['from'], 'from') : defaultFrom;
+        to = q['to'] ? parseIsoDate(q['to'], 'to') : now;
+      } catch (err) {
+        if (err instanceof AppError) throw err;
+        throw new AppError(400, 'INVALID_DATE');
+      }
+      if (from > to) {
+        throw new AppError(400, 'RANGE_INVERTED');
+      }
+
+      try {
+        const result = await getPortfolioMargin({ from, to });
+        return reply.status(200).send({ available: true, ...result });
+      } catch (err) {
+        // 400-class errors from validateRange (range > 90 days) bubble up as actual 400s.
+        if (err instanceof AppError) throw err;
+        logger.warn({ err }, 'portfolio-margin: upstream error — degrading');
+        return reply.status(200).send({ available: false, reason: 'upstream_unavailable' });
+      }
     },
   );
 
