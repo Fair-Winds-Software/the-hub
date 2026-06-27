@@ -371,6 +371,179 @@ export async function getPortfolioMargin(
   };
 }
 
+// ── HUB-1597 (CR-5): pricing scenario compute — fetch (impure) + compute (pure) split ──
+
+const SCENARIO_LOOKBACK_DAYS = 30;
+const SCENARIO_ELASTICITY_DEFAULT = -1.0; // HUB-1585 closeout: setting not seeded; hardcoded constant.
+
+export const SCENARIO_DISCLAIMER =
+  'Scenario projections are advisory only and use a constant-elasticity model. Actual outcomes depend on factors not modeled (churn timing, competitive pricing, mix shifts). This is decision support, not a forecast.';
+export const SCENARIO_MODEL_TYPE = 'constant_elasticity' as const;
+
+export interface ScenarioBaseline {
+  snapshotAt: string;
+  productId: string;
+  revenueLast30dCents: number;
+  costLast30dCents: number;
+  subscriptionCount: number;
+  elasticityCoefficient: number;
+  marginPct: number | null;
+}
+
+export interface ScenarioInput {
+  priceChangePercent: number;
+  churnAssumptionPercent: number;
+}
+
+export interface ScenarioProjection {
+  revenueCents: number;
+  costCents: number;
+  marginPct: number | null;
+  subscriptionCount: number;
+}
+
+export interface ScenarioDelta {
+  revenueCents: number;
+  costCents: number;
+  marginPctPoints: number | null;
+  subscriptionCount: number;
+}
+
+export interface ScenarioResult {
+  baseline: ScenarioBaseline;
+  scenario: ScenarioProjection;
+  delta: ScenarioDelta;
+  modelType: typeof SCENARIO_MODEL_TYPE;
+  disclaimer: string;
+}
+
+/**
+ * HUB-1597 (CR-5) IMPURE: read live revenue + cost + subscription count for the productId
+ * over the last 30 days, freeze into a baseline snapshot. The returned snapshot is the
+ * boundary between impure (this fn) and pure (computeScenario) — once frozen, the same
+ * baseline + input must produce byte-identical outputs forever.
+ *
+ * Spec deviation: R1 mentioned `pricing_models.coefficient` but the live `pricing_models`
+ * table stores model config in JSONB without a coefficient column. Hardcoded -1.0 (per
+ * HUB-1585 closeout — pricing_elasticity_coefficient setting was implicitly dropped).
+ */
+export async function fetchScenarioBaseline(productId: string): Promise<ScenarioBaseline> {
+  const now = new Date();
+  const from = new Date(now.getTime() - SCENARIO_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+
+  const pool = getPool();
+  const [revenueRes, costRes, subRes] = await Promise.all([
+    pool.query<{ revenue_cents: string }>(
+      `SELECT COALESCE(SUM(amount_paid), 0)::bigint AS revenue_cents
+         FROM invoices
+        WHERE product_id = $1 AND period_start >= $2 AND period_end <= $3`,
+      [productId, from, now],
+    ),
+    pool.query<{ cost_cents: string }>(
+      `SELECT COALESCE(SUM(total_cost_cents), 0)::bigint AS cost_cents
+         FROM billing_period_costs
+        WHERE product_id = $1 AND period_start >= $2 AND period_end <= $3`,
+      [productId, from, now],
+    ),
+    pool.query<{ sub_count: string }>(
+      `SELECT COUNT(*)::bigint AS sub_count
+         FROM stripe_subscriptions
+        WHERE product_id = $1 AND status = 'active'`,
+      [productId],
+    ),
+  ]);
+
+  const revenueLast30dCents = parseInt(revenueRes.rows[0]?.revenue_cents ?? '0', 10);
+  const costLast30dCents = parseInt(costRes.rows[0]?.cost_cents ?? '0', 10);
+  const subscriptionCount = parseInt(subRes.rows[0]?.sub_count ?? '0', 10);
+
+  let marginPct: number | null = null;
+  if (revenueLast30dCents > 0) {
+    marginPct =
+      Math.round(((revenueLast30dCents - costLast30dCents) / revenueLast30dCents) * 10000) / 10000;
+  }
+
+  return {
+    snapshotAt: now.toISOString(),
+    productId,
+    revenueLast30dCents,
+    costLast30dCents,
+    subscriptionCount,
+    elasticityCoefficient: SCENARIO_ELASTICITY_DEFAULT,
+    marginPct,
+  };
+}
+
+/**
+ * HUB-1597 (CR-5) PURE: deterministic compute over a frozen baseline + scenario input.
+ * Same `(baseline, input)` produces byte-identical `ScenarioResult` every time — this is
+ * the R1 idempotency contract.
+ *
+ * Math:
+ *   customerCount_scenario = subCount × (1 + churn/100) × (1 + elasticity × priceChange/100)
+ *   revenue_scenario       = revenue × (1 + priceChange/100) × (customerCount_scenario / subCount)
+ *   cost_scenario          = cost  (held constant in v0.1 — pricing has no cost-side effect)
+ *   marginPct_scenario     = (revenue_scenario - cost_scenario) / revenue_scenario
+ *
+ * Validation: priceChangePercent must be > -100 (can't drop price by 100% or more); churn
+ * must be 0..100. Subscription count of zero produces a degenerate baseline (no customers
+ * to elasticity-scale) — the scenario projects zero revenue and the same cost.
+ */
+export function computeScenario(baseline: ScenarioBaseline, input: ScenarioInput): ScenarioResult {
+  if (input.priceChangePercent <= -100) {
+    throw new AppError(400, 'priceChangePercent must be greater than -100');
+  }
+  if (input.churnAssumptionPercent < 0 || input.churnAssumptionPercent > 100) {
+    throw new AppError(400, 'churnAssumptionPercent must be between 0 and 100');
+  }
+
+  const churnFactor = 1 + input.churnAssumptionPercent / 100;
+  const elasticityFactor = 1 + baseline.elasticityCoefficient * (input.priceChangePercent / 100);
+  const subscriptionScalar = churnFactor * elasticityFactor;
+
+  let subscriptionCountScenario = 0;
+  let revenueScenarioCents = 0;
+  if (baseline.subscriptionCount > 0) {
+    subscriptionCountScenario = Math.round(baseline.subscriptionCount * subscriptionScalar);
+    const priceFactor = 1 + input.priceChangePercent / 100;
+    revenueScenarioCents = Math.round(
+      baseline.revenueLast30dCents * priceFactor * subscriptionScalar,
+    );
+  }
+
+  const costScenarioCents = baseline.costLast30dCents; // held constant in v0.1
+  const marginPctScenario =
+    revenueScenarioCents > 0
+      ? Math.round(((revenueScenarioCents - costScenarioCents) / revenueScenarioCents) * 10000) /
+        10000
+      : null;
+
+  const scenario: ScenarioProjection = {
+    revenueCents: revenueScenarioCents,
+    costCents: costScenarioCents,
+    marginPct: marginPctScenario,
+    subscriptionCount: subscriptionCountScenario,
+  };
+
+  const delta: ScenarioDelta = {
+    revenueCents: revenueScenarioCents - baseline.revenueLast30dCents,
+    costCents: costScenarioCents - baseline.costLast30dCents,
+    marginPctPoints:
+      baseline.marginPct !== null && marginPctScenario !== null
+        ? Math.round((marginPctScenario - baseline.marginPct) * 10000) / 10000
+        : null,
+    subscriptionCount: subscriptionCountScenario - baseline.subscriptionCount,
+  };
+
+  return {
+    baseline,
+    scenario,
+    delta,
+    modelType: SCENARIO_MODEL_TYPE,
+    disclaimer: SCENARIO_DISCLAIMER,
+  };
+}
+
 /**
  * HUB-1595 R1 three-branch margin logic:
  *   revenue=0, cost=0   → no signal (marginPct null, losingMoney false)
