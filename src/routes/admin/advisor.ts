@@ -3,9 +3,15 @@
 // Authorized by HUB-1144 — POST /api/v1/admin/advisor/recommendations/:id/outcome; outcome write; cache invalidation
 // Authorized by HUB-1148 — billing-summary, audit-note, recommendation history endpoints
 // Authorized by HUB-1149 — enhanced portfolio/summary + CSV export endpoint
+// Authorized by HUB-1699 (E-BE-1 S22) — GET /api/v1/admin/advisor/recommendations
+//   (portfolio-wide flat list with productId + outcome filters); VALID_OUTCOME_TYPES expanded
+//   to 6 values (won/lost/no_action added per advisor_outcome_type enum expansion in
+//   migration 055). product_admin scoping mirrors HUB-1697 (handler-level products.tenant_id
+//   ownership check after operatorRbacHook tenant match).
 import type { FastifyPluginAsync } from 'fastify';
 import { AppError } from '../../errors/AppError.js';
 import logger from '../../lib/logger.js';
+import { getPool } from '../../db/pool.js';
 import {
   runAdvisor,
   getLatestRecommendation,
@@ -14,11 +20,19 @@ import {
   getBillingSummary,
   addAuditNote,
   getRecommendationHistory,
+  listRecommendations,
   type OutcomeType,
 } from '../../services/planAdvisorService.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const VALID_OUTCOME_TYPES = new Set<OutcomeType>(['applied', 'dismissed', 'auto_detected']);
+const VALID_OUTCOME_TYPES = new Set<OutcomeType>([
+  'applied',
+  'dismissed',
+  'auto_detected',
+  'won',
+  'lost',
+  'no_action',
+]);
 
 function assertUUID(value: string, label: string): void {
   if (!UUID_RE.test(value)) throw new AppError(400, `${label} must be a valid UUID`);
@@ -31,6 +45,65 @@ const adminAdvisorRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/api/v1/admin/advisor/portfolio/summary', async (_request, reply) => {
     const summary = await getPortfolioSummary();
     return reply.send(summary);
+  });
+
+  // ── List recommendations (HUB-1699 E-BE-1 S22) ────────────────────────────────
+  //
+  // GET /api/v1/admin/advisor/recommendations
+  //   ?productId=<uuid>        (optional for super_admin; REQUIRED for product_admin)
+  //   &outcome=<v-or-csv>      (optional; allowlist enum values)
+  //   &limit=<int>             (default 50, capped at 200)
+  //   &offset=<int>            (default 0)
+  //
+  // RBAC: super_admin unrestricted; product_admin must specify productId AND the product
+  // must belong to their tenant (handler-level check; mirrors HUB-1697 audit-log pattern).
+  // operatorRbacHook already enforced tenant_id query param matches claim.tenant_id.
+  fastify.get('/api/v1/admin/advisor/recommendations', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>;
+    const op = (request as { operatorUser?: { role: string; tenant_id: string | null } })
+      .operatorUser;
+
+    const productId = q.productId;
+    if (productId !== undefined) assertUUID(productId, 'productId');
+
+    if (op?.role === 'product_admin') {
+      if (!productId) {
+        throw new AppError(
+          400,
+          'PRODUCT_ID_REQUIRED: product_admin must specify productId',
+        );
+      }
+      const ownerRes = await getPool().query<{ id: string }>(
+        `SELECT id FROM products WHERE id = $1 AND tenant_id = $2 LIMIT 1`,
+        [productId, op.tenant_id],
+      );
+      if (ownerRes.rows.length === 0) {
+        throw new AppError(
+          403,
+          'FORBIDDEN: product_admin does not have access to this product',
+        );
+      }
+    }
+
+    let outcomes: OutcomeType[] | undefined;
+    if (q.outcome !== undefined) {
+      const parts = q.outcome.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+      for (const v of parts) {
+        if (!VALID_OUTCOME_TYPES.has(v as OutcomeType)) {
+          throw new AppError(
+            400,
+            `INVALID_OUTCOME: outcome must be one of ${[...VALID_OUTCOME_TYPES].join(', ')}`,
+          );
+        }
+      }
+      outcomes = parts as OutcomeType[];
+    }
+
+    const limit = Math.min(parseInt(q.limit ?? '50', 10) || 50, 200);
+    const offset = Math.max(parseInt(q.offset ?? '0', 10) || 0, 0);
+
+    const result = await listRecommendations({ productId, outcomes, limit, offset });
+    return reply.status(200).send(result);
   });
 
   // ── Portfolio summary CSV export (HUB-1149) ───────────────────────────────────

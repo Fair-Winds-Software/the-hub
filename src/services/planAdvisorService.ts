@@ -15,7 +15,16 @@ import logger from '../lib/logger.js';
 export type RecommendationType = 'upgrade' | 'downgrade' | 'switch_to_annual' | 'stay';
 export type AdvisorConfidence = 'high' | 'medium' | 'low';
 export type RecommendationStatus = 'open' | 'applied' | 'dismissed' | 'superseded';
-export type OutcomeType = 'applied' | 'dismissed' | 'auto_detected';
+// HUB-1699 (E-BE-1 S22): widened with operator-captured outcome semantics. Existing
+// applied/dismissed/auto_detected = HUB-observed auto-detection. New won/lost/no_action =
+// operator explicitly captured the deal state. Status mapping in recordOutcome below.
+export type OutcomeType =
+  | 'applied'
+  | 'dismissed'
+  | 'auto_detected'
+  | 'won'
+  | 'lost'
+  | 'no_action';
 
 export interface AdvisorRecommendation {
   id: string;
@@ -450,9 +459,14 @@ export async function recordOutcome(
   }
   const rec = recRows[0]!;
 
-  // Determine new parent status: applied if outcome matches type, dismissed otherwise
+  // Determine new parent status. HUB-1699 widens the mapping:
+  //   applied / won           → 'applied'   (recommendation acted on)
+  //   dismissed / auto_detected /
+  //   lost / no_action        → 'dismissed' (terminal non-applied)
   const newStatus: RecommendationStatus =
-    input.outcomeType === 'applied' ? 'applied' : 'dismissed';
+    input.outcomeType === 'applied' || input.outcomeType === 'won'
+      ? 'applied'
+      : 'dismissed';
 
   const client = await pool.connect();
   let outcome: AdvisorOutcome;
@@ -917,4 +931,142 @@ export async function runWeeklyAdvisor(): Promise<void> {
     { total: rows.length, processed, failed, staleAutoDetected: staleRecs.length },
     'Weekly advisor run complete',
   );
+}
+
+// ── listRecommendations (HUB-1699 E-BE-1 S22) ─────────────────────────────────
+//
+// Portfolio-wide flat list of recommendations with latest outcome + optional filters,
+// powering HUB-1638 E-FE-4 S2 list view. Returns { data, total } so the FE table can
+// paginate without N+1 fetches.
+//
+// Schema-vs-spec deviations (documented per ironclad-engineer Rule 14):
+// - `currentPlan`, `churnRisk`, `operatorEmail` are NOT in the advisor schema — returned
+//   as null. FE renders them when present or omits the field. Adding them is out of scope
+//   for v0.1 (would require new columns + plan-assignment join + audit-log lookup).
+// - `outcomeNote` ← advisor_outcomes.notes; `outcomeCapturedAt` ← advisor_outcomes.created_at
+// - `recommendedPlan` ← pricing_models.model_type (no plan name column; model_type is the
+//   closest semantic label HUB tracks).
+// - Outcome filter: subquery joins to a per-recommendation latest outcome, then filters
+//   via ANY() (per HUB-1697 OR-within-multi-value pattern).
+
+export interface AdvisorRecommendationListRow {
+  recommendationId: string;
+  productId: string;
+  tenantId: string;
+  productName: string | null;
+  currentPlan: null; // not in schema (see deviation note above)
+  recommendedPlan: string | null;
+  reasoning: string;
+  mrrImpact: number | null;
+  churnRisk: null; // not in schema
+  outcome: OutcomeType | null;
+  outcomeNote: string | null;
+  createdAt: string;
+  outcomeCapturedAt: string | null;
+  operatorEmail: null; // not in schema
+}
+
+export interface ListRecommendationsOpts {
+  productId?: string;
+  outcomes?: OutcomeType[];
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListRecommendationsResult {
+  data: AdvisorRecommendationListRow[];
+  total: number;
+}
+
+export async function listRecommendations(
+  opts: ListRecommendationsOpts,
+): Promise<ListRecommendationsResult> {
+  const pool = getPool();
+  const limit = Math.min(opts.limit ?? 50, 200);
+  const offset = Math.max(opts.offset ?? 0, 0);
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let idx = 1;
+
+  if (opts.productId) {
+    conditions.push(`ar.product_id = $${idx++}`);
+    params.push(opts.productId);
+  }
+  if (opts.outcomes && opts.outcomes.length > 0) {
+    conditions.push(`latest_outcome.outcome_type = ANY($${idx++}::text[])`);
+    params.push(opts.outcomes);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  // Subquery: latest outcome per recommendation (DISTINCT ON ordered by created_at DESC).
+  // LEFT JOIN so recommendations without any outcome still appear (outcome = null).
+  const baseFrom = `
+    FROM advisor_recommendations ar
+    LEFT JOIN products p ON p.id = ar.product_id
+    LEFT JOIN pricing_models pm ON pm.id = ar.suggested_plan_id
+    LEFT JOIN LATERAL (
+      SELECT outcome_type, notes, created_at
+        FROM advisor_outcomes ao
+       WHERE ao.recommendation_id = ar.id
+       ORDER BY ao.created_at DESC
+       LIMIT 1
+    ) latest_outcome ON true
+  `;
+
+  const { rows: countRows } = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::bigint AS count ${baseFrom} ${where}`,
+    params,
+  );
+  const total = parseInt(countRows[0]!.count, 10);
+
+  const { rows } = await pool.query<{
+    recommendation_id: string;
+    product_id: string;
+    tenant_id: string;
+    product_name: string | null;
+    recommended_plan: string | null;
+    reasoning: string;
+    mrr_impact: number | null;
+    outcome: OutcomeType | null;
+    outcome_note: string | null;
+    created_at: Date;
+    outcome_captured_at: Date | null;
+  }>(
+    `SELECT ar.id AS recommendation_id,
+            ar.product_id, ar.tenant_id,
+            p.name AS product_name,
+            pm.model_type AS recommended_plan,
+            ar.rationale AS reasoning,
+            ar.projected_monthly_delta_cents AS mrr_impact,
+            latest_outcome.outcome_type AS outcome,
+            latest_outcome.notes AS outcome_note,
+            ar.created_at,
+            latest_outcome.created_at AS outcome_captured_at
+       ${baseFrom}
+       ${where}
+   ORDER BY ar.created_at DESC
+      LIMIT $${idx++} OFFSET $${idx}`,
+    [...params, limit, offset],
+  );
+
+  return {
+    total,
+    data: rows.map((r) => ({
+      recommendationId: r.recommendation_id,
+      productId: r.product_id,
+      tenantId: r.tenant_id,
+      productName: r.product_name,
+      currentPlan: null,
+      recommendedPlan: r.recommended_plan,
+      reasoning: r.reasoning,
+      mrrImpact: r.mrr_impact,
+      churnRisk: null,
+      outcome: r.outcome,
+      outcomeNote: r.outcome_note,
+      createdAt: r.created_at.toISOString(),
+      outcomeCapturedAt: r.outcome_captured_at ? r.outcome_captured_at.toISOString() : null,
+      operatorEmail: null,
+    })),
+  };
 }
