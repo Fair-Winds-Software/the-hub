@@ -1,10 +1,16 @@
 // Authorized by HUB-462 — invoice service: getInvoices, handleInvoiceCreated, handleInvoiceFinalized,
 //   handleInvoicePaymentSucceeded, handleInvoicePaymentFailed
+// Authorized by HUB-1590 (E-BE-1 S7, CR-2) — external_provider column ('stripe' | 'internal');
+//   createInternalInvoice() for credit-mode tenants. This service has no runtime Stripe SDK
+//   imports (it processes Stripe webhooks; the SDK boundary is src/stripe/client.ts per HUB-1589).
 import type Stripe from 'stripe';
+import crypto from 'crypto';
 import { getPool } from '../db/pool.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../lib/logger.js';
 import { getBillingPaymentFailedQueue, defaultJobOptions } from '../queues/index.js';
+import { isCreditMode } from './stripeService.js';
+import { writeAuditEntry } from './auditLogService.js';
 
 export interface InvoiceRow {
   id: string;
@@ -20,9 +26,15 @@ export interface InvoiceRow {
   period_end: Date;
   invoice_pdf_url: string | null;
   payment_failed_at: Date | null;
+  external_provider: 'stripe' | 'internal';
   created_at: Date;
   updated_at: Date;
 }
+
+// HUB-1590: synthetic stripe_invoice_id prefix for credit-mode invoices. Downstream
+// reconciliation MUST NOT look these up in Stripe; the external_provider column is the
+// authoritative discriminator, this prefix is a structural safety net.
+const INTERNAL_INVOICE_ID_PREFIX = 'inv_internal:';
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
@@ -38,7 +50,7 @@ export async function getInvoices(
 
   const COLS = `id, tenant_id, product_id, stripe_invoice_id, stripe_subscription_id, status,
     amount_due, amount_paid, currency, period_start, period_end, invoice_pdf_url, payment_failed_at,
-    created_at, updated_at`;
+    external_provider, created_at, updated_at`;
 
   if (productId) {
     const { rows } = await pool.query<InvoiceRow>(
@@ -108,8 +120,8 @@ export async function handleInvoiceCreated(eventId: string): Promise<void> {
   const { rows: invRows } = await pool.query<{ id: string }>(
     `INSERT INTO invoices
        (tenant_id, product_id, stripe_invoice_id, stripe_subscription_id, status,
-        amount_due, amount_paid, currency, period_start, period_end)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, to_timestamp($9), to_timestamp($10))
+        amount_due, amount_paid, currency, period_start, period_end, external_provider)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, to_timestamp($9), to_timestamp($10), 'stripe')
      ON CONFLICT (stripe_invoice_id) DO UPDATE
        SET status      = EXCLUDED.status,
            amount_due  = EXCLUDED.amount_due,
@@ -149,6 +161,88 @@ export async function handleInvoiceCreated(eventId: string): Promise<void> {
   }
 
   logger.info({ eventId, invoiceId: invoice.id, tenantId, productId }, 'invoice created');
+}
+
+/**
+ * HUB-1590 (CR-2): create an internal invoice row for a credit-mode subscription. Skips the
+ * Stripe SDK entirely (this service has no runtime Stripe imports). Writes one audit_log
+ * entry tagged with `event_type='invoice.created.internal'` is NOT used (that enum is
+ * reserved for auth events per HUB-1704); instead the audit row uses `operation='INSERT'`,
+ * `table_name='invoices'`, and `new_values.event='invoice.created.internal'` for the marker.
+ *
+ * Defensive: throws 400 if the plan is not credit-mode. This entry point is for the
+ * credit-mode billing flow only; standard-mode invoices arrive via Stripe webhooks
+ * (handleInvoiceCreated).
+ */
+export async function createInternalInvoice(params: {
+  tenantId: string;
+  productId: string;
+  planId: string;
+  stripeSubscriptionId: string;
+  periodStart: Date;
+  periodEnd: Date;
+  amountCents: number;
+  currency: string;
+}): Promise<InvoiceRow> {
+  const credit = await isCreditMode(params.planId);
+  if (!credit) {
+    throw new AppError(400, 'createInternalInvoice requires a credit-mode plan');
+  }
+
+  const syntheticInvoiceId = `${INTERNAL_INVOICE_ID_PREFIX}${crypto.randomUUID()}`;
+  const pool = getPool();
+
+  const { rows } = await pool.query<InvoiceRow>(
+    `INSERT INTO invoices
+       (tenant_id, product_id, stripe_invoice_id, stripe_subscription_id, status,
+        amount_due, amount_paid, currency, period_start, period_end, external_provider)
+     VALUES ($1, $2, $3, $4, 'paid', $5, $5, $6, $7, $8, 'internal')
+     RETURNING id, tenant_id, product_id, stripe_invoice_id, stripe_subscription_id, status,
+       amount_due, amount_paid, currency, period_start, period_end, invoice_pdf_url,
+       payment_failed_at, external_provider, created_at, updated_at`,
+    [
+      params.tenantId,
+      params.productId,
+      syntheticInvoiceId,
+      params.stripeSubscriptionId,
+      params.amountCents,
+      params.currency,
+      params.periodStart,
+      params.periodEnd,
+    ],
+  );
+
+  const row = rows[0]!;
+
+  await writeAuditEntry({
+    tenant_id: params.tenantId,
+    product_id: params.productId,
+    actor_id: null,
+    actor_type: 'system',
+    operation: 'INSERT',
+    table_name: 'invoices',
+    record_id: row.id,
+    new_values: {
+      event: 'invoice.created.internal',
+      stripe_invoice_id: syntheticInvoiceId,
+      stripe_subscription_id: params.stripeSubscriptionId,
+      amount_due: params.amountCents,
+      currency: params.currency,
+      external_provider: 'internal',
+    },
+  });
+
+  logger.info(
+    {
+      tenantId: params.tenantId,
+      productId: params.productId,
+      stripeInvoiceId: syntheticInvoiceId,
+      event: 'invoice.created.internal',
+    },
+    'CR-2 internal invoice created — Stripe SDK bypassed',
+  );
+
+  return row;
 }
 
 // Webhook processor for invoice.finalized events.
