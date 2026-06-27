@@ -3,6 +3,12 @@
 // Authorized by HUB-1704 (CR-6 under HUB-1556) — audit writes (login.success/failure, logout,
 //   refresh_token.revoked) per HUB-1580 R1 (D-HUB-SCOPE-028). Audit calls use the never-throws
 //   writeAuditEntry contract (HUB-1517) — DB failures are logged but do not break the auth flow.
+// Authorized by HUB-1695 (E-BE-1 S18) — revokePendingSession: anonymous idempotent session revoke
+//   for the FE logout retry-on-reconnect flow (D-HUB-SCOPE-030). sessionId = operator_refresh_tokens.id
+//   (HUB has no separate sessions table — story spec said "sessions"; documented deviation).
+//   Race-safe revoke via `UPDATE ... WHERE id=$1 AND revoked=false` returning rowCount; only writes
+//   audit when the guarded UPDATE actually flipped state, so parallel duplicate calls produce one
+//   audit row, not two.
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -251,4 +257,79 @@ export async function logoutOperator(
       trace_id: audit_context.trace_id ?? null,
     });
   }
+}
+
+export type RevokePendingReason = 'not_found' | 'already_revoked' | 'expired';
+
+export interface RevokePendingResult {
+  revoked: boolean;
+  reason?: RevokePendingReason;
+}
+
+/**
+ * HUB-1695 (E-BE-1 S18) — anonymous idempotent revoke for the FE logout retry-on-reconnect
+ * flow. Caller is unauthenticated by construction (user already clicked logout, local state
+ * cleared, refresh-token cookie cleared); the only identifier they retain is the session id
+ * stashed in sessionStorage before tear-down. Safety: knowing a sessionId allows revoking
+ * that one session — same outcome as the user's intended logout, no privilege escalation.
+ * Rate limit (10/min/IP) at the route layer defends against enumeration. Returns:
+ *   { revoked: true }                                       — guarded UPDATE flipped state
+ *   { revoked: false, reason: 'not_found' }                 — sessionId is unknown
+ *   { revoked: false, reason: 'already_revoked' }           — replay-safe
+ *   { revoked: false, reason: 'expired' }                   — refresh token TTL elapsed
+ */
+export async function revokePendingSession(
+  sessionId: string,
+  audit_context: AuditContext = {},
+): Promise<RevokePendingResult> {
+  const pool = getPool();
+
+  const { rows } = await pool.query<{
+    operator_id: string;
+    revoked: boolean;
+    expires_at: Date;
+  }>(
+    `SELECT operator_id, revoked, expires_at
+       FROM operator_refresh_tokens
+      WHERE id = $1`,
+    [sessionId],
+  );
+
+  if (rows.length === 0) return { revoked: false, reason: 'not_found' };
+
+  const row = rows[0]!;
+  if (row.revoked) return { revoked: false, reason: 'already_revoked' };
+  if (row.expires_at.getTime() < Date.now()) return { revoked: false, reason: 'expired' };
+
+  // Guarded UPDATE: only flips state if currently revoked=false. Parallel duplicate calls
+  // will only see rowCount=1 once, so we only write one audit row.
+  const upd = await pool.query(
+    `UPDATE operator_refresh_tokens
+        SET revoked = true
+      WHERE id = $1 AND revoked = false`,
+    [sessionId],
+  );
+
+  if (upd.rowCount === 0) {
+    // Lost the race — another call already revoked. Treat as already_revoked, no audit.
+    return { revoked: false, reason: 'already_revoked' };
+  }
+
+  await writeAuditEntry({
+    tenant_id: HUB_INTERNAL_TENANT_ID,
+    actor_id: 'system:logout-retry',
+    actor_type: 'system',
+    operation: 'UPDATE',
+    table_name: 'operator_refresh_tokens',
+    record_id: sessionId,
+    event_type: 'auth.session.revoke_pending',
+    new_values: {
+      trigger: 'pending_revoke_retry',
+      operator_id: row.operator_id,
+    },
+    ip_address: audit_context.ip ?? null,
+    trace_id: audit_context.trace_id ?? null,
+  });
+
+  return { revoked: true };
 }

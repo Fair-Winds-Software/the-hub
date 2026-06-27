@@ -3,6 +3,9 @@
 // 'password' for login.failure audit entries that record the attempted email.
 // Authorized by HUB-1598 (E-BE-1 S15) — added 'analytics.pricing_scenario_compute' to the
 // non-CRUD event_type union (compute action, no DB write — mirrors auth audit pattern).
+// Authorized by HUB-1695 (E-BE-1 S18) — added 'auth.session.revoke_pending' for the anonymous
+// idempotent revoke-pending endpoint (system-initiated logout retry, distinct from
+// 'auth.logout' which is user-initiated).
 
 import { getPool } from "../db/pool.js";
 import logger from "../lib/logger.js";
@@ -20,6 +23,7 @@ export type AuditEventType =
   | "auth.login.failure"
   | "auth.logout"
   | "auth.refresh_token.revoked"
+  | "auth.session.revoke_pending"
   | "analytics.pricing_scenario_compute";
 
 export interface AuditEntry {
