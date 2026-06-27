@@ -25,6 +25,7 @@
 // Authorized by HUB-1149 — adminAdvisorRoutes: enhanced portfolio summary + CSV export
 // Authorized by HUB-1146 — adminOperatorConsoleRoutes: pricing overview endpoint
 // Authorized by HUB-1147 — adminOperatorConsoleRoutes: tenant list, plan assignment, discounts, overrides, audit log
+// Authorized by HUB-1594 (E-BE-1 S11, CR-1) — adminIntegrationRoutes: Jira ticket counts + admin recovery
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { operatorRbacHook } from '../hooks/operatorRbac.js';
@@ -41,6 +42,7 @@ import adminComplianceAlertsRoutes from '../routes/admin/complianceAlerts.js';
 import adminComplianceExportRoutes from '../routes/admin/complianceExport.js';
 import adminAdvisorRoutes from '../routes/admin/advisor.js';
 import adminOperatorConsoleRoutes from '../routes/admin/operatorConsole.js';
+import adminIntegrationRoutes from '../routes/admin/integrations.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -62,6 +64,7 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminComplianceExportRoutes);
     await scope.register(adminAdvisorRoutes);
     await scope.register(adminOperatorConsoleRoutes);
+    await scope.register(adminIntegrationRoutes);
   });
 };
 
