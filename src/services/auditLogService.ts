@@ -1,6 +1,8 @@
 // Authorized by HUB-1517 — writeAuditEntry; sensitive field redaction; never-throws contract
 // Authorized by HUB-1704 — event_type field (non-CRUD auth audit events); REDACT_FIELDS includes
 // 'password' for login.failure audit entries that record the attempted email.
+// Authorized by HUB-1598 (E-BE-1 S15) — added 'analytics.pricing_scenario_compute' to the
+// non-CRUD event_type union (compute action, no DB write — mirrors auth audit pattern).
 
 import { getPool } from "../db/pool.js";
 import logger from "../lib/logger.js";
@@ -17,7 +19,8 @@ export type AuditEventType =
   | "auth.login.success"
   | "auth.login.failure"
   | "auth.logout"
-  | "auth.refresh_token.revoked";
+  | "auth.refresh_token.revoked"
+  | "analytics.pricing_scenario_compute";
 
 export interface AuditEntry {
   tenant_id: string;

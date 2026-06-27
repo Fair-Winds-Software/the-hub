@@ -4,13 +4,31 @@
 //   (/api/v1/analytics/...) — the story spec said /api/v1/admin/analytics/... but the actual
 //   file does not use /admin/ for analytics; matching siblings here. R1 cross-Epic contract
 //   (200 + {available:false}) applied for upstream failures.
+// Authorized by HUB-1598 (E-BE-1 S15, CR-5 chain final) — POST /api/v1/analytics/pricing-scenario.
+//   Same path convention deviation as HUB-1596 (no /admin/). Wraps HUB-1597's compute split:
+//   fetchScenarioBaseline (impure) + computeScenario (pure). R1 contract: snake_case body fields
+//   (D-HUB-SCOPE-039) + camelCase response (R2 Amendment 4 deferral). Audit writes ONE row per
+//   successful request unconditionally (FIX#1 per-request SOC 2 trail). 404 PRICING-001 when the
+//   product has no active pricing model (R2 Amendment 2 / D-HUB-SCOPE-040). Audit schema mapping
+//   per HUB-1586: operation='INSERT' + event_type='analytics.pricing_scenario_compute' +
+//   table_name='products' + record_id=productId.
 
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import jwt from 'jsonwebtoken';
-import { getUsageAnalytics, getBillingAnalytics, getPortfolioMargin } from '../services/analyticsService.js';
+import {
+  getUsageAnalytics,
+  getBillingAnalytics,
+  getPortfolioMargin,
+  fetchScenarioBaseline,
+  computeScenario,
+} from '../services/analyticsService.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../lib/logger.js';
+import { getPool } from '../db/pool.js';
+import { writeAuditEntry } from '../services/auditLogService.js';
+
+const HUB_INTERNAL_TENANT_ID = '00000000-0000-0000-0000-0000000000a1';
 
 interface OperatorClaims {
   operator_id: string;
@@ -157,6 +175,115 @@ const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         logger.warn({ err }, 'portfolio-margin: upstream error — degrading');
         return reply.status(200).send({ available: false, reason: 'upstream_unavailable' });
       }
+    },
+  );
+
+  // HUB-1598 (E-BE-1 S15, CR-5 chain final): POST /api/v1/analytics/pricing-scenario.
+  //
+  // Body (snake_case per D-HUB-SCOPE-039):
+  //   product_id (required, uuid string)
+  //   baseline_model_id (optional, uuid string)
+  //   price_change_percent (required, > -100 and ≤ 1000)
+  //   churn_assumption_percent (required, 0..100)
+  //
+  // Response (camelCase per R2 Amendment 4 deferral):
+  //   { baseline, scenario, delta, modelType, disclaimer, baselineSnapshotAt, generatedAt }
+  //
+  // RBAC: super_admin + product_admin (compute is read-only; no tenant scoping — HUB-internal).
+  //
+  // Audit (R1 FIX#1 — one row per request, unconditional on 200; R1 FIX#2 — full detail):
+  //   operation='INSERT', event_type='analytics.pricing_scenario_compute',
+  //   table_name='products', record_id=productId,
+  //   new_values={ productId, baselineModelId, scenarioInput, baselineSnapshotAt, deltaSummary }
+  //   (deltaSummary keeps revenueCents — service contract is cents, not dollars; documented.)
+  //
+  // 404 PRICING-001 (R2 Amendment 2 / D-HUB-SCOPE-040): if product has no active pricing_models
+  //   row, respond {error:'no_pricing_model', code:'PRICING-001'} and write NO audit row.
+  fastify.post(
+    '/api/v1/analytics/pricing-scenario',
+    { preHandler: [requireOperatorJwt] },
+    async (request, reply) => {
+      const op = request.operatorUser!;
+      const body = (request.body ?? {}) as Record<string, unknown>;
+
+      const productId = body['product_id'];
+      const baselineModelId = body['baseline_model_id'] ?? null;
+      const priceChangePercent = body['price_change_percent'];
+      const churnAssumptionPercent = body['churn_assumption_percent'];
+
+      if (typeof productId !== 'string' || productId.length === 0) {
+        throw new AppError(400, 'product_id is required');
+      }
+      if (baselineModelId !== null && typeof baselineModelId !== 'string') {
+        throw new AppError(400, 'baseline_model_id must be a string');
+      }
+      if (typeof priceChangePercent !== 'number' || !Number.isFinite(priceChangePercent)) {
+        throw new AppError(400, 'price_change_percent must be a finite number');
+      }
+      if (priceChangePercent <= -100 || priceChangePercent > 1000) {
+        throw new AppError(400, 'price_change_percent must be > -100 and ≤ 1000');
+      }
+      if (
+        typeof churnAssumptionPercent !== 'number' ||
+        !Number.isFinite(churnAssumptionPercent)
+      ) {
+        throw new AppError(400, 'churn_assumption_percent must be a finite number');
+      }
+      if (churnAssumptionPercent < 0 || churnAssumptionPercent > 100) {
+        throw new AppError(400, 'churn_assumption_percent must be between 0 and 100');
+      }
+
+      // R2 Amendment 2: no active pricing model → 404 PRICING-001, no audit row.
+      const pool = getPool();
+      const modelRes = await pool.query<{ id: string }>(
+        `SELECT id FROM pricing_models WHERE product_id = $1 AND active = true LIMIT 1`,
+        [productId],
+      );
+      if (modelRes.rows.length === 0) {
+        return reply
+          .status(404)
+          .send({ error: 'no_pricing_model', code: 'PRICING-001' });
+      }
+
+      const baseline = await fetchScenarioBaseline(productId);
+      const result = computeScenario(baseline, {
+        priceChangePercent,
+        churnAssumptionPercent,
+      });
+
+      const generatedAt = new Date().toISOString();
+      const response = {
+        baseline: result.baseline,
+        scenario: result.scenario,
+        delta: result.delta,
+        modelType: result.modelType,
+        disclaimer: result.disclaimer,
+        baselineSnapshotAt: result.baseline.snapshotAt,
+        generatedAt,
+      };
+
+      await writeAuditEntry({
+        tenant_id: HUB_INTERNAL_TENANT_ID,
+        product_id: productId,
+        actor_id: op.operator_id,
+        actor_type: 'operator',
+        operation: 'INSERT',
+        table_name: 'products',
+        record_id: productId,
+        event_type: 'analytics.pricing_scenario_compute',
+        new_values: {
+          productId,
+          baselineModelId,
+          scenarioInput: { priceChangePercent, churnAssumptionPercent },
+          baselineSnapshotAt: result.baseline.snapshotAt,
+          deltaSummary: {
+            deltaRevenueCents: result.delta.revenueCents,
+            deltaMarginPctPoints: result.delta.marginPctPoints,
+          },
+        },
+      });
+
+      return reply.status(200).send(response);
     },
   );
 
