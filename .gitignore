@@ -20,3 +20,6 @@ hub_dev_backup_*.dump
 frontend/playwright-report/
 frontend/test-results/
 frontend/.lighthouseci/
+
+# Authorized by HUB-1600 — perf-test JSON artifacts (per-build trend data, CI uploads)
+qa-results/perf/*.json
