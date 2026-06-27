@@ -13,6 +13,7 @@ const REQUIRED_VARS = [
   'HOOK_ENCRYPTION_KEY',
   'JIRA_SERVICE_TOKEN',
   'JIRA_SERVICE_EMAIL',
+  'JIRA_WORKSPACE_URL',
 ] as const;
 
 const VALID_ENV: Record<string, string> = {
@@ -27,6 +28,8 @@ const VALID_ENV: Record<string, string> = {
   // HUB-1592 (CR-1): Atlassian Cloud REST v3 Basic-auth pair per D-HUB-SCOPE-029.
   JIRA_SERVICE_TOKEN: 'test-jira-token-placeholder',
   JIRA_SERVICE_EMAIL: 'ci-test-jira@hub.invalid',
+  // HUB-1593 (CR-1): Atlassian Cloud workspace base URL.
+  JIRA_WORKSPACE_URL: 'https://example.atlassian.net',
 };
 
 describe('validateEnv()', () => {
@@ -120,6 +123,12 @@ describe('validateEnv()', () => {
     process.env.JIRA_SERVICE_EMAIL = 'ci-test-jira@hub.invalid';
     const { validateEnv } = await import('../config/env.js');
     expect(() => validateEnv()).not.toThrow();
+  });
+
+  it('throws listing JIRA_WORKSPACE_URL when it is missing (HUB-1593 CR-1)', async () => {
+    delete process.env.JIRA_WORKSPACE_URL;
+    const { validateEnv } = await import('../config/env.js');
+    expect(() => validateEnv()).toThrow('JIRA_WORKSPACE_URL');
   });
 
   it('throws when LEASE_ENCRYPTION_KEY is too short to be 64 hex chars', async () => {

@@ -4,6 +4,9 @@
 //   add STRIPE_WEBHOOK_SIGNING_SECRET and HOOK_ENCRYPTION_KEY to REQUIRED so missing values fail at startup
 // Authorized by HUB-1592 (E-BE-1 S9, CR-1) — Atlassian Cloud REST v3 Basic auth pair:
 //   JIRA_SERVICE_TOKEN + JIRA_SERVICE_EMAIL. Both required per D-HUB-SCOPE-029.
+// Authorized by HUB-1593 (E-BE-1 S10, CR-1) — JIRA_WORKSPACE_URL: Atlassian Cloud workspace
+//   base URL (e.g., https://fairwindssoftware.atlassian.net). jiraIntegrationService prefixes
+//   every REST v3 path with this. Required at startup.
 import logger from '../lib/logger.js';
 
 const REQUIRED = [
@@ -17,6 +20,7 @@ const REQUIRED = [
   'HOOK_ENCRYPTION_KEY',
   'JIRA_SERVICE_TOKEN',
   'JIRA_SERVICE_EMAIL',
+  'JIRA_WORKSPACE_URL',
 ] as const;
 
 const LEASE_KEY_HEX_RE = /^[0-9a-f]{64}$/i;

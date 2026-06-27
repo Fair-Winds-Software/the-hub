@@ -57,6 +57,7 @@ jobs:
       # per D-HUB-SCOPE-029; real values only present in production env.
       JIRA_SERVICE_TOKEN: test-jira-token-placeholder
       JIRA_SERVICE_EMAIL: ci-test-jira@hub.invalid
+      JIRA_WORKSPACE_URL: https://example.atlassian.net
       BCRYPT_ROUNDS: "1"
       NODE_ENV: test
       RUN_INTEGRATION: "1"
