@@ -1,8 +1,22 @@
 // Authorized by HUB-1520 — analyticsService: getUsageAnalytics + getBillingAnalytics over billing_period_costs
+// Authorized by HUB-1595 (E-BE-1 S12, CR-3) — getPortfolioMargin: per-product revenue + cost
+//   aggregator with portfolio rollup + losingMoney signal. Threshold read from
+//   settings.portfolio_margin_threshold_pct (HUB-1585 seed). R1 FIX: zero-revenue + non-zero
+//   cost = losingMoney=true (was false in original spec — that defeated the indicator).
+//   Comparison is `marginPct <= threshold` per HUB-1585 R1 B1 cascade (break-even flags).
+//
+// Spec note: the story description said to "call existing getBillingAnalytics" for revenue +
+// cost, but that function returns only cost (mislabeled as `mrr_cents` — it's a SUM of
+// total_cost_cents from billing_period_costs). Going direct to `invoices.amount_paid` for
+// revenue and `billing_period_costs.total_cost_cents` for cost is cleaner.
 // Authorized by HUB-47 FVL — M1: add recovery_count to BillingRow per FR-37-02
 
 import { getPool } from '../db/pool.js';
 import { AppError } from '../errors/AppError.js';
+import { getSetting } from './adminSettings.js';
+
+const PORTFOLIO_MARGIN_THRESHOLD_KEY = 'portfolio_margin_threshold_pct';
+const PORTFOLIO_MARGIN_THRESHOLD_DEFAULT = 0.0;
 
 const MAX_RANGE_DAYS = 90;
 const MAX_LIMIT = 200;
@@ -234,4 +248,149 @@ export async function getBillingAnalytics(params: BillingAnalyticsParams): Promi
     next_cursor: null,
     data,
   };
+}
+
+// ── HUB-1595 (CR-3): portfolio margin aggregator ──────────────────────────────
+
+export interface PortfolioMarginParams {
+  from: Date;
+  to: Date;
+}
+
+export interface PortfolioMarginProduct {
+  productId: string;
+  productName: string;
+  revenueCents: number;
+  costCents: number;
+  marginPct: number | null;
+  losingMoney: boolean;
+}
+
+export interface PortfolioMarginRollup {
+  revenueCents: number;
+  costCents: number;
+  marginPct: number | null;
+  losingMoney: boolean;
+}
+
+export interface PortfolioMarginResult {
+  from: string;
+  to: string;
+  generatedAt: string;
+  threshold: number;
+  products: PortfolioMarginProduct[];
+  portfolio: PortfolioMarginRollup;
+}
+
+/**
+ * HUB-1595 (CR-3): per-product revenue + cost aggregator with portfolio rollup. R1 FIX
+ * for zero-revenue states + R1 B1 cascade (HUB-1585) using `<=` so break-even flags. Pure
+ * compute over `invoices` (revenue) + `billing_period_costs` (cost) + `settings`
+ * (threshold).
+ */
+export async function getPortfolioMargin(
+  params: PortfolioMarginParams,
+): Promise<PortfolioMarginResult> {
+  validateRange(params.from, params.to);
+
+  // Resolve threshold up-front; tolerate read failure with the default so the indicator
+  // never errors the endpoint just because Redis or settings is briefly down.
+  let threshold = PORTFOLIO_MARGIN_THRESHOLD_DEFAULT;
+  try {
+    const raw = await getSetting(PORTFOLIO_MARGIN_THRESHOLD_KEY);
+    if (typeof raw === 'number') threshold = raw;
+  } catch {
+    /* swallow — fall back to default */
+  }
+
+  // Three parallel queries: products list + revenue per product + cost per product.
+  // Avoids a LEFT JOIN cartesian; merge in JS keyed by product_id.
+  const pool = getPool();
+  const [productsRes, revenueRes, costRes] = await Promise.all([
+    pool.query<{ id: string; name: string }>(
+      `SELECT id, name FROM products WHERE active = true ORDER BY name ASC`,
+    ),
+    pool.query<{ product_id: string; revenue_cents: string }>(
+      `SELECT product_id, COALESCE(SUM(amount_paid), 0)::bigint AS revenue_cents
+         FROM invoices
+        WHERE period_start >= $1
+          AND period_end <= $2
+        GROUP BY product_id`,
+      [params.from, params.to],
+    ),
+    pool.query<{ product_id: string; cost_cents: string }>(
+      `SELECT product_id, COALESCE(SUM(total_cost_cents), 0)::bigint AS cost_cents
+         FROM billing_period_costs
+        WHERE period_start >= $1
+          AND period_end <= $2
+        GROUP BY product_id`,
+      [params.from, params.to],
+    ),
+  ]);
+
+  const revenueByProduct = new Map<string, number>();
+  for (const row of revenueRes.rows) {
+    revenueByProduct.set(row.product_id, parseInt(row.revenue_cents, 10));
+  }
+  const costByProduct = new Map<string, number>();
+  for (const row of costRes.rows) {
+    costByProduct.set(row.product_id, parseInt(row.cost_cents, 10));
+  }
+
+  const products: PortfolioMarginProduct[] = productsRes.rows.map((p) => {
+    const revenueCents = revenueByProduct.get(p.id) ?? 0;
+    const costCents = costByProduct.get(p.id) ?? 0;
+    const { marginPct, losingMoney } = computeMargin(revenueCents, costCents, threshold);
+    return {
+      productId: p.id,
+      productName: p.name,
+      revenueCents,
+      costCents,
+      marginPct,
+      losingMoney,
+    };
+  });
+
+  const totalRevenue = products.reduce((sum, p) => sum + p.revenueCents, 0);
+  const totalCost = products.reduce((sum, p) => sum + p.costCents, 0);
+  const rollup = computeMargin(totalRevenue, totalCost, threshold);
+  const portfolio: PortfolioMarginRollup = {
+    revenueCents: totalRevenue,
+    costCents: totalCost,
+    marginPct: rollup.marginPct,
+    losingMoney: rollup.losingMoney,
+  };
+
+  return {
+    from: params.from.toISOString(),
+    to: params.to.toISOString(),
+    generatedAt: new Date().toISOString(),
+    threshold,
+    products,
+    portfolio,
+  };
+}
+
+/**
+ * HUB-1595 R1 three-branch margin logic:
+ *   revenue=0, cost=0   → no signal (marginPct null, losingMoney false)
+ *   revenue=0, cost>0   → burn with no revenue (marginPct null, losingMoney TRUE)
+ *   revenue>0           → (revenue-cost)/revenue, compare <= threshold
+ *
+ * Rounds marginPct to 4-decimal precision so downstream display rounding is deterministic.
+ */
+function computeMargin(
+  revenueCents: number,
+  costCents: number,
+  threshold: number,
+): { marginPct: number | null; losingMoney: boolean } {
+  if (revenueCents === 0 && costCents === 0) {
+    return { marginPct: null, losingMoney: false };
+  }
+  if (revenueCents === 0 && costCents > 0) {
+    return { marginPct: null, losingMoney: true };
+  }
+  const raw = (revenueCents - costCents) / revenueCents;
+  const marginPct = Math.round(raw * 10000) / 10000;
+  return { marginPct, losingMoney: marginPct <= threshold };
 }
