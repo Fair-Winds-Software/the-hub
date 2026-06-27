@@ -43,6 +43,7 @@ import adminComplianceExportRoutes from '../routes/admin/complianceExport.js';
 import adminAdvisorRoutes from '../routes/admin/advisor.js';
 import adminOperatorConsoleRoutes from '../routes/admin/operatorConsole.js';
 import adminIntegrationRoutes from '../routes/admin/integrations.js';
+import adminSdkVersionsRoutes from '../routes/admin/sdkVersions.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -65,6 +66,8 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminAdvisorRoutes);
     await scope.register(adminOperatorConsoleRoutes);
     await scope.register(adminIntegrationRoutes);
+    // HUB-1698 (E-BE-1 S21): SDK version analytics endpoints (super_admin-only inline check)
+    await scope.register(adminSdkVersionsRoutes);
   });
 };
 
