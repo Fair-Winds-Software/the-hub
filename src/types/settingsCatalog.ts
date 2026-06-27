@@ -6,13 +6,16 @@
 // Adding a new key: (1) add the seed row to migration 047 (or a new migration), (2) add
 // the catalog entry here, (3) bump the integration test expectation.
 
-export type SettingsValueType = 'number' | 'boolean' | 'string';
+export type SettingsValueType = 'number' | 'boolean' | 'string' | 'json';
+
+/** Default value contract — primitive types or a JSON object/array. */
+export type SettingsCatalogDefault = number | boolean | string | Record<string, unknown> | unknown[];
 
 export interface SettingsCatalogEntry {
   /** Unique key used in `settings.key`. */
   key: string;
-  /** Default value seeded by migration 047. */
-  default: number | boolean | string;
+  /** Default value seeded by migration 047/052/etc. */
+  default: SettingsCatalogDefault;
   /** Type contract; UI editors render the matching control. */
   type: SettingsValueType;
   /** Operator-facing description rendered as inline help in HUB-1664 Settings editor. */
@@ -86,6 +89,19 @@ export const SETTINGS_CATALOG: readonly SettingsCatalogEntry[] = [
       'Customer Health stale-no-activity window in days. Tenants with no usage events in 2x this value are forced red regardless of score.',
     introducedBy: 'HUB-1680',
   },
+  {
+    key: 'jira_project_key_by_product',
+    default: {
+      contenthelm: 'CH',
+      hub: 'HUB',
+      synapz: 'SYNC',
+      launchkit: 'LK',
+    },
+    type: 'json',
+    description:
+      'Mapping from HUB product key → Atlassian project key (e.g., contenthelm → CH). Consumed by HUB-1593 jiraIntegrationService at request time to resolve which Atlassian project to query per HUB-tracked product.',
+    introducedBy: 'HUB-1592',
+  },
 ] as const;
 
 /** Look up a catalog entry by key. Returns undefined for unknown keys. */
@@ -103,5 +119,6 @@ export function assertValueType(
   if (entry.type === 'number') return typeof value === 'number';
   if (entry.type === 'boolean') return typeof value === 'boolean';
   if (entry.type === 'string') return typeof value === 'string';
+  if (entry.type === 'json') return typeof value === 'object' && value !== null;
   return false;
 }

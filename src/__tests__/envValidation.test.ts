@@ -11,6 +11,8 @@ const REQUIRED_VARS = [
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SIGNING_SECRET',
   'HOOK_ENCRYPTION_KEY',
+  'JIRA_SERVICE_TOKEN',
+  'JIRA_SERVICE_EMAIL',
 ] as const;
 
 const VALID_ENV: Record<string, string> = {
@@ -22,6 +24,9 @@ const VALID_ENV: Record<string, string> = {
   STRIPE_SECRET_KEY: 'sk_test_hub_unit_test_key',
   STRIPE_WEBHOOK_SIGNING_SECRET: 'whsec_test_hub_unit_test',
   HOOK_ENCRYPTION_KEY: '00'.repeat(32), // 64 hex chars = 32-byte AES-256 key
+  // HUB-1592 (CR-1): Atlassian Cloud REST v3 Basic-auth pair per D-HUB-SCOPE-029.
+  JIRA_SERVICE_TOKEN: 'test-jira-token-placeholder',
+  JIRA_SERVICE_EMAIL: 'ci-test-jira@hub.invalid',
 };
 
 describe('validateEnv()', () => {
@@ -96,6 +101,25 @@ describe('validateEnv()', () => {
     delete process.env.HOOK_ENCRYPTION_KEY;
     const { validateEnv } = await import('../config/env.js');
     expect(() => validateEnv()).toThrow('HOOK_ENCRYPTION_KEY');
+  });
+
+  it('throws listing JIRA_SERVICE_TOKEN when it is missing (HUB-1592 CR-1)', async () => {
+    delete process.env.JIRA_SERVICE_TOKEN;
+    const { validateEnv } = await import('../config/env.js');
+    expect(() => validateEnv()).toThrow('JIRA_SERVICE_TOKEN');
+  });
+
+  it('throws listing JIRA_SERVICE_EMAIL when it is missing (HUB-1592 CR-1)', async () => {
+    delete process.env.JIRA_SERVICE_EMAIL;
+    const { validateEnv } = await import('../config/env.js');
+    expect(() => validateEnv()).toThrow('JIRA_SERVICE_EMAIL');
+  });
+
+  it('accepts the test placeholder values for the Jira auth pair (no format check per R1 FIX#1)', async () => {
+    process.env.JIRA_SERVICE_TOKEN = 'test-jira-token-placeholder';
+    process.env.JIRA_SERVICE_EMAIL = 'ci-test-jira@hub.invalid';
+    const { validateEnv } = await import('../config/env.js');
+    expect(() => validateEnv()).not.toThrow();
   });
 
   it('throws when LEASE_ENCRYPTION_KEY is too short to be 64 hex chars', async () => {

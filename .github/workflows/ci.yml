@@ -53,6 +53,10 @@ jobs:
       STRIPE_SECRET_KEY: sk_test_ci_placeholder_not_real
       STRIPE_WEBHOOK_SIGNING_SECRET: whsec_ci_test_placeholder_not_real
       HOOK_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      # HUB-1592 (CR-1): Atlassian Cloud REST v3 Basic-auth pair. CI uses placeholders
+      # per D-HUB-SCOPE-029; real values only present in production env.
+      JIRA_SERVICE_TOKEN: test-jira-token-placeholder
+      JIRA_SERVICE_EMAIL: ci-test-jira@hub.invalid
       BCRYPT_ROUNDS: "1"
       NODE_ENV: test
       RUN_INTEGRATION: "1"
