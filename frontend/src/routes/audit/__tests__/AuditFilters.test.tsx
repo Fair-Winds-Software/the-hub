@@ -20,6 +20,7 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { axe } from 'vitest-axe';
+import { MemoryRouter } from 'react-router-dom';
 import { AuditFilters } from '../AuditFilters';
 import { PermissionDeniedError } from '../../../lib/errors';
 
@@ -104,11 +105,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function renderFilters() {
+function renderFilters(initialUrl = '/') {
   const onResults = vi.fn();
   const onLoadingChange = vi.fn();
   const ui = render(
-    <AuditFilters onResults={onResults} onLoadingChange={onLoadingChange} />,
+    <MemoryRouter initialEntries={[initialUrl]}>
+      <AuditFilters onResults={onResults} onLoadingChange={onLoadingChange} />
+    </MemoryRouter>,
   );
   return { ...ui, onResults, onLoadingChange };
 }

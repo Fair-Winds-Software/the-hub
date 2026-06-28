@@ -29,10 +29,14 @@ import {
 } from 'react';
 import { apiClient } from '../../lib/api';
 import { PermissionDeniedError } from '../../lib/errors';
+import {
+  parseFilterState,
+  useAuditUrlSync,
+  type AuditFilterState,
+} from './useAuditUrlSync';
 
 const DEBOUNCE_MS = 300;
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
-const DEFAULT_RANGE_DAYS = 30;
 // HUB-internal sentinel tenant (HUB-1704 convention). The audit-log endpoint requires
 // tenant_id on every request; HUB-internal audit data is scoped to this single tenant.
 const HUB_INTERNAL_TENANT_ID = '00000000-0000-0000-0000-0000000000a1';
@@ -89,35 +93,10 @@ export interface AuditFiltersProps {
   onLoadingChange: (loading: boolean) => void;
 }
 
-interface FilterState {
-  actor: string;
-  action: string;
-  entityType: string;
-  productId: string;
-  from: string;
-  to: string;
-}
-
-function toIsoDateString(d: Date): string {
-  // yyyy-mm-dd for <input type="date">
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function buildDefaultState(): FilterState {
-  const today = new Date();
-  const from = new Date(today.getTime() - DEFAULT_RANGE_DAYS * 24 * 60 * 60 * 1000);
-  return {
-    actor: '',
-    action: '',
-    entityType: '',
-    productId: '',
-    from: toIsoDateString(from),
-    to: toIsoDateString(today),
-  };
-}
+// FilterState shape lifted to useAuditUrlSync (AuditFilterState) so URL is the source
+// of truth. Re-exported here as an alias for any AuditFilters consumer that still
+// imports the old name.
+type FilterState = AuditFilterState;
 
 /** Comma-split + trim + drop empties. */
 function splitCsv(raw: string): string[] {
@@ -145,7 +124,10 @@ export function AuditFilters({
   onResults,
   onLoadingChange,
 }: AuditFiltersProps): React.ReactElement {
-  const [state, setState] = useState<FilterState>(buildDefaultState);
+  // HUB-1616: URL is the source of truth for filter state. AuditFilters reads + writes
+  // through the hook; deep-links (?productId=p1 etc.) land with the filter pre-applied;
+  // setState calls write with replace:true to avoid history bloat across rapid changes.
+  const { state, setState, reset: resetUrl } = useAuditUrlSync();
   const [operators, setOperators] = useState<OperatorListItem[]>([]);
   const [products, setProducts] = useState<PortfolioProductListItem[]>([]);
   const [operatorsForbidden, setOperatorsForbidden] = useState(false);
@@ -256,14 +238,16 @@ export function AuditFilters({
   }, []);
 
   const handleReset = useCallback(() => {
-    const defaults = buildDefaultState();
-    setState(defaults);
+    // Compute defaults synchronously so we can fire the fetch immediately without
+    // waiting for the URL update → re-render cycle.
+    const defaults = parseFilterState(new URLSearchParams());
+    resetUrl();
     if (debounceRef.current !== null) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
     void runFetch(defaults);
-  }, [runFetch]);
+  }, [runFetch, resetUrl]);
 
   // The form element exists to expose a single submit boundary for assistive tech; the
   // submit itself is a no-op because state changes auto-fetch via the debounce effect.
