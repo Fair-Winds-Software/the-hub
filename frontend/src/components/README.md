@@ -233,3 +233,17 @@ const columns: ColumnDef<AuditRow>[] = [
 ## Server-side RBAC invariant (cross-component reminder)
 
 All client-side gates in this module (including `<RBACRoute>` from HUB-1574) are UX-layer only. Server-side endpoints MUST enforce their own RBAC and return 403 for unauthorized requests. Client guards exist to keep the UI honest; they are not a security boundary. See [`../lib/rbac.ts`](../lib/rbac.ts) module-level documentation.
+
+### Per-resource RBAC (HUB-1618)
+
+Some endpoints enforce RBAC at the **resource** level via query params — not just at the route level. The canonical example is the audit log:
+
+- `GET /api/v1/admin/console/audit-log?product_id=<X>` returns **403** when `<X>` is outside the requesting operator's product scope, even though the route itself is open to `product_admin`.
+
+This means an operator can paste a deep-link URL (`/console/audit?product_id=<out-of-scope>`) and reach a page they're authorized to view, but the data fetch will fail. The UI handles this by:
+
+1. Surfacing an inline error with guided next-step text.
+2. Clearing the offending param from local filter state (other filters preserved).
+3. Re-firing the fetch automatically (now without the bad param), so the operator sees their in-scope data instead of an empty screen.
+
+The server remains authoritative — the client never filters by scope on its own.

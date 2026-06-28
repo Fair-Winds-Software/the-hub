@@ -415,6 +415,85 @@ describe('AuditFilters (HUB-1613)', () => {
     });
   });
 
+  describe('HUB-1618 — URL-hack invariant: 403 on productId clears the filter', () => {
+    it('deep-link with out-of-scope product_id → 403 → state.productId cleared + guided error + actor preserved', async () => {
+      vi.useFakeTimers();
+      apiGetMock.mockImplementation((path: string) => {
+        if (path.startsWith('/api/v1/admin/operators')) {
+          return Promise.resolve(OPERATORS_RESPONSE);
+        }
+        if (path.startsWith('/api/v1/admin/portfolio/products')) {
+          return Promise.resolve(PRODUCTS_RESPONSE);
+        }
+        if (path.startsWith('/api/v1/admin/console/audit-log')) {
+          // Honor the URL-hack: 403 only when the requested productId is OOS.
+          const qs = new URLSearchParams(path.split('?')[1] ?? '');
+          if (qs.get('product_id') === 'p-out-of-scope') {
+            return Promise.reject(new PermissionDeniedError(403, 'Forbidden'));
+          }
+          return Promise.resolve(AUDIT_RESPONSE);
+        }
+        return Promise.reject(new Error('unexpected'));
+      });
+
+      const { onResults } = renderFilters(
+        '/?product_id=p-out-of-scope&actor=op-1',
+      );
+      // Drain mount + initial debounce.
+      await act(async () => {
+        vi.runAllTimers();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      // First call surfaced the 403 with the guided message.
+      const firstFail = onResults.mock.calls.find(
+        (c) => c[2] && /access to audit entries/i.test(c[2] as string),
+      );
+      expect(firstFail).toBeDefined();
+      // After productId is cleared, debounce reschedules → second fetch fires
+      // WITHOUT product_id, and the actor filter is preserved.
+      await act(async () => {
+        vi.runAllTimers();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const finalCall = lastAuditCall();
+      expect(finalCall).toBeDefined();
+      expect(finalCall!.search.get('product_id')).toBeNull();
+      expect(finalCall!.search.get('actor')).toBe('op-1');
+    });
+
+    it('403 without productId (RBAC denies the whole endpoint) → general error, no cascade', async () => {
+      vi.useFakeTimers();
+      apiGetMock.mockImplementation((path: string) => {
+        if (path.startsWith('/api/v1/admin/operators')) {
+          return Promise.resolve(OPERATORS_RESPONSE);
+        }
+        if (path.startsWith('/api/v1/admin/portfolio/products')) {
+          return Promise.resolve(PRODUCTS_RESPONSE);
+        }
+        if (path.startsWith('/api/v1/admin/console/audit-log')) {
+          return Promise.reject(new PermissionDeniedError(403, 'Forbidden'));
+        }
+        return Promise.reject(new Error('unexpected'));
+      });
+
+      const { onResults } = renderFilters();
+      await act(async () => {
+        vi.runAllTimers();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const lastFail = onResults.mock.calls.find(
+        (c) => c[0] === null && c[2] !== undefined,
+      );
+      expect(lastFail).toBeDefined();
+      // The guided-product-access message is NOT used here — without a
+      // productId, the URL-hack branch must not trigger.
+      expect(lastFail![2]).not.toMatch(/access to audit entries for that product/i);
+    });
+  });
+
   describe('a11y — axe-core zero violations', () => {
     it('passes axe scan on the filter sidebar', async () => {
       const { container } = renderFilters();

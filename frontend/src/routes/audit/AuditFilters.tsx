@@ -1,3 +1,9 @@
+// Authorized by HUB-1618 (E-FE-12 S8) — URL-hack invariant for productId. When the
+// audit-log endpoint returns 403 for an out-of-scope productId (operator pasted a
+// /console/audit?product_id=<X> link they don't have access to), we clear productId
+// from local state — other filters preserved — and surface a guided inline error.
+// Server is authoritative; we never filter client-side.
+//
 // Authorized by HUB-1613 (E-FE-12 S3) — audit filter controls + 300ms debounced fetch.
 // Owns the 5 filter groups (actor / action / entity_type / product / date range), the
 // debounced submit pipeline, and the live API call to the canonical audit-log endpoint.
@@ -165,14 +171,26 @@ export function AuditFilters({
         );
         onResults(result.data, result.total);
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Failed to load audit log';
-        onResults(null, 0, message);
+        // HUB-1618: URL-hack invariant. A 403 paired with a productId means the
+        // operator deep-linked to a product outside their scope. Clear productId
+        // from filter state — other filters stay — and guide them.
+        if (err instanceof PermissionDeniedError && snapshot.productId) {
+          setState((prev) => ({ ...prev, productId: '' }));
+          onResults(
+            null,
+            0,
+            "You don't have access to audit entries for that product. Clear the product filter or contact a super_admin.",
+          );
+        } else {
+          const message =
+            err instanceof Error ? err.message : 'Failed to load audit log';
+          onResults(null, 0, message);
+        }
       } finally {
         onLoadingChange(false);
       }
     },
-    [onLoadingChange, onResults],
+    [onLoadingChange, onResults, setState],
   );
 
   // ── Schedule a debounced fetch on state change (skip when dates inverted) ───
