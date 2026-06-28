@@ -10,6 +10,11 @@
 // Authorized by HUB-1581 — bootstrap hydrate-from-refresh on App mount (closes HUB-1572 R1
 //   wiring gap: without this, sessionStore.isHydrating stays true forever and ConsoleShell
 //   never advances past the skeleton; surfaced by S12 e2e tests)
+// Authorized by HUB-1612 (E-FE-12 S2) — /console/audit now routes to Audit (real scaffold),
+//   superseding HUB-1578's AuditStub per D-HUB-SCOPE-027. requiredRole broadened from
+//   super_admin to product_admin per HUB-1612 AC#1: both roles may access the audit
+//   explorer (role hierarchy keeps super_admin allowed; product_admin newly granted; the
+//   per-product RBAC scope filter belongs to HUB-1618 S8 on the BE side).
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -21,7 +26,7 @@ import { useSessionStore } from './stores/sessionStore';
 
 const Login = lazy(() => import('./routes/Login'));
 const DashboardStub = lazy(() => import('./routes/DashboardStub'));
-const AuditStub = lazy(() => import('./routes/AuditStub'));
+const Audit = lazy(() => import('./routes/Audit'));
 const SettingsStub = lazy(() => import('./routes/SettingsStub'));
 
 export function App() {
@@ -54,8 +59,8 @@ export function App() {
             <Route
               path="/console/audit"
               element={
-                <GuardedRoute requiredRole="super_admin">
-                  <AuditStub />
+                <GuardedRoute requiredRole="product_admin">
+                  <Audit />
                 </GuardedRoute>
               }
             />
