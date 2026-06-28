@@ -230,6 +230,40 @@ const columns: ColumnDef<AuditRow>[] = [
 - It does NOT handle row selection / checkboxes — that's a column-renderer concern for v0.2 if it surfaces.
 - It does NOT manage the loading/error state — consumer passes booleans/strings; the table renders the appropriate shell.
 
+## `<TabbedDetailView>` — Cross-Epic tabbed-detail pattern
+
+Authoritative source: [`TabbedDetailView.tsx`](./TabbedDetailView.tsx) (authored by HUB-1602).
+
+**Use when** a route renders a detail view with multiple tabbed sub-sections — product detail, settings detail, customer detail. Inherit it instead of re-implementing the tab strip + ARIA pattern.
+
+### What it does
+
+- **Tab strip** with active-tab visual distinction (sailcloth tint + brass bottom-border accent per HUB-1571 tokens).
+- **URL deep-link sync** — active tab id is mirrored to a configurable URL query param (default `tab`). Browser back/forward "just works." Other URL params (e.g. drawer `eventId`) are preserved on tab change.
+- **Per-tab error boundary** — if one tab's content throws, its `errorFallback` renders while the other tabs stay functional. Keyed by tab id so switching to a working tab resets the boundary cleanly.
+- **Lazy render** — only the active tab's content is mounted; inactive tabs are unmounted entirely. Pass `content` as a thunk (`() => ReactNode`) to defer expensive computation until the tab is opened.
+- **WAI-ARIA tabs pattern** — `role="tablist"` / `role="tab"` / `role="tabpanel"`, `aria-selected`, `aria-controls`. Keyboard: ←/→ between tabs (wrap-around), Home/End jump to first/last, Tab moves into the panel.
+
+### Minimum usage
+
+```tsx
+import { TabbedDetailView, type TabDef } from '../components/TabbedDetailView';
+
+const tabs: TabDef[] = [
+  { id: 'overview', label: 'Overview', content: <OverviewTab productId={id} /> },
+  { id: 'plans', label: 'Plans', content: () => <PlansTab productId={id} /> },
+  { id: 'audit', label: 'Audit', content: <AuditTab productId={id} />, badge: <span>3</span> },
+];
+
+<TabbedDetailView tabs={tabs} defaultTab="overview" ariaLabel="Product detail" />
+```
+
+### When NOT to use
+
+- **Non-tab navigation** — for top-level route navigation use React Router, not this primitive.
+- **Persistent cross-tab state** — lazy render unmounts inactive tabs. If a tab's state must survive a switch, lift it into a store (Zustand) above the `<TabbedDetailView>`.
+- **More than ~6 tabs** — the horizontal strip degrades at higher counts; consider a sidebar nav pattern instead.
+
 ## Server-side RBAC invariant (cross-component reminder)
 
 All client-side gates in this module (including `<RBACRoute>` from HUB-1574) are UX-layer only. Server-side endpoints MUST enforce their own RBAC and return 403 for unauthorized requests. Client guards exist to keep the UI honest; they are not a security boundary. See [`../lib/rbac.ts`](../lib/rbac.ts) module-level documentation.
