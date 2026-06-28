@@ -1,0 +1,6 @@
+{
+  "_doc": "HUB-1696 (E-BE-1 S19) — explicit allowlist of `(test|it|describe).(skip|todo)` occurrences in the HUB-1556 CR gate's canonical test files. Adding an entry here is the only way to authorize a skip without failing the gate. Each entry MUST carry a human-readable reason. Code review of any diff that adds or removes entries here is the operator-audit trail (spec AC#4).",
+  "_format": "Key: `<repo-relative-path>:<line-number>`. Value: prose reason.",
+  "src/__tests__/billingMode.integration.test.ts:8": "RUN_INTEGRATION-gated harness (HUB convention since HUB-1519: `(RUN_INTEGRATION ? describe : describe.skip)(...)`). The `describe.skip` is the OFF branch of a runtime conditional, not a silenced test. CI runs with `RUN_INTEGRATION=1` set so the live-DB branch executes.",
+  "src/__tests__/roleRename.integration.test.ts:8": "RUN_INTEGRATION-gated harness (HUB convention since HUB-1519). Same pattern as billingMode above. CI runs with `RUN_INTEGRATION=1`."
+}
