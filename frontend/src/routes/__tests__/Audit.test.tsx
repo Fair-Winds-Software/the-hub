@@ -1,10 +1,23 @@
 // Authorized by HUB-1612 (E-FE-12 S2) — Audit route scaffold tests. Covers structural
 // landmarks (sidebar + main), document.title management, placeholder slots (mount points
 // for HUB-1613 S3 + HUB-1614 S4), and axe-core a11y on the page shell.
-import { afterEach, describe, expect, it } from 'vitest';
+// Updated for HUB-1613 (E-FE-12 S3) — page now wires AuditFilters into the sidebar slot
+// and AuditFilters fires fetches on mount. apiClient is mocked here so the page-level
+// scaffolding test remains fast + deterministic; AuditFilters' own fetch behavior is
+// covered in its dedicated test file.
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { axe } from 'vitest-axe';
 import Audit from '../Audit';
+
+// Stub apiClient at the module boundary — AuditFilters' mount-time fetches go through it.
+// Reject with a never-resolving promise so the page stays in its initial "rows=null"
+// state for the duration of each test (no async leaks, no flake).
+vi.mock('../../lib/api', () => ({
+  apiClient: {
+    get: vi.fn().mockReturnValue(new Promise(() => {})),
+  },
+}));
 
 afterEach(() => {
   cleanup();
@@ -34,12 +47,13 @@ describe('Audit (HUB-1612 — /console/audit page scaffold)', () => {
       ).toBeInTheDocument();
     });
 
-    it('placeholder content present in both slots (mount points for S3 + S4)', () => {
+    it('sidebar embeds the AuditFilters form; main shows S4 placeholder until rows arrive', () => {
       render(<Audit />);
-      // Sidebar slot — filter placeholder
-      expect(screen.getByText(/Filters/)).toBeInTheDocument();
-      expect(screen.getByText(/HUB-1613/)).toBeInTheDocument();
-      // Main slot — table placeholder
+      // Sidebar slot — AuditFilters form rendered (HUB-1613)
+      expect(
+        screen.getByRole('form', { name: 'Audit log filters' }),
+      ).toBeInTheDocument();
+      // Main slot — S4 placeholder (rows=null on mount; apiClient mocked to never resolve)
       expect(screen.getByText(/HUB-1614/)).toBeInTheDocument();
     });
   });
