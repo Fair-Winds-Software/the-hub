@@ -152,6 +152,84 @@ URL `?audit=1` opens the drawer on mount; closing removes the param; browser bac
 - It does NOT auto-open from the URL when `urlParam` is set on mount — the consumer reads the same param and sets `open=true`. The component handles the SYNC (open → URL, URL removed → onClose), not the initial read.
 - It does NOT fetch data — consumers pass already-loaded content via `children`.
 
+## `<DataTable<T>>` — Canonical table pattern (generic + searchable + sortable + paginated)
+
+Authoritative source: [`DataTable.tsx`](./DataTable.tsx) (authored by HUB-1601).
+
+**Use when:** any list view needs tabular rendering with search / sort / pagination. Generic typing means rows are typed per-screen; nothing is downcast. Zero external table dependencies (no react-table, no ag-grid) — pure React + Tailwind tokens.
+
+- Audit Log result table (HUB-1614 / E-FE-12)
+- SDK Version Distribution + breakdown (HUB-1560 / E-FE-10)
+- Plan Advisor recommendation list (HUB-1561 / E-FE-4)
+- Settings tables (HUB-1564 / E-FE-6)
+- Pricing Scenario history / outcome list (HUB-1565 / E-FE-11)
+- Customer Health roster (HUB-1567 / E-FE-9)
+- Failed Payment Tracker queue (HUB-1568 / E-FE-13)
+
+**Required for any list view in HUB-1546 v0.1.** Re-implementing the pattern in a downstream Epic is an automatic R1 BLOCK.
+
+### Minimum usage
+
+```tsx
+import { DataTable, type ColumnDef } from '../components/DataTable';
+
+interface AuditRow { id: string; actor: string; action: string; createdAt: string; }
+
+const columns: ColumnDef<AuditRow>[] = [
+  {
+    key: 'createdAt',
+    header: 'Timestamp',
+    render: (r) => new Date(r.createdAt).toLocaleString(),
+    sortable: true,
+    sortValue: (r) => new Date(r.createdAt),
+  },
+  { key: 'actor', header: 'Actor', render: (r) => r.actor, searchValue: (r) => r.actor },
+  { key: 'action', header: 'Action', render: (r) => r.action, searchValue: (r) => r.action },
+];
+
+<DataTable<AuditRow>
+  columns={columns}
+  rows={rows}
+  rowKey={(r) => r.id}
+  ariaLabel="Audit log entries"
+  searchableColumns={['actor', 'action']}
+  defaultSort={{ key: 'createdAt', direction: 'desc' }}
+  loading={loading}
+  error={error}
+  emptyState={<span>No audit entries match your filters.</span>}
+  onRowClick={(row) => setSelectedRow(row)}
+/>
+```
+
+### Behavior contract
+
+| State / Action | Behavior |
+|---|---|
+| Search input | Case-insensitive substring filter across `searchableColumns` via each col's `searchValue`. Hidden when `searchableColumns` is omitted or empty. |
+| Click sortable header | Cycles `asc → desc → none`. `aria-sort` reflects current state. Sort uses `sortValue` extractor; columns without `sortValue` are not sortable. |
+| Pagination | Client-side; default `pageSize=50`. Prev / Next disable at boundaries. Page index resets to 0 when filter / sort / row count changes invalidate the current page. |
+| `loading={true}` | Renders 5 skeleton rows; real rows hidden; pagination hidden. |
+| `error="…"` | Renders `role="alert"` with the message; rows + pagination hidden. |
+| Empty (0 filtered rows) | Renders `emptyState` prop or default `"No matching entries."`. |
+| Row click | When `onRowClick` is provided, rows become focusable (`tabIndex=0`) + clickable + keyboard-activatable (Enter / Space). When omitted, rows are inert. |
+
+### A11y guarantees
+
+- Semantic `<table>` + `<thead>` + `<tbody>` with `aria-label` on the table itself
+- Column headers `role="columnheader"` (implicit on `<th>`) with `aria-sort` on sortable columns
+- Sortable headers are `<button>` elements (keyboard-activatable)
+- Search input has computed `aria-label` (e.g., `"Search Audit log entries"`)
+- Pagination controls labeled `"Previous page"` / `"Next page"`; page status announced via `aria-live="polite"`
+- Skeleton rows respect `prefers-reduced-motion: reduce` (animation suppressed)
+- WCAG 2.1 AA verified via `vitest-axe` (zero violations in populated + empty states)
+
+### What `<DataTable>` does NOT do
+
+- It does NOT fetch data — consumer passes `rows` already loaded.
+- It does NOT do server-side pagination — `pageSize` paginates the rows you pass in. For >1000-row tables, consumers need a controlled-mode variant + virtualization (out of scope at v0.1; flag for downstream Epic).
+- It does NOT handle row selection / checkboxes — that's a column-renderer concern for v0.2 if it surfaces.
+- It does NOT manage the loading/error state — consumer passes booleans/strings; the table renders the appropriate shell.
+
 ## Server-side RBAC invariant (cross-component reminder)
 
 All client-side gates in this module (including `<RBACRoute>` from HUB-1574) are UX-layer only. Server-side endpoints MUST enforce their own RBAC and return 403 for unauthorized requests. Client guards exist to keep the UI honest; they are not a security boundary. See [`../lib/rbac.ts`](../lib/rbac.ts) module-level documentation.
