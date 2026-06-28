@@ -47,14 +47,18 @@ describe('Audit (HUB-1612 — /console/audit page scaffold)', () => {
       ).toBeInTheDocument();
     });
 
-    it('sidebar embeds the AuditFilters form; main shows S4 placeholder until rows arrive', () => {
+    it('sidebar embeds the AuditFilters form; main embeds the AuditResultTable', () => {
       render(<Audit />);
       // Sidebar slot — AuditFilters form rendered (HUB-1613)
       expect(
         screen.getByRole('form', { name: 'Audit log filters' }),
       ).toBeInTheDocument();
-      // Main slot — S4 placeholder (rows=null on mount; apiClient mocked to never resolve)
-      expect(screen.getByText(/HUB-1614/)).toBeInTheDocument();
+      // Main slot — AuditResultTable rendered (HUB-1614); the inner DataTable surfaces a
+      // <table> with aria-label="Audit log entries".
+      expect(screen.getByTestId('audit-result-table')).toBeInTheDocument();
+      expect(
+        screen.getByRole('table', { name: 'Audit log entries' }),
+      ).toBeInTheDocument();
     });
   });
 
