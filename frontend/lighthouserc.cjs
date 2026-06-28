@@ -11,6 +11,14 @@
 //     the session. Without a real BE in the audit pipeline, any dashboard measurement
 //     would actually measure the redirect-to-login (auth guard kicks in). Logged as
 //     D-HUB-SCOPE-051. Real dashboard CWV measurement is HUB-1562's DoD per R1 D-HUB-SCOPE-027.
+//   - /console/audit (HUB-1619)   — same in-memory-session constraint as /console/dashboard.
+//                                    Per-component a11y is gated via the vitest-axe scans in
+//                                    the test files for HUB-1611/13/14/15/19; drawer-open
+//                                    state is covered by Audit.nfr.test.tsx. Filter→result
+//                                    perf is asserted synthetically in the same NFR test
+//                                    file (debounce + microtask budget < 1000ms). Live
+//                                    Lighthouse measurement of /console/audit moves to
+//                                    Stage 4 alongside the dashboard.
 //
 // Targets (preset: desktop): LCP ≤ 2.5s, CLS ≤ 0.1, TBT ≤ 200ms, A11y score ≥ 0.95.
 
