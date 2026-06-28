@@ -7,6 +7,10 @@
 // 2. The error banner above the table when the API call failed (AC#7).
 // 3. The empty-state spec text passed down to DataTable's emptyState slot (AC#6).
 //
+// Authorized by HUB-1617 (E-FE-12 S7) — adds the "Export CSV" button in the summary
+// row. Bounded to the current page; disabled with tooltip when there's nothing to
+// export. Generation is client-side via exportAuditCsv (no new BE endpoint at v0.1).
+//
 // Spec deviation (documented):
 // - AC#7 "Retry" affordance: AuditFilters owns the fetch lifecycle (HUB-1613), and lifting
 //   an imperative re-fetch handle would require refactoring it. v0.1: the error banner
@@ -16,9 +20,10 @@
 //
 // Row click is wired here via the optional onRowClick prop; HUB-1615 (S5) provides the
 // side-drawer consumer at the Audit page level.
-import { useMemo, type ReactNode } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import { DataTable, type ColumnDef } from '../../components/DataTable';
 import type { AuditRow } from './AuditFilters';
+import { exportAuditCsv } from './exportAuditCsv';
 
 const PAGE_SIZE = 50;
 const DETAIL_PREVIEW_MAX = 80;
@@ -107,6 +112,12 @@ export function AuditResultTable({
   // shaped lists between renders.
   const tableRows = useMemo<AuditRow[]>(() => rows ?? [], [rows]);
 
+  const canExport = tableRows.length > 0 && !loading && error === null;
+  const handleExport = useCallback(() => {
+    if (!canExport) return;
+    exportAuditCsv(tableRows);
+  }, [canExport, tableRows]);
+
   // "Showing N entries" line above the table (AC#4). When rows haven't loaded yet
   // (rows === null and no error), show a neutral status; while loading, defer to
   // DataTable's skeleton.
@@ -143,7 +154,20 @@ export function AuditResultTable({
           </p>
         </div>
       )}
-      <div className="text-sm font-body text-deep-charcoal/80">{summary}</div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-body text-deep-charcoal/80">{summary}</div>
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={!canExport}
+          aria-label="Export current page as CSV"
+          title={canExport ? undefined : 'No data to export'}
+          data-testid="audit-export-csv"
+          className="font-body inline-flex items-center gap-1 rounded-md border border-primary-navy/20 bg-white px-3 py-1.5 text-sm text-primary-navy shadow-sm hover:bg-primary-navy/5 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Export CSV
+        </button>
+      </div>
       <DataTable<AuditRow>
         columns={COLUMNS}
         rows={tableRows}

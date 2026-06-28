@@ -197,6 +197,58 @@ describe('AuditResultTable (HUB-1614)', () => {
     });
   });
 
+  describe('HUB-1617 — Export CSV button wiring', () => {
+    it('renders the Export CSV button enabled when rows are present', () => {
+      render(
+        <AuditResultTable rows={SAMPLE_ROWS} total={3} loading={false} error={null} />,
+      );
+      const btn = screen.getByTestId('audit-export-csv');
+      expect(btn).toHaveAttribute('aria-label', 'Export current page as CSV');
+      expect(btn).not.toBeDisabled();
+    });
+
+    it('disables the button with "No data to export" tooltip when rows are empty (AC#6)', () => {
+      render(
+        <AuditResultTable rows={[]} total={0} loading={false} error={null} />,
+      );
+      const btn = screen.getByTestId('audit-export-csv');
+      expect(btn).toBeDisabled();
+      expect(btn).toHaveAttribute('title', 'No data to export');
+    });
+
+    it('disables the button while loading', () => {
+      render(<AuditResultTable rows={null} total={0} loading={true} error={null} />);
+      expect(screen.getByTestId('audit-export-csv')).toBeDisabled();
+    });
+
+    it('disables the button when an error is present', () => {
+      render(
+        <AuditResultTable rows={SAMPLE_ROWS} total={3} loading={false} error="boom" />,
+      );
+      expect(screen.getByTestId('audit-export-csv')).toBeDisabled();
+    });
+
+    it('clicking the button triggers a download (Blob URL created)', () => {
+      const createObjectURL = vi.fn(() => 'blob:mock');
+      const revokeObjectURL = vi.fn();
+      (URL as unknown as { createObjectURL: typeof createObjectURL }).createObjectURL =
+        createObjectURL;
+      (URL as unknown as { revokeObjectURL: typeof revokeObjectURL }).revokeObjectURL =
+        revokeObjectURL;
+      const clickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+      render(
+        <AuditResultTable rows={SAMPLE_ROWS} total={3} loading={false} error={null} />,
+      );
+      fireEvent.click(screen.getByTestId('audit-export-csv'));
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock');
+      clickSpy.mockRestore();
+    });
+  });
+
   describe('a11y — axe-core zero violations', () => {
     it('passes axe-core scan with rows', async () => {
       const { container } = render(
