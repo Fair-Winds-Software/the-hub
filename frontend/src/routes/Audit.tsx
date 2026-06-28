@@ -8,12 +8,16 @@
 // Authorized by HUB-1614 (E-FE-12 S4) — main slot now renders AuditResultTable (consumes
 // HUB-1601 DataTable); replaces the v0.1 scaffolding preview.
 //
+// Authorized by HUB-1615 (E-FE-12 S5) — row click opens AuditRowDrawer (HUB-1611
+// <SideDrawer>); page owns the selectedRow state.
+//
 // RBAC: `requiredRole="product_admin"` per HUB-1612 AC#1 — role hierarchy means super_admin
 // still reaches the route; product_admin newly granted access. Per-product RBAC scope
 // filtering belongs to HUB-1618 (S8) on the BE side.
 import { useCallback, useEffect, useState } from 'react';
 import { AuditFilters, type AuditRow } from './audit/AuditFilters';
 import { AuditResultTable } from './audit/AuditResultTable';
+import { AuditRowDrawer } from './audit/AuditRowDrawer';
 
 const PAGE_TITLE = 'Audit Log | HUB Console';
 
@@ -22,6 +26,9 @@ export default function Audit(): React.ReactElement {
   const [rows, setRows] = useState<AuditRow[] | null>(null);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // HUB-1615: row selected for the detail drawer. Reset to null when filter results
+  // change so the drawer doesn't outlive its referenced row across re-fetches.
+  const [selectedRow, setSelectedRow] = useState<AuditRow | null>(null);
 
   useEffect(() => {
     const prev = document.title;
@@ -36,9 +43,20 @@ export default function Audit(): React.ReactElement {
       setRows(data);
       setTotal(totalCount);
       setError(errMsg ?? null);
+      // HUB-1615: close any open drawer when results change — the referenced row may no
+      // longer exist in the new result set.
+      setSelectedRow(null);
     },
     [],
   );
+
+  const handleRowClick = useCallback((row: AuditRow) => {
+    setSelectedRow(row);
+  }, []);
+
+  const handleDrawerClose = useCallback(() => {
+    setSelectedRow(null);
+  }, []);
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 h-full">
@@ -56,8 +74,10 @@ export default function Audit(): React.ReactElement {
           total={total}
           loading={loading}
           error={error}
+          onRowClick={handleRowClick}
         />
       </main>
+      <AuditRowDrawer row={selectedRow} onClose={handleDrawerClose} />
     </div>
   );
 }

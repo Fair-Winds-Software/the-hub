@@ -8,6 +8,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { axe } from 'vitest-axe';
+import { MemoryRouter } from 'react-router-dom';
 import Audit from '../Audit';
 
 // Stub apiClient at the module boundary — AuditFilters' mount-time fetches go through it.
@@ -26,7 +27,11 @@ afterEach(() => {
 describe('Audit (HUB-1612 — /console/audit page scaffold)', () => {
   describe('AC#2/3/4 — 2-col layout with placeholder slots', () => {
     it('renders sidebar landmark + main landmark with placeholder slots', () => {
-      render(<Audit />);
+      render(
+        <MemoryRouter>
+          <Audit />
+        </MemoryRouter>,
+      );
 
       // Sidebar landmark with the required aria-label.
       const sidebar = screen.getByRole('complementary', { name: 'Audit filters' });
@@ -41,14 +46,22 @@ describe('Audit (HUB-1612 — /console/audit page scaffold)', () => {
     });
 
     it('renders an h1 page heading "Audit Log"', () => {
-      render(<Audit />);
+      render(
+        <MemoryRouter>
+          <Audit />
+        </MemoryRouter>,
+      );
       expect(
         screen.getByRole('heading', { level: 1, name: 'Audit Log' }),
       ).toBeInTheDocument();
     });
 
     it('sidebar embeds the AuditFilters form; main embeds the AuditResultTable', () => {
-      render(<Audit />);
+      render(
+        <MemoryRouter>
+          <Audit />
+        </MemoryRouter>,
+      );
       // Sidebar slot — AuditFilters form rendered (HUB-1613)
       expect(
         screen.getByRole('form', { name: 'Audit log filters' }),
@@ -67,7 +80,11 @@ describe('Audit (HUB-1612 — /console/audit page scaffold)', () => {
       const original = document.title;
       try {
         document.title = 'Some other title';
-        render(<Audit />);
+        render(
+        <MemoryRouter>
+          <Audit />
+        </MemoryRouter>,
+      );
         expect(document.title).toBe('Audit Log | HUB Console');
       } finally {
         document.title = original;
@@ -78,7 +95,7 @@ describe('Audit (HUB-1612 — /console/audit page scaffold)', () => {
       const original = document.title;
       try {
         document.title = 'Before audit';
-        const { unmount } = render(<Audit />);
+        const { unmount } = render(<MemoryRouter><Audit /></MemoryRouter>);
         expect(document.title).toBe('Audit Log | HUB Console');
         unmount();
         expect(document.title).toBe('Before audit');
@@ -90,14 +107,18 @@ describe('Audit (HUB-1612 — /console/audit page scaffold)', () => {
 
   describe('AC#8 — responsive layout (Tailwind utility classes)', () => {
     it('container uses flex-col by default and lg:flex-row at ≥1024px', () => {
-      const { container } = render(<Audit />);
+      const { container } = render(<MemoryRouter><Audit /></MemoryRouter>);
       const root = container.firstElementChild as HTMLElement;
       expect(root.className).toMatch(/flex-col/);
       expect(root.className).toMatch(/lg:flex-row/);
     });
 
     it('sidebar has fixed 280px width at ≥1024px', () => {
-      render(<Audit />);
+      render(
+        <MemoryRouter>
+          <Audit />
+        </MemoryRouter>,
+      );
       const sidebar = screen.getByTestId('audit-filter-sidebar');
       // Tailwind lg:w-[280px] arbitrary-value class — string check is enough; jsdom does
       // not resolve viewport-conditional CSS.
@@ -107,7 +128,7 @@ describe('Audit (HUB-1612 — /console/audit page scaffold)', () => {
 
   describe('a11y — axe-core zero violations', () => {
     it('passes axe-core scan on the page shell', async () => {
-      const { container } = render(<Audit />);
+      const { container } = render(<MemoryRouter><Audit /></MemoryRouter>);
       const results = await axe(container);
       expect(results.violations).toEqual([]);
     });
