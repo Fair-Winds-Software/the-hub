@@ -15,6 +15,9 @@
 //   super_admin to product_admin per HUB-1612 AC#1: both roles may access the audit
 //   explorer (role hierarchy keeps super_admin allowed; product_admin newly granted; the
 //   per-product RBAC scope filter belongs to HUB-1618 S8 on the BE side).
+// Authorized by HUB-1603 (E-FE-3 S3) — /console/products route registered. Both
+//   product_admin and super_admin may access (RBAC scope-specific filtering is BE-side
+//   per HUB-1609 S9 + HUB-1700 server enforcement).
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -27,6 +30,7 @@ import { useSessionStore } from './stores/sessionStore';
 const Login = lazy(() => import('./routes/Login'));
 const DashboardStub = lazy(() => import('./routes/DashboardStub'));
 const Audit = lazy(() => import('./routes/Audit'));
+const Products = lazy(() => import('./routes/Products'));
 const SettingsStub = lazy(() => import('./routes/SettingsStub'));
 
 export function App() {
@@ -61,6 +65,14 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <Audit />
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/products"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <Products />
                 </GuardedRoute>
               }
             />
