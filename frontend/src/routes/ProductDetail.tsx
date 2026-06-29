@@ -23,6 +23,7 @@ import { TabbedDetailView, type TabDef } from '../components/TabbedDetailView';
 import { apiClient } from '../lib/api';
 import type { PortfolioProduct } from './Products';
 import { OverviewTab } from './productDetailTabs/OverviewTab';
+import { PlansTab } from './productDetailTabs/PlansTab';
 
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
 const PAGE_TITLE_PREFIX = 'Product';
@@ -176,7 +177,7 @@ export default function ProductDetail(): React.ReactElement {
       {
         id: 'plans',
         label: 'Plans',
-        content: <PlaceholderTab label="Plans" story="HUB-1606 (S6)" />,
+        content: <PlansTab productId={productId} />,
       },
       {
         id: 'pricing',
