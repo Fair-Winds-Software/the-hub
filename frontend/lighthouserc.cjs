@@ -26,6 +26,13 @@
 //                                    Products.nfr.test.tsx (50-row render < 500ms per
 //                                    AC-E2). Live Lighthouse measurement for the products
 //                                    routes moves to Stage 4 alongside the dashboard.
+//   - /console/compliance + /console/compliance/:productId (HUB-1629) — same constraint.
+//                                    Per-component a11y is gated via vitest-axe scans in
+//                                    Compliance + ComplianceDetail + MetricTile +
+//                                    TimelineChart + the four section test files; drill-in
+//                                    perf (<1.5s) is asserted synthetically in
+//                                    Compliance.nfr.test.tsx. Live Lighthouse measurement
+//                                    for the compliance routes moves to Stage 4.
 //
 // Targets (preset: desktop): LCP ≤ 2.5s, CLS ≤ 0.1, TBT ≤ 200ms, A11y score ≥ 0.95.
 
