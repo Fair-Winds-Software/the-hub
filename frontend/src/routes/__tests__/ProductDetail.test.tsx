@@ -130,7 +130,11 @@ describe('ProductDetail (HUB-1604)', () => {
           'true',
         );
       });
-      expect(screen.getByText(/Audit tab content lands in HUB-1607/)).toBeInTheDocument();
+      // AuditTab (HUB-1607) renders inside the tab panel. The audit-log fetch
+      // here will reject (mock only handles /portfolio/products); we just
+      // verify the AuditTab shell is in the DOM, which is sufficient proof
+      // of the deep-link → tab-content wiring.
+      expect(screen.getByTestId('audit-tab')).toBeInTheDocument();
     });
   });
 

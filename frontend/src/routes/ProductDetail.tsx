@@ -24,6 +24,7 @@ import { apiClient } from '../lib/api';
 import type { PortfolioProduct } from './Products';
 import { OverviewTab } from './productDetailTabs/OverviewTab';
 import { PlansTab } from './productDetailTabs/PlansTab';
+import { AuditTab } from './productDetailTabs/AuditTab';
 
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
 const PAGE_TITLE_PREFIX = 'Product';
@@ -187,7 +188,14 @@ export default function ProductDetail(): React.ReactElement {
       {
         id: 'audit',
         label: 'Audit',
-        content: <PlaceholderTab label="Audit" story="HUB-1607 (S7)" />,
+        content: readyProduct ? (
+          <AuditTab
+            productId={readyProduct.productId}
+            tenantId={readyProduct.tenantId}
+          />
+        ) : (
+          <PlaceholderTab label="Audit" story="HUB-1607 (S7)" />
+        ),
       },
       {
         id: 'notifications',
