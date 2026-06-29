@@ -268,6 +268,17 @@ const tabs: TabDef[] = [
 
 All client-side gates in this module (including `<RBACRoute>` from HUB-1574) are UX-layer only. Server-side endpoints MUST enforce their own RBAC and return 403 for unauthorized requests. Client guards exist to keep the UI honest; they are not a security boundary. See [`../lib/rbac.ts`](../lib/rbac.ts) module-level documentation.
 
+### Full-page denial UX (`<AccessDeniedPage>`, HUB-1609)
+
+When a server-side RBAC check returns 403, surface the canonical [`<AccessDeniedPage>`](./AccessDeniedPage.tsx) instead of a generic error banner. The page is **distinct from a 404**: it tells the operator "you can't see this" rather than "this doesn't exist," and supplies escalation copy ("ask Sammy to grant access").
+
+Used by:
+- `/console/products` (HUB-1603) — when the portfolio fetch returns 403 (operator lacks any product scope)
+- `/console/products/:productId` (HUB-1604) — when the deep-link target is outside the operator's scope (URL-hack scenario per HUB-1609 AC#2)
+- Future surfaces with per-resource RBAC: invoke when the relevant fetch throws `PermissionDeniedError`
+
+The page focuses its back-link on mount so SR users hear the denial announcement via `role="alert"` and have a keyboard target one Tab away.
+
 ### Per-resource RBAC (HUB-1618)
 
 Some endpoints enforce RBAC at the **resource** level via query params — not just at the route level. The canonical example is the audit log:

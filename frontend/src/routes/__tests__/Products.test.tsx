@@ -13,6 +13,7 @@ import {
 import { axe } from 'vitest-axe';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Products from '../Products';
+import { PermissionDeniedError } from '../../lib/errors';
 
 const apiGetMock = vi.fn();
 vi.mock('../../lib/api', () => ({
@@ -295,6 +296,31 @@ describe('Products (HUB-1603)', () => {
       await waitFor(() => {
         expect(screen.getByTestId('ticket-unavailable-p-1')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('HUB-1609 — denial UX on 403', () => {
+    it('PermissionDeniedError from the portfolio fetch renders <AccessDeniedPage>', async () => {
+      const errSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      apiGetMock.mockImplementation((path: string) => {
+        if (path.startsWith('/api/v1/admin/portfolio/products')) {
+          return Promise.reject(new PermissionDeniedError(403, 'Forbidden'));
+        }
+        return Promise.reject(new Error(`unexpected: ${path}`));
+      });
+      renderProducts();
+      await waitFor(() => {
+        expect(screen.getByTestId('access-denied-page')).toBeInTheDocument();
+      });
+      // Denial UX replaces the error banner — operator gets full-page treatment.
+      expect(screen.queryByTestId('products-error-banner')).toBeNull();
+      // Back link points at the dashboard (sensible escalation point from the list).
+      expect(
+        screen.getByTestId('access-denied-back-link'),
+      ).toHaveAttribute('href', '/console/dashboard');
+      errSpy.mockRestore();
     });
   });
 

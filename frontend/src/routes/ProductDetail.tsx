@@ -1,3 +1,10 @@
+// Authorized by HUB-1609 (E-FE-3 S9) — URL-hack scenario: deep-link to a productId
+// outside the operator's scope. The portfolio list endpoint enforces RBAC server-
+// side (HUB-1700), so an out-of-scope productId simply isn't in the returned list
+// → renders <AccessDeniedPage> rather than the generic "Product not found." This
+// is intentional UX divergence from a true 404: the operator gets explicit denial
+// copy + escalation guidance.
+//
 // Authorized by HUB-1604 (E-FE-3 S4) — /console/products/:productId detail scaffold.
 // Renders a product header (name + key + status badge) above a HUB-1602
 // <TabbedDetailView> with five tabs: Overview / Plans / Pricing Model / Audit /
@@ -20,7 +27,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { TabbedDetailView, type TabDef } from '../components/TabbedDetailView';
+import { AccessDeniedPage } from '../components/AccessDeniedPage';
 import { apiClient } from '../lib/api';
+import { PermissionDeniedError } from '../lib/errors';
 import type { PortfolioProduct } from './Products';
 import { OverviewTab } from './productDetailTabs/OverviewTab';
 import { PlansTab } from './productDetailTabs/PlansTab';
@@ -39,6 +48,7 @@ type FetchState =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
   | { kind: 'not-found' }
+  | { kind: 'denied' }
   | { kind: 'ready'; product: PortfolioProduct };
 
 function StatusBadge({ status }: { status: string }): React.ReactElement {
@@ -145,6 +155,14 @@ export default function ProductDetail(): React.ReactElement {
       })
       .catch((err) => {
         if (cancelled) return;
+        // HUB-1609: 403 from the portfolio endpoint is the URL-hack outcome —
+        // render the canonical denial UX, distinct from the generic error
+        // banner (which suggests retry) and from not-found (which suggests
+        // the productId is a typo).
+        if (err instanceof PermissionDeniedError) {
+          setState({ kind: 'denied' });
+          return;
+        }
         const message =
           err instanceof Error ? err.message : 'Failed to load product';
         setState({ kind: 'error', message });
@@ -275,6 +293,22 @@ export default function ProductDetail(): React.ReactElement {
             Back to products
           </Link>
         </div>
+      </div>
+    );
+  }
+
+  if (state.kind === 'denied') {
+    return (
+      <div
+        id="main-content"
+        data-testid="product-detail-page"
+        className="flex flex-col gap-4"
+      >
+        <AccessDeniedPage
+          resourceLabel="this product"
+          backTo="/console/products"
+          backLabel="Back to products"
+        />
       </div>
     );
   }

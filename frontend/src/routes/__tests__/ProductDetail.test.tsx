@@ -12,6 +12,7 @@ import {
 import { axe } from 'vitest-axe';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import ProductDetail from '../ProductDetail';
+import { PermissionDeniedError } from '../../lib/errors';
 
 const apiGetMock = vi.fn();
 vi.mock('../../lib/api', () => ({
@@ -183,6 +184,38 @@ describe('ProductDetail (HUB-1604)', () => {
       } finally {
         document.title = original;
       }
+    });
+  });
+
+  describe('HUB-1609 — denial UX on 403 (URL-hack)', () => {
+    it('PermissionDeniedError on portfolio fetch renders <AccessDeniedPage> (distinct from not-found)', async () => {
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      apiGetMock.mockImplementation(() =>
+        Promise.reject(new PermissionDeniedError(403, 'Forbidden')),
+      );
+      renderDetail('p-out-of-scope');
+      await waitFor(() => {
+        expect(screen.getByTestId('access-denied-page')).toBeInTheDocument();
+      });
+      // Denial replaces both error banner and not-found.
+      expect(screen.queryByTestId('product-detail-error')).toBeNull();
+      expect(screen.queryByTestId('product-not-found')).toBeNull();
+      // Back link points to the products list.
+      expect(screen.getByTestId('access-denied-back-link')).toHaveAttribute(
+        'href',
+        '/console/products',
+      );
+      errSpy.mockRestore();
+    });
+
+    it('not-found still renders for an in-portfolio but unknown productId (NOT denial)', async () => {
+      // Default mock returns the portfolio with PRODUCT p-1 only.
+      renderDetail('p-does-not-exist');
+      await waitFor(() => {
+        expect(screen.getByTestId('product-not-found')).toBeInTheDocument();
+      });
+      // Confirms not-found and denial are distinct per spec AC#2.
+      expect(screen.queryByTestId('access-denied-page')).toBeNull();
     });
   });
 

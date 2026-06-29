@@ -1,3 +1,8 @@
+// Authorized by HUB-1609 (E-FE-3 S9) — server 403 on the portfolio list (out-of-
+// scope product_admin reaches a tenant they're not in) renders the canonical
+// <AccessDeniedPage> distinct from the generic error banner. Server-side RBAC
+// remains authoritative; the FE never filters by scope itself.
+//
 // Authorized by HUB-1603 (E-FE-3 S3) — /console/products list view. Renders the HUB
 // portfolio over the HUB-1601 <DataTable> primitive; ticket counts lazy-load per row
 // after the initial table render so Atlassian latency doesn't block first paint
@@ -19,7 +24,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DataTable, type ColumnDef } from '../components/DataTable';
+import { AccessDeniedPage } from '../components/AccessDeniedPage';
 import { apiClient } from '../lib/api';
+import { PermissionDeniedError } from '../lib/errors';
 
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
 const JIRA_TICKETS_PATH = '/api/v1/admin/integrations/jira/tickets';
@@ -73,6 +80,7 @@ export default function Products(): React.ReactElement {
   const [products, setProducts] = useState<PortfolioProduct[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [tickets, setTickets] = useState<Record<string, TicketState>>({});
 
   useEffect(() => {
@@ -86,16 +94,24 @@ export default function Products(): React.ReactElement {
   const loadProducts = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
+    setAccessDenied(false);
     try {
       const res = await apiClient.get<PortfolioResponse>(
         `${PORTFOLIO_PATH}?limit=${PAGE_SIZE}`,
       );
       setProducts(res.data);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to load products';
-      setError(message);
-      setProducts(null);
+      // HUB-1609: distinguish 403 (denial) from other failures so the denial
+      // UX is full-page rather than a banner that suggests retry.
+      if (err instanceof PermissionDeniedError) {
+        setAccessDenied(true);
+        setProducts(null);
+      } else {
+        const message =
+          err instanceof Error ? err.message : 'Failed to load products';
+        setError(message);
+        setProducts(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -227,6 +243,18 @@ export default function Products(): React.ReactElement {
     },
     [navigate],
   );
+
+  if (accessDenied) {
+    return (
+      <div id="main-content" data-testid="products-page" className="flex flex-col gap-4">
+        <AccessDeniedPage
+          resourceLabel="the products list"
+          backTo="/console/dashboard"
+          backLabel="Back to dashboard"
+        />
+      </div>
+    );
+  }
 
   return (
     <div id="main-content" data-testid="products-page" className="flex flex-col gap-4">
