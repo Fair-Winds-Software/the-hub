@@ -257,7 +257,7 @@ describe('ComplianceDetail (HUB-1623)', () => {
     });
   });
 
-  describe('HUB-1628 preview — denial UX on 403', () => {
+  describe('HUB-1628 — denial UX on 403 (URL-hack to out-of-scope productId)', () => {
     it('PermissionDeniedError renders <AccessDeniedPage> with back-link to /console/compliance', async () => {
       const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       apiGetMock.mockImplementation(() =>

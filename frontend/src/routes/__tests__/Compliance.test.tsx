@@ -308,7 +308,33 @@ describe('Compliance (HUB-1622)', () => {
     });
   });
 
-  describe('HUB-1628 preview — denial UX on 403', () => {
+  describe('HUB-1628 AC#1 — server-authoritative scope (no client-side filtering)', () => {
+    it('FE renders exactly the rows the server returned — no role-based pruning', async () => {
+      // Simulate the BE returning a product_admin-scoped subset (only p-1).
+      apiGetMock.mockImplementation((path: string) => {
+        if (path.startsWith('/api/v1/admin/compliance/portfolio')) {
+          return Promise.resolve({
+            data: [ROWS[0]!], // only Synapz
+            total: 1,
+          });
+        }
+        if (path === '/api/v1/admin/settings') {
+          return Promise.resolve(SETTINGS_RESPONSE);
+        }
+        return Promise.reject(new Error('unexpected'));
+      });
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('compliance-tile-p-1')).toBeInTheDocument();
+      });
+      // ContentHelm + LaunchKit are absent because the BE didn't return them.
+      // The FE rendered exactly what the BE returned with no additional filter.
+      expect(screen.queryByTestId('compliance-tile-p-2')).toBeNull();
+      expect(screen.queryByTestId('compliance-tile-p-3')).toBeNull();
+    });
+  });
+
+  describe('HUB-1628 — denial UX on 403', () => {
     it('PermissionDeniedError on portfolio fetch renders <AccessDeniedPage>', async () => {
       const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       apiGetMock.mockImplementation((path: string) => {

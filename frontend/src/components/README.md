@@ -367,3 +367,12 @@ This means an operator can paste a deep-link URL (`/console/audit?product_id=<ou
 3. Re-firing the fetch automatically (now without the bad param), so the operator sees their in-scope data instead of an empty screen.
 
 The server remains authoritative — the client never filters by scope on its own.
+
+### Per-path-param RBAC (HUB-1628 — compliance)
+
+The compliance endpoints enforce RBAC at the **path-parameter** level:
+
+- `GET /api/v1/admin/compliance/portfolio` — server returns only scope-allowed products for `product_admin`. The FE renders what the server returns without additional client-side filtering.
+- `GET /api/v1/admin/compliance/:productId` — server returns **403** when `:productId` is outside the operator's scope (URL-hack scenario). The FE catches `PermissionDeniedError` and renders `<AccessDeniedPage>` with a back-link to `/console/compliance` — distinct from the not-found state because compliance data may carry sensitive control evidence and the user needs to know they're being denied, not that the product is missing.
+
+Same invariant as HUB-1618: server authoritative. The compliance view never client-side filters scope.
