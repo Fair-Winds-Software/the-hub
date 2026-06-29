@@ -26,6 +26,10 @@ import { Link, useParams } from 'react-router-dom';
 import { apiClient } from '../lib/api';
 import { PermissionDeniedError } from '../lib/errors';
 import { AccessDeniedPage } from '../components/AccessDeniedPage';
+import {
+  HistoryTimelineSection,
+  type VerdictHistoryPoint,
+} from './complianceSections/HistoryTimelineSection';
 
 const DETAIL_PATH = (productId: string): string =>
   `/api/v1/admin/compliance/${productId}`;
@@ -37,6 +41,8 @@ export interface ComplianceDetail {
   /** Trailing 30-day baseline used by the drift signal computation. */
   score_30d_ago?: number;
   last_evaluated_at: string | null;
+  /** Up to 90 days of historical posture scores; sliced by HUB-1624. */
+  history?: VerdictHistoryPoint[];
 }
 
 type FetchState =
@@ -344,11 +350,7 @@ export default function ComplianceDetail(): React.ReactElement {
       </header>
 
       <ComplianceSectionErrorBoundary name="verdict-history">
-        <SectionPlaceholder
-          id="verdict-history"
-          title="Verdict History"
-          story="HUB-1624 (S5)"
-        />
+        <HistoryTimelineSection history={product.history ?? []} />
       </ComplianceSectionErrorBoundary>
 
       <ComplianceSectionErrorBoundary name="drift-signals">

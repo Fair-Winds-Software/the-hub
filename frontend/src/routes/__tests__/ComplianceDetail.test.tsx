@@ -132,16 +132,16 @@ describe('ComplianceDetail (HUB-1623)', () => {
           screen.getByTestId('compliance-section-verdict-history'),
         ).toBeInTheDocument();
       });
+      // Each section component owns its own aria-labelledby id; assert that the
+      // attribute is present + the referenced heading exists, without coupling
+      // to a single id-naming convention (HUB-1624 Verdict History uses
+      // 'history-timeline-heading' for example).
       const sections = ['verdict-history', 'drift-signals', 'per-control'];
       for (const id of sections) {
         const section = screen.getByTestId(`compliance-section-${id}`);
-        expect(section).toHaveAttribute(
-          'aria-labelledby',
-          `section-${id}-heading`,
-        );
-        expect(
-          document.getElementById(`section-${id}-heading`),
-        ).toBeInTheDocument();
+        const labelledBy = section.getAttribute('aria-labelledby');
+        expect(labelledBy).toBeTruthy();
+        expect(document.getElementById(labelledBy!)).toBeInTheDocument();
       }
     });
   });
