@@ -301,6 +301,44 @@ import { MetricTile } from '../components/MetricTile';
 - **Sparkline or chart context** — pair with `<TimelineChart>` (HUB-1621) inside a tile's footer slot rather than substituting one for the other.
 - **More than ~16 tiles on a page** — at that scale switch to a `<DataTable>` for scan-ability; tiles work for ≤16-entity portfolios.
 
+## `<TimelineChart>` — Cross-Epic time-series pattern
+
+Authoritative source: [`TimelineChart.tsx`](./TimelineChart.tsx) (authored by HUB-1621).
+
+**Use when** a route renders a time-series of one metric with optional annotations (compliance posture over 90 days, system response time over the week, customer engagement over the quarter).
+
+### What it does
+
+- **Inline SVG line chart** — no Recharts / D3 / chart library dependency at v0.1 (LK-134 lives in a separate repo; bundle-budget-friendly). The public surface matches the spec props so a one-file swap to recharts is trivial once HUB consumes the LK substrate.
+- **Severity-coloured annotations** — `info` / `warning` / `error` markers as dashed vertical lines with native `<title>` tooltips.
+- **valueFormat variants** — `integer` / `percent` / `currency` for y-tick labels.
+- **States covered** — `loading` (skeleton with the same height to keep CLS<0.1), `error` (alert banner), empty (no-data message rather than an empty axis).
+- **A11y**: chart container is `role="img"` with an auto-composed aria-label that summarizes the trend (`"Compliance % timeline, 90 days, current 92, trend up"`) and an SR-only `<table>` fallback so screen-reader users can step through point-by-point. Override the label via `ariaLabel` when a tailored phrasing is wanted.
+
+### Minimum usage
+
+```tsx
+import { TimelineChart } from '../components/TimelineChart';
+
+<TimelineChart
+  data={[
+    { date: '2026-04-01', value: 80 },
+    { date: '2026-05-01', value: 85 },
+    { date: '2026-06-01', value: 92 },
+  ]}
+  yLabel="Compliance %"
+  valueFormat="percent"
+  annotations={[
+    { date: '2026-05-01', label: 'SOC 2 audit kickoff', severity: 'info' },
+  ]}
+/>
+```
+
+### When NOT to use
+
+- **Categorical data** (a bar chart of products by status) — pair `<DataTable>` with `<MetricTile>` instead.
+- **Multi-series overlays** — v0.1 supports a single series. Add multi-series support in a follow-up story when a consumer needs it.
+
 ## Server-side RBAC invariant (cross-component reminder)
 
 All client-side gates in this module (including `<RBACRoute>` from HUB-1574) are UX-layer only. Server-side endpoints MUST enforce their own RBAC and return 403 for unauthorized requests. Client guards exist to keep the UI honest; they are not a security boundary. See [`../lib/rbac.ts`](../lib/rbac.ts) module-level documentation.
