@@ -339,6 +339,43 @@ import { TimelineChart } from '../components/TimelineChart';
 - **Categorical data** (a bar chart of products by status) — pair `<DataTable>` with `<MetricTile>` instead.
 - **Multi-series overlays** — v0.1 supports a single series. Add multi-series support in a follow-up story when a consumer needs it.
 
+## `<DistributionChart>` — Cross-Epic categorical-distribution pattern
+
+Authoritative source: [`DistributionChart.tsx`](./DistributionChart.tsx) (authored by HUB-1630).
+
+**Use when** a route renders a categorical distribution: SDK version → product count (HUB-1632), plan tier → customer count (HUB-1561), churn risk → customer count (HUB-1567), service status → incident count (HUB-1566).
+
+### What it does
+
+- **Inline SVG bar chart** — same rationale as `<TimelineChart>` (no Recharts / D3 dependency at v0.1; bundle-budget friendly; LK-134 swap is a one-file change).
+- **Two layouts** — `vertical` (default; bars stand up, x-axis = category) or `horizontal` (bars lie sideways, good for long category labels like `"Synapz v2.7.18-rc.3"`).
+- **Hover tooltip** with category + count + optional item list (e.g., on the SDK-versions chart, hovering a v1.5 bar surfaces the products on that version).
+- **Total label** above the chart summing all categories (`Total: 12 products`). Unit configurable via `totalUnit` prop.
+- **A11y**: chart container is `role="img"` with an auto-composed summary aria-label (top-3 categories by count), plus a visually-hidden `<table>` fallback for SR users to step through point-by-point.
+
+### Minimum usage
+
+```tsx
+import { DistributionChart } from '../components/DistributionChart';
+
+<DistributionChart
+  data={[
+    { category: 'v1.5', count: 8, items: ['Synapz', 'ContentHelm'] },
+    { category: 'v1.4', count: 3, items: ['LaunchKit'] },
+    { category: 'v1.3', count: 1 },
+  ]}
+  xLabel="SDK Version"
+  yLabel="Products"
+  totalUnit="products"
+/>
+```
+
+### When NOT to use
+
+- **Time-series data** — use [`<TimelineChart>`](./TimelineChart.tsx) instead.
+- **More than ~12 categories** — bars cram together; switch to `<DataTable>` for scan-ability.
+- **Continuous numeric distributions** — histograms aren't the same as categorical distributions; a separate primitive would be appropriate.
+
 ## Server-side RBAC invariant (cross-component reminder)
 
 All client-side gates in this module (including `<RBACRoute>` from HUB-1574) are UX-layer only. Server-side endpoints MUST enforce their own RBAC and return 403 for unauthorized requests. Client guards exist to keep the UI honest; they are not a security boundary. See [`../lib/rbac.ts`](../lib/rbac.ts) module-level documentation.
