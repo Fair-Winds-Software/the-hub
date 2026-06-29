@@ -34,6 +34,10 @@ import {
   DriftSignalsSection,
   type DriftSignal,
 } from './complianceSections/DriftSignalsSection';
+import {
+  ControlBreakdownSection,
+  type ControlRow,
+} from './complianceSections/ControlBreakdownSection';
 
 const DETAIL_PATH = (productId: string): string =>
   `/api/v1/admin/compliance/${productId}`;
@@ -49,6 +53,8 @@ export interface ComplianceDetail {
   history?: VerdictHistoryPoint[];
   /** Controls that changed status in the last 30 days; sliced by HUB-1625. */
   drift_signals?: DriftSignal[];
+  /** Full control catalog for the per-control table; sliced by HUB-1626. */
+  controls?: ControlRow[];
 }
 
 type FetchState =
@@ -139,36 +145,6 @@ function SectionSkeleton({ id }: { id: string }): React.ReactElement {
       data-testid={`compliance-section-skeleton-${id}`}
       className="h-32 w-full animate-pulse rounded-md border border-deep-charcoal/10 bg-deep-charcoal/5"
     />
-  );
-}
-
-interface SectionPlaceholderProps {
-  id: string;
-  title: string;
-  story: string;
-}
-
-function SectionPlaceholder({
-  id,
-  title,
-  story,
-}: SectionPlaceholderProps): React.ReactElement {
-  return (
-    <section
-      aria-labelledby={`section-${id}-heading`}
-      data-testid={`compliance-section-${id}`}
-      className="rounded-md border border-deep-charcoal/15 bg-sailcloth p-4"
-    >
-      <h2
-        id={`section-${id}-heading`}
-        className="font-heading text-lg text-primary-navy"
-      >
-        {title}
-      </h2>
-      <p className="mt-2 text-sm font-body text-deep-charcoal/70">
-        {title} section content lands in {story}.
-      </p>
-    </section>
   );
 }
 
@@ -368,11 +344,7 @@ export default function ComplianceDetail(): React.ReactElement {
       </ComplianceSectionErrorBoundary>
 
       <ComplianceSectionErrorBoundary name="per-control">
-        <SectionPlaceholder
-          id="per-control"
-          title="Per-Control Breakdown"
-          story="HUB-1626 (S7)"
-        />
+        <ControlBreakdownSection controls={product.controls ?? []} />
       </ComplianceSectionErrorBoundary>
     </div>
   );
