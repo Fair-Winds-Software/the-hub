@@ -38,6 +38,7 @@ import {
   ControlBreakdownSection,
   type ControlRow,
 } from './complianceSections/ControlBreakdownSection';
+import { ExportReportButton } from './complianceSections/ExportReportButton';
 
 const DETAIL_PATH = (productId: string): string =>
   `/api/v1/admin/compliance/${productId}`;
@@ -298,37 +299,40 @@ export default function ComplianceDetail(): React.ReactElement {
       data-testid="compliance-detail-page"
       className="flex flex-col gap-6"
     >
-      <header className="flex flex-col gap-1">
-        <div className="flex items-center gap-3">
-          <h1
-            data-testid="compliance-detail-name"
-            className="font-heading text-2xl text-primary-navy"
-          >
-            {product.productName}
-          </h1>
-          <span
-            data-testid="compliance-detail-verdict-badge"
-            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-body ${verdict.className}`}
-          >
-            {verdict.label}
-          </span>
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
+            <h1
+              data-testid="compliance-detail-name"
+              className="font-heading text-2xl text-primary-navy"
+            >
+              {product.productName}
+            </h1>
+            <span
+              data-testid="compliance-detail-verdict-badge"
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-body ${verdict.className}`}
+            >
+              {verdict.label}
+            </span>
+          </div>
+          <p className="font-body text-sm text-deep-charcoal/70">
+            Posture score:{' '}
+            <strong
+              data-testid="compliance-detail-score"
+              className="text-primary-navy"
+            >
+              {product.score}
+            </strong>
+            {product.last_evaluated_at && (
+              <>
+                {' '}
+                · Evaluated{' '}
+                {new Date(product.last_evaluated_at).toLocaleString()}
+              </>
+            )}
+          </p>
         </div>
-        <p className="font-body text-sm text-deep-charcoal/70">
-          Posture score:{' '}
-          <strong
-            data-testid="compliance-detail-score"
-            className="text-primary-navy"
-          >
-            {product.score}
-          </strong>
-          {product.last_evaluated_at && (
-            <>
-              {' '}
-              · Evaluated{' '}
-              {new Date(product.last_evaluated_at).toLocaleString()}
-            </>
-          )}
-        </p>
+        <ExportReportButton detail={product} />
       </header>
 
       <ComplianceSectionErrorBoundary name="verdict-history">
