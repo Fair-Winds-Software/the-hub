@@ -30,6 +30,10 @@ import {
   HistoryTimelineSection,
   type VerdictHistoryPoint,
 } from './complianceSections/HistoryTimelineSection';
+import {
+  DriftSignalsSection,
+  type DriftSignal,
+} from './complianceSections/DriftSignalsSection';
 
 const DETAIL_PATH = (productId: string): string =>
   `/api/v1/admin/compliance/${productId}`;
@@ -43,6 +47,8 @@ export interface ComplianceDetail {
   last_evaluated_at: string | null;
   /** Up to 90 days of historical posture scores; sliced by HUB-1624. */
   history?: VerdictHistoryPoint[];
+  /** Controls that changed status in the last 30 days; sliced by HUB-1625. */
+  drift_signals?: DriftSignal[];
 }
 
 type FetchState =
@@ -354,10 +360,10 @@ export default function ComplianceDetail(): React.ReactElement {
       </ComplianceSectionErrorBoundary>
 
       <ComplianceSectionErrorBoundary name="drift-signals">
-        <SectionPlaceholder
-          id="drift-signals"
-          title="Drift Signals"
-          story="HUB-1625 (S6)"
+        <DriftSignalsSection
+          signals={product.drift_signals ?? []}
+          currentScore={product.score}
+          score_30d_ago={product.score_30d_ago}
         />
       </ComplianceSectionErrorBoundary>
 
