@@ -17,11 +17,12 @@
 // 2. URL deep-link parsing: query param 'tab' is owned by <TabbedDetailView>; we
 //    pass the configurable urlParam through but do not parse it here. Browser
 //    back/forward and shareable links "just work" by virtue of the primitive.
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { TabbedDetailView, type TabDef } from '../components/TabbedDetailView';
 import { apiClient } from '../lib/api';
 import type { PortfolioProduct } from './Products';
+import { OverviewTab } from './productDetailTabs/OverviewTab';
 
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
 const PAGE_TITLE_PREFIX = 'Product';
@@ -150,12 +151,27 @@ export default function ProductDetail(): React.ReactElement {
     };
   }, [productId]);
 
+  const handleProductChange = useCallback((next: PortfolioProduct) => {
+    setState({ kind: 'ready', product: next });
+  }, []);
+
+  // The HUB-1605 OverviewTab needs the loaded product. We compute the tab
+  // definition only when the product has resolved so the placeholder path
+  // is never asked to render OverviewTab with no data.
+  const readyProduct = state.kind === 'ready' ? state.product : null;
   const tabs: TabDef[] = useMemo(
     () => [
       {
         id: 'overview',
         label: 'Overview',
-        content: <PlaceholderTab label="Overview" story="HUB-1605 (S5)" />,
+        content: readyProduct ? (
+          <OverviewTab
+            product={readyProduct}
+            onProductChange={handleProductChange}
+          />
+        ) : (
+          <PlaceholderTab label="Overview" story="HUB-1605 (S5)" />
+        ),
       },
       {
         id: 'plans',
@@ -178,7 +194,7 @@ export default function ProductDetail(): React.ReactElement {
         content: <PlaceholderTab label="Notifications" story="HUB-1608 (S8)" />,
       },
     ],
-    [productId],
+    [productId, readyProduct, handleProductChange],
   );
 
   if (state.kind === 'loading') {

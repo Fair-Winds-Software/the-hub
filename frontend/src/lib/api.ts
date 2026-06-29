@@ -23,7 +23,7 @@ export interface RequestOptions {
   signal?: AbortSignal;
 }
 
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 // Module-scoped single-flight refresh promise (AC#3 mitigation for thundering-herd refresh storms).
 let refreshPromise: Promise<void> | null = null;
@@ -137,6 +137,11 @@ export const apiClient = {
   },
   put<T>(path: string, body?: unknown, opts?: RequestOptions): Promise<T> {
     return request<T>('PUT', path, body, opts);
+  },
+  // Authorized by HUB-1605 (E-FE-3 S5) — PATCH for partial-update inline edits
+  // (status / contact email) on /api/v1/admin/products/:productId.
+  patch<T>(path: string, body?: unknown, opts?: RequestOptions): Promise<T> {
+    return request<T>('PATCH', path, body, opts);
   },
   delete<T>(path: string, opts?: RequestOptions): Promise<T> {
     return request<T>('DELETE', path, undefined, opts);
