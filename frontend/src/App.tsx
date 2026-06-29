@@ -38,6 +38,7 @@ const Audit = lazy(() => import('./routes/Audit'));
 const Products = lazy(() => import('./routes/Products'));
 const ProductDetail = lazy(() => import('./routes/ProductDetail'));
 const Compliance = lazy(() => import('./routes/Compliance'));
+const ComplianceDetail = lazy(() => import('./routes/ComplianceDetail'));
 const SettingsStub = lazy(() => import('./routes/SettingsStub'));
 
 export function App() {
@@ -96,6 +97,14 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <Compliance />
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/compliance/:productId"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <ComplianceDetail />
                 </GuardedRoute>
               }
             />
