@@ -19,6 +19,13 @@
 //                                    file (debounce + microtask budget < 1000ms). Live
 //                                    Lighthouse measurement of /console/audit moves to
 //                                    Stage 4 alongside the dashboard.
+//   - /console/products + /console/products/:productId (HUB-1610) — same constraint.
+//                                    Per-component a11y is gated via vitest-axe scans in
+//                                    Products + ProductDetail + the four tab test files;
+//                                    list-load perf is asserted synthetically in
+//                                    Products.nfr.test.tsx (50-row render < 500ms per
+//                                    AC-E2). Live Lighthouse measurement for the products
+//                                    routes moves to Stage 4 alongside the dashboard.
 //
 // Targets (preset: desktop): LCP ≤ 2.5s, CLS ≤ 0.1, TBT ≤ 200ms, A11y score ≥ 0.95.
 
