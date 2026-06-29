@@ -264,6 +264,43 @@ const tabs: TabDef[] = [
 - **Persistent cross-tab state** — lazy render unmounts inactive tabs. If a tab's state must survive a switch, lift it into a store (Zustand) above the `<TabbedDetailView>`.
 - **More than ~6 tabs** — the horizontal strip degrades at higher counts; consider a sidebar nav pattern instead.
 
+## `<MetricTile>` — Cross-Epic metric tile pattern
+
+Authoritative source: [`MetricTile.tsx`](./MetricTile.tsx) (authored by HUB-1620).
+
+**Use when** a route renders a portfolio of metrics-per-entity (compliance posture per product, SDK versions per product, system health per service, customer health per account). Inherit it instead of re-implementing the title + value + verdict triple.
+
+### What it does
+
+- **Triple-encoded verdict** — color (HUB-1571 semantic palette) + glyph (SVG icon per verdict) + text label (`healthy` / `warning` / `error` / `neutral`). WCAG AA: color alone is insufficient, so the glyph + text always travel with the color.
+- **Auto-composed aria-label** — `"{title}: {value} {unit}, {verdict label}"` so screen readers get the full semantic in one announcement. Override via `ariaLabel` when the consumer wants a tailored phrasing.
+- **Empty state** — `value={null | undefined | ''}` renders an em-dash with `aria-label="No data"` so SR users don't hear "dash."
+- **Loading skeleton** — matches the loaded tile's `h-[160px]` dimensions so CLS stays under 0.1.
+- **Click-through** — passing `onClick` makes the whole tile keyboard-activatable: `role="button"`, `tabIndex=0`, Enter/Space invoke. Without it the tile is `role="group"` and non-tabbable.
+- **Drift badge** — optional corner badge with `↑ +5` / `↓ −10` / `→` for delta visualization; carries its own aria-label so SR users hear "trending up: +5."
+
+### Minimum usage
+
+```tsx
+import { MetricTile } from '../components/MetricTile';
+
+<MetricTile
+  title="Compliance posture for ContentHelm"
+  value={92}
+  unit="%"
+  verdict="success"
+  drift="up"
+  driftLabel="+5"
+  onClick={() => navigate(`/console/compliance/${productId}`)}
+/>
+```
+
+### When NOT to use
+
+- **Single number on a detail page** — overkill; use a plain `<dt>/<dd>` row instead.
+- **Sparkline or chart context** — pair with `<TimelineChart>` (HUB-1621) inside a tile's footer slot rather than substituting one for the other.
+- **More than ~16 tiles on a page** — at that scale switch to a `<DataTable>` for scan-ability; tiles work for ≤16-entity portfolios.
+
 ## Server-side RBAC invariant (cross-component reminder)
 
 All client-side gates in this module (including `<RBACRoute>` from HUB-1574) are UX-layer only. Server-side endpoints MUST enforce their own RBAC and return 403 for unauthorized requests. Client guards exist to keep the UI honest; they are not a security boundary. See [`../lib/rbac.ts`](../lib/rbac.ts) module-level documentation.
