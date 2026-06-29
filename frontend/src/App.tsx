@@ -20,6 +20,9 @@
 //   per HUB-1609 S9 + HUB-1700 server enforcement).
 // Authorized by HUB-1604 (E-FE-3 S4) — /console/products/:productId detail scaffold
 //   route added. Same guard as the list view.
+// Authorized by HUB-1622 (E-FE-8 S3) — /console/compliance route registered. Both
+//   product_admin and super_admin may access (RBAC scope-specific filtering is BE
+//   per HUB-1628 S9).
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -34,6 +37,7 @@ const DashboardStub = lazy(() => import('./routes/DashboardStub'));
 const Audit = lazy(() => import('./routes/Audit'));
 const Products = lazy(() => import('./routes/Products'));
 const ProductDetail = lazy(() => import('./routes/ProductDetail'));
+const Compliance = lazy(() => import('./routes/Compliance'));
 const SettingsStub = lazy(() => import('./routes/SettingsStub'));
 
 export function App() {
@@ -84,6 +88,14 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <ProductDetail />
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/compliance"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <Compliance />
                 </GuardedRoute>
               }
             />
