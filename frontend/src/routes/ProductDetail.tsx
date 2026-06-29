@@ -25,6 +25,7 @@ import type { PortfolioProduct } from './Products';
 import { OverviewTab } from './productDetailTabs/OverviewTab';
 import { PlansTab } from './productDetailTabs/PlansTab';
 import { AuditTab } from './productDetailTabs/AuditTab';
+import { NotificationsTab } from './productDetailTabs/NotificationsTab';
 
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
 const PAGE_TITLE_PREFIX = 'Product';
@@ -200,7 +201,14 @@ export default function ProductDetail(): React.ReactElement {
       {
         id: 'notifications',
         label: 'Notifications',
-        content: <PlaceholderTab label="Notifications" story="HUB-1608 (S8)" />,
+        content: readyProduct ? (
+          <NotificationsTab
+            productId={readyProduct.productId}
+            tenantId={readyProduct.tenantId}
+          />
+        ) : (
+          <PlaceholderTab label="Notifications" story="HUB-1608 (S8)" />
+        ),
       },
     ],
     [productId, readyProduct, handleProductChange],
