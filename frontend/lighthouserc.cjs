@@ -33,6 +33,13 @@
 //                                    perf (<1.5s) is asserted synthetically in
 //                                    Compliance.nfr.test.tsx. Live Lighthouse measurement
 //                                    for the compliance routes moves to Stage 4.
+//   - /console/sdk-versions (HUB-1636) — same constraint. Per-component a11y is gated
+//                                    via vitest-axe scans in SdkVersions + the three
+//                                    section test files + DistributionChart; page-load +
+//                                    impact-widget perf are asserted synthetically in
+//                                    SdkVersions.nfr.test.tsx (< 2500ms page LCP /
+//                                    < 1000ms impact compute). Live Lighthouse
+//                                    measurement defers to Stage 4.
 //
 // Targets (preset: desktop): LCP ≤ 2.5s, CLS ≤ 0.1, TBT ≤ 200ms, A11y score ≥ 0.95.
 
