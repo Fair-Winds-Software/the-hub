@@ -44,6 +44,9 @@ const PlanAdvisor = lazy(() => import('./routes/PlanAdvisor'));
 const NewRecommendationFlow = lazy(
   () => import('./routes/planAdvisor/NewRecommendationFlow'),
 );
+const RecommendationResultView = lazy(
+  () => import('./routes/planAdvisor/RecommendationResultView'),
+);
 const SettingsStub = lazy(() => import('./routes/SettingsStub'));
 
 export function App() {
@@ -134,6 +137,14 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <NewRecommendationFlow />
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/plan-advisor/:runId"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <RecommendationResultView />
                 </GuardedRoute>
               }
             />
