@@ -22,8 +22,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../lib/api';
 import { DistributionChartSection } from './sdkVersions/DistributionChartSection';
+import {
+  ProductBreakdownTable,
+  type ProductBreakdownRow,
+} from './sdkVersions/ProductBreakdownTable';
 
 const DISTRIBUTION_PATH = '/api/v1/admin/sdk-versions/distribution';
+const PRODUCTS_PATH = '/api/v1/admin/sdk-versions/products';
 const PAGE_TITLE = 'SDK Versions | HUB Console';
 
 export type SdkName = string;
@@ -47,11 +52,21 @@ interface DistributionResponse {
   distribution: DistributionRow[];
 }
 
+interface ProductsResponse {
+  sdkName: string;
+  products: ProductBreakdownRow[];
+}
+
 type FetchState =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
   | { kind: 'empty' }
-  | { kind: 'ready'; data: DistributionResponse };
+  | {
+      kind: 'ready';
+      data: DistributionResponse;
+      products: ProductBreakdownRow[];
+      productsError: string | null;
+    };
 
 export default function SdkVersions(): React.ReactElement {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -80,30 +95,46 @@ export default function SdkVersions(): React.ReactElement {
     );
   }, [sdkName, searchParams, setSearchParams]);
 
-  const loadDistribution = useCallback(
+  const loadSdkData = useCallback(
     async (selected: SdkName): Promise<void> => {
       setState({ kind: 'loading' });
-      try {
-        const res = await apiClient.get<DistributionResponse>(
-          `${DISTRIBUTION_PATH}?sdkName=${encodeURIComponent(selected)}`,
-        );
-        if (!res.distribution || res.distribution.length === 0) {
-          setState({ kind: 'empty' });
-          return;
-        }
-        setState({ kind: 'ready', data: res });
-      } catch (err) {
+      // Distribution is the primary signal — when it fails the whole page
+      // surfaces an error. Products is rendered side-by-side but degrades
+      // independently (partial-OK): a products failure shows the section's
+      // own error banner without poisoning the chart above it.
+      const params = `sdkName=${encodeURIComponent(selected)}`;
+      const [distRes, prodRes] = await Promise.allSettled([
+        apiClient.get<DistributionResponse>(`${DISTRIBUTION_PATH}?${params}`),
+        apiClient.get<ProductsResponse>(`${PRODUCTS_PATH}?${params}`),
+      ]);
+      if (distRes.status === 'rejected') {
+        const err = distRes.reason;
         const message =
           err instanceof Error ? err.message : 'Failed to load SDK distribution';
         setState({ kind: 'error', message });
+        return;
       }
+      const data = distRes.value;
+      if (!data.distribution || data.distribution.length === 0) {
+        setState({ kind: 'empty' });
+        return;
+      }
+      const products =
+        prodRes.status === 'fulfilled' ? (prodRes.value.products ?? []) : [];
+      const productsError =
+        prodRes.status === 'rejected'
+          ? prodRes.reason instanceof Error
+            ? prodRes.reason.message
+            : 'Failed to load product breakdown'
+          : null;
+      setState({ kind: 'ready', data, products, productsError });
     },
     [],
   );
 
   useEffect(() => {
-    void loadDistribution(sdkName);
-  }, [sdkName, loadDistribution]);
+    void loadSdkData(sdkName);
+  }, [sdkName, loadSdkData]);
 
   const handleSdkChange = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -152,7 +183,7 @@ export default function SdkVersions(): React.ReactElement {
           <p className="mt-1">{state.message}</p>
           <button
             type="button"
-            onClick={() => void loadDistribution(sdkName)}
+            onClick={() => void loadSdkData(sdkName)}
             className="mt-2 rounded border border-ironwake/40 px-3 py-1 text-sm hover:bg-ironwake/10 focus:outline-none focus:ring-2 focus:ring-accent-brass"
           >
             Retry
@@ -198,21 +229,11 @@ export default function SdkVersions(): React.ReactElement {
             sdkName={state.data.sdkName}
             rows={state.data.distribution}
           />
-          <section
-            aria-labelledby="sdk-products-section-heading"
-            data-testid="sdk-versions-section-products"
-            className="rounded-md border border-deep-charcoal/15 bg-sailcloth p-4"
-          >
-            <h2
-              id="sdk-products-section-heading"
-              className="font-heading text-lg text-primary-navy mb-2"
-            >
-              Product Breakdown
-            </h2>
-            <p className="font-body text-sm text-deep-charcoal/70">
-              Per-product table + stale detection lands in HUB-1633 (S4).
-            </p>
-          </section>
+          <ProductBreakdownTable
+            sdkName={state.data.sdkName}
+            rows={state.products}
+            error={state.productsError}
+          />
           <section
             aria-labelledby="sdk-impact-section-heading"
             data-testid="sdk-versions-section-impact"

@@ -37,11 +37,28 @@ const DIST_RESPONSE = {
   ],
 };
 
+const PRODUCTS_RESPONSE = {
+  sdkName: 'hub-sdk',
+  products: [
+    {
+      productId: 'p-1',
+      productName: 'Synapz',
+      currentVersion: '1.5.0',
+      lastReportedAt: '2026-06-29T12:00:00.000Z',
+      daysBehindLatest: 0,
+      status: 'current' as const,
+    },
+  ],
+};
+
 beforeEach(() => {
   apiGetMock.mockReset();
   apiGetMock.mockImplementation((path: string) => {
     if (path.startsWith('/api/v1/admin/sdk-versions/distribution')) {
       return Promise.resolve(DIST_RESPONSE);
+    }
+    if (path.startsWith('/api/v1/admin/sdk-versions/products')) {
+      return Promise.resolve(PRODUCTS_RESPONSE);
     }
     return Promise.reject(new Error(`unexpected: ${path}`));
   });
@@ -201,10 +218,22 @@ describe('SdkVersions (HUB-1631)', () => {
       const errSpy = vi
         .spyOn(console, 'error')
         .mockImplementation(() => {});
-      apiGetMock.mockImplementationOnce(() =>
-        Promise.reject(new Error('upstream down')),
-      );
-      apiGetMock.mockImplementation(() => Promise.resolve(DIST_RESPONSE));
+      // First distribution call rejects; everything else succeeds with the
+      // appropriate shape per endpoint.
+      let firstDistCall = true;
+      apiGetMock.mockImplementation((path: string) => {
+        if (path.startsWith('/api/v1/admin/sdk-versions/distribution')) {
+          if (firstDistCall) {
+            firstDistCall = false;
+            return Promise.reject(new Error('upstream down'));
+          }
+          return Promise.resolve(DIST_RESPONSE);
+        }
+        if (path.startsWith('/api/v1/admin/sdk-versions/products')) {
+          return Promise.resolve(PRODUCTS_RESPONSE);
+        }
+        return Promise.reject(new Error('unexpected'));
+      });
       renderPage();
       await waitFor(() => {
         expect(
