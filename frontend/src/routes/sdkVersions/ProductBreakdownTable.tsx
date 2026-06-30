@@ -7,8 +7,12 @@
 // Data is sliced from the parent's products fetch. The 4 badge variants
 // are distinct in icon + color + text per AC#5 a11y floor — color alone is
 // insufficient.
-import { useMemo } from 'react';
+//
+// Authorized by HUB-1635 (E-FE-10 S6) — adds the "Export CSV" button above
+// the table. Disabled with tooltip when there is nothing to export.
+import { useCallback, useMemo } from 'react';
 import { DataTable, type ColumnDef } from '../../components/DataTable';
+import { exportSdkVersionsCsv } from './exportSdkVersionsCsv';
 
 export type SdkProductStatus = 'current' | 'behind' | 'eol' | 'stale';
 
@@ -235,18 +239,37 @@ export function ProductBreakdownTable({
     [],
   );
 
+  const canExport = rows.length > 0 && !loading && error === null;
+  const handleExport = useCallback(() => {
+    if (!canExport) return;
+    exportSdkVersionsCsv(rows, sdkName);
+  }, [canExport, rows, sdkName]);
+
   return (
     <section
       aria-labelledby="product-breakdown-section-heading"
       data-testid="sdk-versions-section-products"
       className="rounded-md border border-deep-charcoal/15 bg-sailcloth p-4"
     >
-      <h2
-        id="product-breakdown-section-heading"
-        className="font-heading text-lg text-primary-navy mb-2"
-      >
-        Product Breakdown
-      </h2>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <h2
+          id="product-breakdown-section-heading"
+          className="font-heading text-lg text-primary-navy"
+        >
+          Product Breakdown
+        </h2>
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={!canExport}
+          aria-label="Export SDK breakdown as CSV"
+          title={canExport ? undefined : 'No data to export'}
+          data-testid="sdk-versions-export-csv"
+          className="inline-flex items-center gap-1 rounded-md border border-primary-navy/20 bg-white px-3 py-1.5 text-sm font-body text-primary-navy shadow-sm hover:bg-primary-navy/5 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent-brass"
+        >
+          Export CSV
+        </button>
+      </div>
       <DataTable<ProductBreakdownRow>
         columns={columns}
         rows={rows}

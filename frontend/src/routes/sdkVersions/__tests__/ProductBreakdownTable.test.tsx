@@ -4,8 +4,8 @@
 // (Product asc), default sort by status puts the most critical first when
 // the operator clicks the column, empty state scoped to the SDK name, and
 // axe-core a11y.
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { axe } from 'vitest-axe';
 import {
   ProductBreakdownTable,
@@ -166,6 +166,63 @@ describe('ProductBreakdownTable (HUB-1633)', () => {
       expect(
         screen.getAllByTestId('data-table-skeleton-row').length,
       ).toBeGreaterThan(0);
+    });
+  });
+
+  describe('HUB-1635 — Export CSV button wiring', () => {
+    let createObjectURL: ReturnType<typeof vi.fn>;
+    let originalClick: typeof HTMLAnchorElement.prototype.click;
+    let clickSpy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      createObjectURL = vi.fn(() => 'blob:mock');
+      (URL as unknown as { createObjectURL: typeof createObjectURL }).createObjectURL =
+        createObjectURL;
+      (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => {};
+      originalClick = HTMLAnchorElement.prototype.click;
+      clickSpy = vi.fn();
+      HTMLAnchorElement.prototype.click = clickSpy as unknown as () => void;
+    });
+
+    afterEach(() => {
+      HTMLAnchorElement.prototype.click = originalClick;
+    });
+
+    it('Export CSV button labeled per AC + enabled when rows present', () => {
+      render(<ProductBreakdownTable sdkName="hub-sdk" rows={ROWS} />);
+      const btn = screen.getByTestId('sdk-versions-export-csv');
+      expect(btn).toHaveAttribute('aria-label', 'Export SDK breakdown as CSV');
+      expect(btn).not.toBeDisabled();
+    });
+
+    it('disabled when rows empty (AC#6 "No data to export" tooltip)', () => {
+      render(<ProductBreakdownTable sdkName="hub-sdk" rows={[]} />);
+      const btn = screen.getByTestId('sdk-versions-export-csv');
+      expect(btn).toBeDisabled();
+      expect(btn).toHaveAttribute('title', 'No data to export');
+    });
+
+    it('disabled while loading', () => {
+      render(<ProductBreakdownTable sdkName="hub-sdk" rows={[]} loading />);
+      expect(screen.getByTestId('sdk-versions-export-csv')).toBeDisabled();
+    });
+
+    it('disabled when an error is present', () => {
+      render(
+        <ProductBreakdownTable
+          sdkName="hub-sdk"
+          rows={ROWS}
+          error="boom"
+        />,
+      );
+      expect(screen.getByTestId('sdk-versions-export-csv')).toBeDisabled();
+    });
+
+    it('clicking the button triggers a download (Blob URL created)', () => {
+      render(<ProductBreakdownTable sdkName="hub-sdk" rows={ROWS} />);
+      fireEvent.click(screen.getByTestId('sdk-versions-export-csv'));
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      expect(clickSpy).toHaveBeenCalledTimes(1);
     });
   });
 
