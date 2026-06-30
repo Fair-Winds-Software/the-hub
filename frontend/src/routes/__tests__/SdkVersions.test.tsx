@@ -153,13 +153,18 @@ describe('SdkVersions (HUB-1631)', () => {
       ).toBeInTheDocument();
     });
 
-    it('distribution slot reports the version count from the fetched response', async () => {
+    it('distribution slot renders the real DistributionChart with bars for each version', async () => {
       renderPage();
+      // S3 (HUB-1632) now fills the Distribution slot with a real chart;
+      // verify the bars from the fetched fixture are mounted.
       await waitFor(() => {
         expect(
-          screen.getByTestId('sdk-versions-distribution-count').textContent,
-        ).toBe('2');
+          screen.getByTestId('distribution-bar-1.5.0'),
+        ).toBeInTheDocument();
       });
+      expect(
+        screen.getByTestId('distribution-bar-1.4.0'),
+      ).toBeInTheDocument();
     });
   });
 

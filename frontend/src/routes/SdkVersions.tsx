@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../lib/api';
+import { DistributionChartSection } from './sdkVersions/DistributionChartSection';
 
 const DISTRIBUTION_PATH = '/api/v1/admin/sdk-versions/distribution';
 const PAGE_TITLE = 'SDK Versions | HUB Console';
@@ -35,13 +36,15 @@ const KNOWN_SDK_OPTIONS: Array<{ value: SdkName; label: string }> = [
 
 const DEFAULT_SDK: SdkName = 'hub-sdk';
 
+interface DistributionRow {
+  version: string;
+  productCount: number;
+  products?: string[];
+}
+
 interface DistributionResponse {
   sdkName: string;
-  distribution: Array<{
-    version: string;
-    productCount: number;
-    products?: string[];
-  }>;
+  distribution: DistributionRow[];
 }
 
 type FetchState =
@@ -191,26 +194,10 @@ export default function SdkVersions(): React.ReactElement {
 
       {state.kind === 'ready' && (
         <div className="flex flex-col gap-4">
-          <section
-            aria-labelledby="sdk-distribution-section-heading"
-            data-testid="sdk-versions-section-distribution"
-            className="rounded-md border border-deep-charcoal/15 bg-sailcloth p-4"
-          >
-            <h2
-              id="sdk-distribution-section-heading"
-              className="font-heading text-lg text-primary-navy mb-2"
-            >
-              Distribution
-            </h2>
-            <p className="font-body text-sm text-deep-charcoal/70">
-              Distribution chart lands in HUB-1632 (S3). For now we report{' '}
-              <strong data-testid="sdk-versions-distribution-count">
-                {state.data.distribution.length}
-              </strong>{' '}
-              version
-              {state.data.distribution.length === 1 ? '' : 's'} reporting.
-            </p>
-          </section>
+          <DistributionChartSection
+            sdkName={state.data.sdkName}
+            rows={state.data.distribution}
+          />
           <section
             aria-labelledby="sdk-products-section-heading"
             data-testid="sdk-versions-section-products"
