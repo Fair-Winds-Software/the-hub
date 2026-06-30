@@ -41,6 +41,9 @@ const Compliance = lazy(() => import('./routes/Compliance'));
 const ComplianceDetail = lazy(() => import('./routes/ComplianceDetail'));
 const SdkVersions = lazy(() => import('./routes/SdkVersions'));
 const PlanAdvisor = lazy(() => import('./routes/PlanAdvisor'));
+const NewRecommendationFlow = lazy(
+  () => import('./routes/planAdvisor/NewRecommendationFlow'),
+);
 const SettingsStub = lazy(() => import('./routes/SettingsStub'));
 
 export function App() {
@@ -123,6 +126,14 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <PlanAdvisor />
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/plan-advisor/new"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <NewRecommendationFlow />
                 </GuardedRoute>
               }
             />
