@@ -26,6 +26,7 @@ import {
   PlanComparison,
   type PlanData,
 } from '../../components/PlanComparison';
+import { OutcomeCaptureSection } from './OutcomeCaptureSection';
 
 const RECOMMENDATIONS_PATH = '/api/v1/admin/advisor/recommendations';
 const ADVISORY_COPY =
@@ -399,21 +400,23 @@ export default function RecommendationResultView(): React.ReactElement {
 
       <ImpactSummary mrrImpact={row.mrrImpact} />
 
-      <section
-        aria-labelledby="outcome-capture-heading"
-        data-testid="outcome-capture-placeholder"
-        className="rounded-md border border-deep-charcoal/15 bg-sailcloth p-4"
-      >
-        <h2
-          id="outcome-capture-heading"
-          className="font-heading text-lg text-primary-navy mb-1"
-        >
-          Outcome
-        </h2>
-        <p className="font-body text-sm text-deep-charcoal/70">
-          Outcome capture lands in HUB-1641 (S5).
-        </p>
-      </section>
+      <OutcomeCaptureSection
+        runId={row.recommendationId}
+        currentOutcome={row.outcome}
+        currentNote={row.outcomeNote}
+        outcomeCapturedAt={row.outcomeCapturedAt}
+        onCaptured={(next) => {
+          setState({
+            kind: 'ready',
+            row: {
+              ...row,
+              outcome: next.outcome,
+              outcomeNote: next.note,
+              outcomeCapturedAt: next.capturedAt,
+            },
+          });
+        }}
+      />
     </div>
   );
 }

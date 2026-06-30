@@ -267,13 +267,11 @@ describe('RecommendationResultView (HUB-1640)', () => {
     });
   });
 
-  describe('AC#7 — outcome capture placeholder for S5', () => {
-    it('renders the outcome capture section placeholder for HUB-1641 (S5)', async () => {
+  describe('AC#7 — outcome capture section', () => {
+    it('renders the HUB-1641 OutcomeCaptureSection inline', async () => {
       renderPage();
       await waitFor(() => {
-        expect(
-          screen.getByTestId('outcome-capture-placeholder'),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId('outcome-capture')).toBeInTheDocument();
       });
     });
   });
