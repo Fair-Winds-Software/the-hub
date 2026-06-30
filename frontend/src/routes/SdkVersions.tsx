@@ -26,6 +26,7 @@ import {
   ProductBreakdownTable,
   type ProductBreakdownRow,
 } from './sdkVersions/ProductBreakdownTable';
+import { DeprecationImpactWidget } from './sdkVersions/DeprecationImpactWidget';
 
 const DISTRIBUTION_PATH = '/api/v1/admin/sdk-versions/distribution';
 const PRODUCTS_PATH = '/api/v1/admin/sdk-versions/products';
@@ -234,21 +235,11 @@ export default function SdkVersions(): React.ReactElement {
             rows={state.products}
             error={state.productsError}
           />
-          <section
-            aria-labelledby="sdk-impact-section-heading"
-            data-testid="sdk-versions-section-impact"
-            className="rounded-md border border-deep-charcoal/15 bg-sailcloth p-4"
-          >
-            <h2
-              id="sdk-impact-section-heading"
-              className="font-heading text-lg text-primary-navy mb-2"
-            >
-              Deprecation Impact
-            </h2>
-            <p className="font-body text-sm text-deep-charcoal/70">
-              Deprecation impact widget lands in HUB-1634 (S5).
-            </p>
-          </section>
+          <DeprecationImpactWidget
+            sdkName={state.data.sdkName}
+            versions={state.data.distribution.map((d) => d.version)}
+            products={state.products}
+          />
         </div>
       )}
     </div>
