@@ -376,6 +376,43 @@ import { DistributionChart } from '../components/DistributionChart';
 - **More than ~12 categories** — bars cram together; switch to `<DataTable>` for scan-ability.
 - **Continuous numeric distributions** — histograms aren't the same as categorical distributions; a separate primitive would be appropriate.
 
+## `<PlanComparison>` — Cross-Epic "before vs after" plan pattern
+
+Authoritative source: [`PlanComparison.tsx`](./PlanComparison.tsx) (authored by HUB-1637).
+
+**Use when** a route renders two plan states side-by-side for the operator to compare: advisor current-vs-recommended (HUB-1640), pricing-model baseline-vs-proposed (HUB-1563), scenario A-vs-B (HUB-1565).
+
+### What it does
+
+- **Paired cards** — desktop (`lg`) side-by-side, narrower viewports stacked. Each card is a `<section aria-labelledby>` carrying its own heading (default `Current` / `Recommended`; override via `leftLabel` / `rightLabel`).
+- **Field-level delta detection** when `highlightDeltas` is true (default):
+  - **Price** — numeric diff; right card surfaces a `↑ +$50` / `↓ −$30` chip with semantic color (seafoam for increase, ironwake for decrease). Each chip carries a descriptive aria-label like `"Price changed from $99/mo to $149/mo, increased by $50"`.
+  - **Billing mode** — string equality; differing values get a subtle highlight on the right card.
+  - **Features** — set diff. Added features highlight green on the right card; removed features strike-through red on the left card. Shared features render neutral.
+- **Reasoning bullets** — optional `<ol>` below the cards. Each `<li>` is keyboard-reachable (`tabIndex=0`) so screen-reader users can step through the bullets without arrow-key fighting.
+- **Loading skeleton** matches the two-card layout to keep CLS under 0.1.
+- **Empty card** — `left={null}` or `right={null}` renders the "No current plan assigned" placeholder per AC#6.
+
+### Minimum usage
+
+```tsx
+import { PlanComparison } from '../components/PlanComparison';
+
+<PlanComparison
+  left={{ title: 'Standard $99', price: 99, billingMode: 'standard', features: ['API access'] }}
+  right={{ title: 'Pro $149', price: 149, billingMode: 'credit', features: ['API access', 'Priority support'] }}
+  reasoningBullets={[
+    'Usage exceeded standard tier rate limits for 14 of the last 30 days.',
+    'Credit billing aligns with the customer’s annual budget cadence.',
+  ]}
+/>
+```
+
+### When NOT to use
+
+- **More than 2 plans** to compare — wrap multiple `<PlanComparison>` instances in tabs, or use a `<DataTable>` for a row-per-plan comparison.
+- **Non-plan data** — this primitive is opinionated about Price / Billing / Features. For arbitrary key/value comparison, build a smaller helper.
+
 ## Server-side RBAC invariant (cross-component reminder)
 
 All client-side gates in this module (including `<RBACRoute>` from HUB-1574) are UX-layer only. Server-side endpoints MUST enforce their own RBAC and return 403 for unauthorized requests. Client guards exist to keep the UI honest; they are not a security boundary. See [`../lib/rbac.ts`](../lib/rbac.ts) module-level documentation.
