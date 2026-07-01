@@ -9,6 +9,8 @@
 // the PortfolioSummaryWidget mounts (rather than the S1 placeholder).
 // Authorized by HUB-1646 (E-FE-2 S3) — product-grid region asserts the
 // ProductGridWidget mounts (rather than the S1 placeholder).
+// Authorized by HUB-1648 (E-FE-2 S5) — sidebar region asserts the
+// DashboardSidebar (QuickActions + RecentActivityFeed) mounts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { axe } from 'vitest-axe';
@@ -40,6 +42,9 @@ beforeEach(() => {
       });
     }
     if (path.startsWith('/api/v1/admin/portfolio/products')) {
+      return Promise.resolve({ data: [], total: 0 });
+    }
+    if (path.startsWith('/api/v1/admin/console/audit-log')) {
       return Promise.resolve({ data: [], total: 0 });
     }
     // /portfolio-margin: simulate the endpoint not yet built (HUB-1556).
@@ -94,30 +99,33 @@ describe('Dashboard shell (HUB-1644)', () => {
       expect(sidebar.getAttribute('aria-labelledby')).toBeTruthy();
     });
 
-    it('portfolio-summary + product-grid regions host their real widgets; sidebar keeps the placeholder skeleton (S5 fills later)', async () => {
+    it('all three regions host their real widgets after S1..S5 (portfolio summary + product grid + sidebar)', async () => {
       renderDashboard();
-      // S2 widget mounts (starts in loading state → tiles skeleton visible).
       await waitFor(() => {
         expect(
           screen.getByTestId('portfolio-summary-widget-tiles-skeleton'),
         ).toBeInTheDocument();
       });
-      expect(
-        screen.queryByTestId('dashboard-portfolio-summary-placeholder'),
-      ).toBeNull();
-      // S3 widget mounts (empty-state or loading; empty in this fixture).
       await waitFor(() => {
         expect(
           screen.getByTestId('product-grid-widget-empty'),
         ).toBeInTheDocument();
       });
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('dashboard-quick-actions'),
+        ).toBeInTheDocument();
+      });
+      // No S1 placeholders left.
+      expect(
+        screen.queryByTestId('dashboard-portfolio-summary-placeholder'),
+      ).toBeNull();
       expect(
         screen.queryByTestId('dashboard-product-grid-placeholder'),
       ).toBeNull();
-      // Sidebar still holds the shell placeholder.
       expect(
-        screen.getByTestId('dashboard-sidebar-placeholder'),
-      ).toBeInTheDocument();
+        screen.queryByTestId('dashboard-sidebar-placeholder'),
+      ).toBeNull();
     });
   });
 

@@ -16,6 +16,8 @@
 // Authorized by HUB-1646 (E-FE-2 S3) — product-grid region now hosts the
 // ProductGridWidget (3-column responsive product cards, keyboard-navigable
 // links to /console/products/:productId).
+// Authorized by HUB-1648 (E-FE-2 S5) — sidebar region now hosts the
+// DashboardSidebar (QuickActions row + RecentActivityFeed).
 //
 // Heading structure: h1 = page title ("Dashboard"), then each region gets a
 // visually-hidden h2 keyed off the region's aria-label so screen readers
@@ -23,24 +25,9 @@
 // use h3+ inside their region without breaking heading order.
 import { PortfolioSummaryWidget } from './dashboard/PortfolioSummaryWidget';
 import { ProductGridWidget } from './dashboard/ProductGridWidget';
+import { DashboardSidebar } from './dashboard/DashboardSidebar';
 
 const PAGE_TITLE = 'Dashboard | HUB Console';
-
-function RegionPlaceholder({
-  testId,
-}: {
-  testId: string;
-}): React.ReactElement {
-  // aria-label is intentionally omitted — axe forbids aria-label on plain
-  // <div> without a role, and the enclosing <section aria-labelledby> already
-  // carries the accessible region name for screen readers.
-  return (
-    <div
-      data-testid={testId}
-      className="min-h-[6rem] animate-pulse rounded-md bg-deep-charcoal/5"
-    />
-  );
-}
 
 export default function Dashboard(): React.ReactElement {
   // Match the pattern used by the other console routes — set the tab title
@@ -100,7 +87,7 @@ export default function Dashboard(): React.ReactElement {
         <h2 id="dashboard-region-sidebar-heading" className="sr-only">
           Dashboard sidebar
         </h2>
-        <RegionPlaceholder testId="dashboard-sidebar-placeholder" />
+        <DashboardSidebar />
       </section>
     </div>
   );
