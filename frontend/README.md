@@ -66,6 +66,17 @@ When a future Epic adds a new `/console/*` route:
 Re-run `npm run e2e && npm run lighthouse` locally to verify gates still pass
 before opening the PR.
 
+## Plan advisor NFR gate (HUB-1643)
+
+The a11y + CWV gate for `/console/plan-advisor`, `/console/plan-advisor/new`,
+and `/console/plan-advisor/:runId` is enforced via
+`src/routes/planAdvisor/__tests__/PlanAdvisor.nfr.test.tsx` (synthetic axe
+scan + render-perf assertion + advisory-warning prominence + outcome-button
+semantic-ARIA check). Lighthouse CWV measurement of the plan-advisor routes
+defers to Stage 4 alongside every other post-auth route per
+D-HUB-SCOPE-051 (same in-memory session-store constraint as
+`/console/dashboard`).
+
 ## RBAC scope enforcement (HUB-1642)
 
 Server-side RBAC is authoritative for the operator console. The FE only
