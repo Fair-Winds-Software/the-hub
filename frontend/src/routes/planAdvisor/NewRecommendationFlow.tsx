@@ -2,6 +2,11 @@
 // a product, the FE checks for a recent advisor run on that product (within
 // 7 days), warns if so, then POSTs to the run endpoint. On success navigates
 // to the S4 result view.
+// Authorized by HUB-1642 (E-FE-4 S6) — RBAC scope wiring. PermissionDeniedError
+// from the POST /run path now surfaces as an explicit "out of scope" inline
+// banner instead of a raw err.message. Server is authoritative; the FE picker
+// is sourced from /portfolio/products which is already scope-filtered server-
+// side, so a 403 here only fires on a URL-hack / state-tamper attempt.
 //
 // Spec deviations (documented per ironclad-engineer):
 // 1. Run endpoint: spec named POST /api/v1/admin/plan-advisor/run with
@@ -23,6 +28,7 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../../lib/api';
+import { PermissionDeniedError } from '../../lib/errors';
 
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
 const RECOMMENDATIONS_PATH = '/api/v1/admin/advisor/recommendations';
@@ -58,7 +64,14 @@ interface RunResponse {
 type SubmitState =
   | { kind: 'idle' }
   | { kind: 'submitting' }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string }
+  | { kind: 'denied'; productLabel: string };
+
+// HUB-1642 AC#3 — explicit out-of-scope copy. Surfaces inline (rather than a
+// full-page AccessDeniedPage) because the picker stays visible so the operator
+// can select a different in-scope product without losing context.
+const SCOPE_DENIAL_COPY =
+  'You don’t have access to this product. Pick a product in your scope, or ask Sammy to grant access.';
 
 function runEndpoint(productId: string, tenantId: string): string {
   return `/api/v1/admin/advisor/${productId}/${tenantId}/run`;
@@ -162,6 +175,13 @@ export default function NewRecommendationFlow(): React.ReactElement {
       );
       navigate(`/console/plan-advisor/${res.id}`);
     } catch (err) {
+      if (err instanceof PermissionDeniedError) {
+        setSubmit({
+          kind: 'denied',
+          productLabel: selectedProduct.productName,
+        });
+        return;
+      }
       const message =
         err instanceof Error ? err.message : 'Failed to run advisor';
       setSubmit({ kind: 'error', message });
@@ -177,7 +197,10 @@ export default function NewRecommendationFlow(): React.ReactElement {
   }, []);
 
   const canRunDirect =
-    selectedProduct !== undefined && recentRun === null && submit.kind !== 'submitting';
+    selectedProduct !== undefined &&
+    recentRun === null &&
+    submit.kind !== 'submitting' &&
+    submit.kind !== 'denied';
 
   return (
     <div
@@ -275,6 +298,23 @@ export default function NewRecommendationFlow(): React.ReactElement {
           className="rounded-md border border-ironwake/40 bg-ironwake/5 p-3 text-sm font-body text-ironwake"
         >
           {submit.message}
+        </div>
+      )}
+
+      {submit.kind === 'denied' && (
+        <div
+          role="alert"
+          data-testid="new-recommendation-scope-denied"
+          className="rounded-md border border-ironwake/40 bg-ironwake/5 p-3 text-sm font-body text-ironwake"
+        >
+          <p className="font-medium">
+            Access denied for{' '}
+            <span data-testid="new-recommendation-scope-denied-product">
+              {submit.productLabel}
+            </span>
+            .
+          </p>
+          <p className="mt-1">{SCOPE_DENIAL_COPY}</p>
         </div>
       )}
 

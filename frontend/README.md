@@ -65,3 +65,25 @@ When a future Epic adds a new `/console/*` route:
 
 Re-run `npm run e2e && npm run lighthouse` locally to verify gates still pass
 before opening the PR.
+
+## RBAC scope enforcement (HUB-1642)
+
+Server-side RBAC is authoritative for the operator console. The FE only
+mirrors what the server returns:
+
+- `/api/v1/admin/portfolio/products` returns only in-scope products for
+  `product_admin`; the plan-advisor list-view product filter (S2) and the
+  new-recommendation product picker (S3) simply render whatever comes back.
+- `super_admin` sees all products via the same endpoint.
+- **plan-advisor endpoint RBAC enforcement is per-productId; out-of-scope
+  productId → 403.** The FE surfaces the 403 as:
+  - Result view (`/console/plan-advisor/:runId`): `<AccessDeniedPage>` with
+    a `Back to advisor list` link (HUB-1640).
+  - New-recommendation POST `/run`: inline scope-denial banner
+    (`new-recommendation-scope-denied`) so the picker stays visible and the
+    operator can pick a different in-scope product (HUB-1642).
+
+Client-side guards (`useRBACGuard`, sidebar filtering) are UX-layer only —
+they hide unreachable nav and redirect URL-hack attempts, but the server
+remains the security boundary and every advisor endpoint enforces its own
+per-productId scope check.
