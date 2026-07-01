@@ -360,3 +360,157 @@ export async function getPlanById(planId: string): Promise<PlanRow> {
   if (!rows[0]) throw new AppError(404, 'Plan not found');
   return rows[0];
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HUB-1651 (E-FE-5 S1) — admin CRUD extensions
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UpdatePlanPatch {
+  name?: string;
+  description?: string | null;
+  unit_amount_cents?: number | null;
+}
+
+/**
+ * HUB-1651 (E-FE-5 S1): partial update of a plan's mutable fields (name,
+ * description, unit_amount_cents). Emits an audit_log entry via
+ * writeAuditEntry. Throws 404 if the plan does not exist. Fields not
+ * present on the patch object are left untouched. billing_mode changes
+ * flow through {@link updatePlanBillingMode} — this function refuses
+ * `billing_mode` in the patch to prevent bypassing the two-step confirm
+ * contract established by HUB-1591.
+ */
+export async function updatePlan(
+  planId: string,
+  patch: UpdatePlanPatch,
+  actorId: string | null,
+): Promise<PlanRow> {
+  const pool = getPool();
+
+  const setFragments: string[] = [];
+  const params: unknown[] = [];
+  let idx = 1;
+  if (patch.name !== undefined) {
+    setFragments.push(`name = $${idx++}`);
+    params.push(patch.name);
+  }
+  if (patch.description !== undefined) {
+    setFragments.push(`description = $${idx++}`);
+    params.push(patch.description);
+  }
+  if (patch.unit_amount_cents !== undefined) {
+    setFragments.push(`unit_amount_cents = $${idx++}`);
+    params.push(patch.unit_amount_cents);
+  }
+
+  const { rows: before } = await pool.query<PlanRow>(
+    'SELECT * FROM plans WHERE id = $1',
+    [planId],
+  );
+  if (!before[0]) throw new AppError(404, 'Plan not found');
+
+  if (setFragments.length === 0) return before[0];
+
+  setFragments.push('updated_at = NOW()');
+  params.push(planId);
+
+  const { rows: updated } = await pool.query<PlanRow>(
+    `UPDATE plans SET ${setFragments.join(', ')} WHERE id = $${idx} RETURNING *`,
+    params,
+  );
+
+  await writeAuditEntry({
+    tenant_id: '00000000-0000-0000-0000-0000000000a1',
+    product_id: before[0].product_id,
+    actor_id: actorId,
+    actor_type: 'operator',
+    operation: 'UPDATE',
+    table_name: 'plans',
+    record_id: planId,
+    old_values: {
+      name: before[0].name,
+      description: before[0].description,
+      unit_amount_cents: before[0].unit_amount_cents,
+    },
+    new_values: {
+      name: updated[0]!.name,
+      description: updated[0]!.description,
+      unit_amount_cents: updated[0]!.unit_amount_cents,
+    },
+  });
+
+  return updated[0]!;
+}
+
+/**
+ * HUB-1651 (E-FE-5 S1): soft-archive a plan with an active-subscribers
+ * guard. Checks {@link stripe_subscriptions} for rows referencing this
+ * planId with status IN ('active','trialing','past_due'); if any exist,
+ * throws AppError(422) whose message contains the current active count so
+ * the route can echo it back to the operator UI. Otherwise sets
+ * `active=false` AND `archived_at=NOW()` atomically, writes an audit_log
+ * entry, and returns the updated row. Idempotent: re-archiving an
+ * already-archived plan returns the existing row without a second audit
+ * write.
+ */
+export interface SoftArchivePlanError422 extends AppError {
+  activeSubscribers: number;
+}
+
+export async function softArchivePlan(
+  planId: string,
+  actorId: string | null,
+): Promise<PlanRow> {
+  const pool = getPool();
+  const { rows: before } = await pool.query<PlanRow & { archived_at: Date | null }>(
+    'SELECT * FROM plans WHERE id = $1',
+    [planId],
+  );
+  if (!before[0]) throw new AppError(404, 'Plan not found');
+  if (before[0].archived_at !== null) return before[0];
+
+  const { rows: subs } = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::TEXT AS count
+       FROM stripe_subscriptions
+      WHERE plan_id = $1
+        AND status IN ('active','trialing','past_due')`,
+    [planId],
+  );
+  const activeSubscribers = parseInt(subs[0]!.count, 10);
+  if (activeSubscribers > 0) {
+    const err = new AppError(
+      422,
+      `Plan has ${activeSubscribers} active subscriber(s); archive blocked`,
+    ) as SoftArchivePlanError422;
+    err.activeSubscribers = activeSubscribers;
+    throw err;
+  }
+
+  const { rows: updated } = await pool.query<PlanRow>(
+    `UPDATE plans
+        SET active = false,
+            archived_at = NOW(),
+            updated_at = NOW()
+      WHERE id = $1
+   RETURNING *`,
+    [planId],
+  );
+
+  await writeAuditEntry({
+    tenant_id: '00000000-0000-0000-0000-0000000000a1',
+    product_id: before[0].product_id,
+    actor_id: actorId,
+    actor_type: 'operator',
+    operation: 'DELETE',
+    table_name: 'plans',
+    record_id: planId,
+    old_values: { active: true, archived_at: null },
+    new_values: {
+      active: false,
+      archived_at: updated[0]!.updated_at,
+      event: 'plan.soft_archived',
+    },
+  });
+
+  return updated[0]!;
+}
