@@ -35,6 +35,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MetricTile, type MetricVerdict } from '../../components/MetricTile';
 import { apiClient } from '../../lib/api';
+import { formatDollarsFromCents } from './dashboard-formatters';
 
 const PORTFOLIO_SUMMARY_PATH = '/api/v1/admin/advisor/portfolio/summary';
 const PORTFOLIO_MARGIN_PATH = '/api/v1/admin/analytics/portfolio-margin';
@@ -85,14 +86,6 @@ type SummaryState =
 type MarginState =
   | { kind: 'idle' }
   | { kind: 'ready'; data: PortfolioMarginResponse['portfolio'] };
-
-function formatDollarsFromCents(cents: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(cents / 100);
-}
 
 function LosingMoneyBanner({
   marginPct,

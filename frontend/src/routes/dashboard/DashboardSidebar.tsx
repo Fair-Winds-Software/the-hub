@@ -38,6 +38,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../lib/api';
+import { formatRelativeTime } from './dashboard-formatters';
 
 const AUDIT_LOG_PATH = '/api/v1/admin/console/audit-log?limit=10';
 
@@ -62,25 +63,6 @@ type FeedState =
   | { kind: 'loading' }
   | { kind: 'degraded' }
   | { kind: 'ready'; entries: AuditLogEntry[] };
-
-const MINUTES_PER_HOUR = 60;
-const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
-
-function relativeTime(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return 'unknown';
-  const mins = Math.max(0, Math.floor((Date.now() - t) / 60000));
-  if (mins < 1) return 'just now';
-  if (mins < MINUTES_PER_HOUR) return `${mins} min ago`;
-  if (mins < MINUTES_PER_DAY) {
-    const hrs = Math.floor(mins / MINUTES_PER_HOUR);
-    return `${hrs} h ago`;
-  }
-  const days = Math.floor(mins / MINUTES_PER_DAY);
-  if (days < 30) return `${days} d ago`;
-  const d = new Date(t);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 function shortId(id: string | null | undefined): string {
   if (!id) return 'unknown';
@@ -136,7 +118,7 @@ function ActivityRow({
   const actorLabel = shortId(entry.operator_id);
   const productLabel = shortId(entry.product_id);
   const verb = actionVerb(entry.action);
-  const rel = relativeTime(entry.created_at);
+  const rel = formatRelativeTime(entry.created_at);
   const aria = `Audit event ${entry.id}: ${actorLabel} ${verb} on product ${productLabel}, ${rel}. Click to view in audit log.`;
   return (
     <Link

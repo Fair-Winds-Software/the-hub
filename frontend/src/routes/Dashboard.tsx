@@ -18,6 +18,11 @@
 // links to /console/products/:productId).
 // Authorized by HUB-1648 (E-FE-2 S5) — sidebar region now hosts the
 // DashboardSidebar (QuickActions row + RecentActivityFeed).
+// Authorized by HUB-1650 (E-FE-2 S7) — each widget region is wrapped in a
+// WidgetErrorBoundary so a runtime throw in one widget cannot blank the
+// whole dashboard (FR-014 widget isolation). Fetch-level failures stay
+// inside each widget's own state machine; the boundary is the last-resort
+// catch for exceptions the state machine can't anticipate.
 //
 // Heading structure: h1 = page title ("Dashboard"), then each region gets a
 // visually-hidden h2 keyed off the region's aria-label so screen readers
@@ -26,6 +31,7 @@
 import { PortfolioSummaryWidget } from './dashboard/PortfolioSummaryWidget';
 import { ProductGridWidget } from './dashboard/ProductGridWidget';
 import { DashboardSidebar } from './dashboard/DashboardSidebar';
+import { WidgetErrorBoundary } from './dashboard/WidgetErrorBoundary';
 
 const PAGE_TITLE = 'Dashboard | HUB Console';
 
@@ -64,7 +70,9 @@ export default function Dashboard(): React.ReactElement {
         >
           Portfolio summary
         </h2>
-        <PortfolioSummaryWidget />
+        <WidgetErrorBoundary widgetLabel="portfolio-summary">
+          <PortfolioSummaryWidget />
+        </WidgetErrorBoundary>
       </section>
 
       <section
@@ -77,7 +85,9 @@ export default function Dashboard(): React.ReactElement {
         >
           Portfolio products
         </h2>
-        <ProductGridWidget />
+        <WidgetErrorBoundary widgetLabel="product-grid">
+          <ProductGridWidget />
+        </WidgetErrorBoundary>
       </section>
 
       <section
@@ -87,7 +97,9 @@ export default function Dashboard(): React.ReactElement {
         <h2 id="dashboard-region-sidebar-heading" className="sr-only">
           Dashboard sidebar
         </h2>
-        <DashboardSidebar />
+        <WidgetErrorBoundary widgetLabel="sidebar">
+          <DashboardSidebar />
+        </WidgetErrorBoundary>
       </section>
     </div>
   );

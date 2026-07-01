@@ -45,6 +45,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../lib/api';
+import {
+  formatDollarsFromCents,
+  formatRelativeTime,
+} from './dashboard-formatters';
 
 const PORTFOLIO_PRODUCTS_PATH = '/api/v1/admin/portfolio/products?limit=100';
 const JIRA_TICKETS_PATH = (productId: string): string =>
@@ -72,14 +76,6 @@ type GridState =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
   | { kind: 'ready'; products: PortfolioProduct[] };
-
-function formatDollarsFromCents(cents: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(cents / 100);
-}
 
 // Triple-encoded status badge — color + icon + text label. Unknown status
 // values render as neutral so the badge never breaks on a BE enum expansion.
@@ -198,23 +194,6 @@ function isDegradedPayload(
   );
 }
 
-const MINUTES_PER_HOUR = 60;
-const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
-
-function relativeMinutesSince(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return 'unknown';
-  const mins = Math.max(0, Math.floor((Date.now() - t) / 60000));
-  if (mins < 1) return 'just now';
-  if (mins < MINUTES_PER_HOUR) return `${mins} min ago`;
-  if (mins < MINUTES_PER_DAY) {
-    const hrs = Math.floor(mins / MINUTES_PER_HOUR);
-    return `${hrs} h ago`;
-  }
-  const days = Math.floor(mins / MINUTES_PER_DAY);
-  return `${days} d ago`;
-}
-
 function useJiraTicketCounts(productId: string): JiraState {
   const [state, setState] = useState<JiraState>({ kind: 'loading' });
   useEffect(() => {
@@ -274,12 +253,15 @@ function TicketCountValue({
     );
   }
   const value = kind === 'cr' ? state.counts.openCRs : state.counts.openBugs;
-  const syncLabel = `last synced ${relativeMinutesSince(state.counts.lastSyncedAt)}`;
+  const noun = kind === 'cr' ? 'Change Requests' : 'Bugs';
+  const syncLabel = `last synced ${formatRelativeTime(state.counts.lastSyncedAt)}`;
+  // aria-label surfaces both the count AND the last-sync context per S7 AC#2.
+  const ariaLabel = `${value} open ${noun}, ${syncLabel}`;
   return (
     <span
       data-testid={`${testIdBase}-${productId}`}
       title={syncLabel}
-      aria-label={syncLabel}
+      aria-label={ariaLabel}
       className="inline-block min-w-[1.5rem] text-center font-medium text-primary-navy"
     >
       {value}

@@ -66,6 +66,20 @@ When a future Epic adds a new `/console/*` route:
 Re-run `npm run e2e && npm run lighthouse` locally to verify gates still pass
 before opening the PR.
 
+## Dashboard NFR gate (HUB-1650)
+
+The a11y + CWV gate for `/console/dashboard` is enforced via
+`src/routes/__tests__/Dashboard.nfr.test.tsx` (synthetic axe scan on all
+three widget regions + render-perf assertion + widget-isolation
+invariant that proves a single fetch failure does NOT blank the
+dashboard). All widgets are wrapped by
+`src/routes/dashboard/WidgetErrorBoundary` so a runtime throw in one
+widget cannot cascade. Currency + relative-time formatting live in a
+single `src/routes/dashboard/dashboard-formatters.ts` module consumed
+by every widget. Lighthouse CWV measurement of `/console/dashboard`
+defers to Stage 4 per D-HUB-SCOPE-051 (same in-memory session-store
+constraint as every other post-auth route).
+
 ## Plan advisor NFR gate (HUB-1643)
 
 The a11y + CWV gate for `/console/plan-advisor`, `/console/plan-advisor/new`,

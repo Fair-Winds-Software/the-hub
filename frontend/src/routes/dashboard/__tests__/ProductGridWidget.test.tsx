@@ -294,11 +294,19 @@ describe('ProductGridWidget (HUB-1646)', () => {
         screen.getByTestId('product-card-bug-count-p-1').textContent,
       ).toBe('5');
       // "last synced N min ago" tooltip is exposed via aria-label + title.
-      expect(
+      const crAria =
         screen
           .getByTestId('product-card-cr-count-p-1')
-          .getAttribute('aria-label'),
-      ).toMatch(/last synced 4 min ago/);
+          .getAttribute('aria-label') ?? '';
+      // S7 (HUB-1650) AC#2: aria-label surfaces "N open Change Requests, ..."
+      expect(crAria).toMatch(/3 open Change Requests/);
+      expect(crAria).toMatch(/last synced 4 min ago/);
+      // Bug slot mirrors the pattern.
+      const bugAria =
+        screen
+          .getByTestId('product-card-bug-count-p-1')
+          .getAttribute('aria-label') ?? '';
+      expect(bugAria).toMatch(/5 open Bugs/);
     });
 
     it('degrades gracefully when the endpoint returns {available:false}', async () => {
