@@ -5,11 +5,42 @@
 // core scan passes. Route wiring at App.tsx (product_admin guard + real
 // Dashboard swapped in for the prior DashboardStub) is exercised by the
 // existing Login.test.tsx + shell tests.
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+// Authorized by HUB-1645 (E-FE-2 S2) — portfolio-summary region asserts
+// the PortfolioSummaryWidget mounts (rather than the S1 placeholder).
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { axe } from 'vitest-axe';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import Dashboard from '../Dashboard';
+
+const apiGetMock = vi.fn();
+vi.mock('../../lib/api', () => ({
+  apiClient: {
+    get: (...args: unknown[]) => apiGetMock(...args),
+  },
+}));
+
+beforeEach(() => {
+  apiGetMock.mockReset();
+  apiGetMock.mockImplementation((path: string) => {
+    if (path.startsWith('/api/v1/admin/advisor/portfolio/summary')) {
+      return Promise.resolve({
+        total_products: 0,
+        open_recommendations: 0,
+        upgrade_count: 0,
+        downgrade_count: 0,
+        switch_to_annual_count: 0,
+        stay_count: 0,
+        high_confidence_count: 0,
+        product_cards: [],
+        churn_risk: [],
+        margin_health: [],
+      });
+    }
+    // /portfolio-margin: simulate the endpoint not yet built (HUB-1556).
+    return Promise.reject(new Error('unavailable'));
+  });
+});
 
 afterEach(() => {
   cleanup();
@@ -58,11 +89,18 @@ describe('Dashboard shell (HUB-1644)', () => {
       expect(sidebar.getAttribute('aria-labelledby')).toBeTruthy();
     });
 
-    it('each region carries a placeholder that resolves without throwing (S2/S3/S5 will fill these)', () => {
+    it('portfolio-summary region hosts the S2 PortfolioSummaryWidget; product-grid + sidebar keep the placeholder skeletons (S3/S5 fill later)', async () => {
       renderDashboard();
+      // S2 widget mounts (starts in loading state → tiles skeleton visible).
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('portfolio-summary-widget-tiles-skeleton'),
+        ).toBeInTheDocument();
+      });
       expect(
-        screen.getByTestId('dashboard-portfolio-summary-placeholder'),
-      ).toBeInTheDocument();
+        screen.queryByTestId('dashboard-portfolio-summary-placeholder'),
+      ).toBeNull();
+      // Other regions still hold the shell placeholders.
       expect(
         screen.getByTestId('dashboard-product-grid-placeholder'),
       ).toBeInTheDocument();

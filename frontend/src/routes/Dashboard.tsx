@@ -9,15 +9,16 @@
 //   - Portfolio products (aria-label="Portfolio products")  → S3 (HUB-1646)
 //   - Dashboard sidebar  (aria-label="Dashboard sidebar")   → S5 (HUB-1648)
 //
-// Each region is intentionally empty at S1 (renders a placeholder skeleton
-// so the smoke test can assert the region resolved without throwing). Data
-// fetching lives entirely inside the child widgets per FR-014 / S7 — the
-// shell must not fetch anything of its own.
+// Data fetching lives entirely inside the child widgets per FR-014 / S7 —
+// the shell must not fetch anything of its own.
+// Authorized by HUB-1645 (E-FE-2 S2) — portfolio-summary region now hosts
+// the PortfolioSummaryWidget (MetricTile row + losing-money banner).
 //
 // Heading structure: h1 = page title ("Dashboard"), then each region gets a
 // visually-hidden h2 keyed off the region's aria-label so screen readers
 // can navigate section-by-section. Widget children (added in S2/S3/S5) can
 // use h3+ inside their region without breaking heading order.
+import { PortfolioSummaryWidget } from './dashboard/PortfolioSummaryWidget';
 
 const PAGE_TITLE = 'Dashboard | HUB Console';
 
@@ -72,7 +73,7 @@ export default function Dashboard(): React.ReactElement {
         >
           Portfolio summary
         </h2>
-        <RegionPlaceholder testId="dashboard-portfolio-summary-placeholder" />
+        <PortfolioSummaryWidget />
       </section>
 
       <section
