@@ -7,6 +7,8 @@
 // existing Login.test.tsx + shell tests.
 // Authorized by HUB-1645 (E-FE-2 S2) — portfolio-summary region asserts
 // the PortfolioSummaryWidget mounts (rather than the S1 placeholder).
+// Authorized by HUB-1646 (E-FE-2 S3) — product-grid region asserts the
+// ProductGridWidget mounts (rather than the S1 placeholder).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { axe } from 'vitest-axe';
@@ -36,6 +38,9 @@ beforeEach(() => {
         churn_risk: [],
         margin_health: [],
       });
+    }
+    if (path.startsWith('/api/v1/admin/portfolio/products')) {
+      return Promise.resolve({ data: [], total: 0 });
     }
     // /portfolio-margin: simulate the endpoint not yet built (HUB-1556).
     return Promise.reject(new Error('unavailable'));
@@ -89,7 +94,7 @@ describe('Dashboard shell (HUB-1644)', () => {
       expect(sidebar.getAttribute('aria-labelledby')).toBeTruthy();
     });
 
-    it('portfolio-summary region hosts the S2 PortfolioSummaryWidget; product-grid + sidebar keep the placeholder skeletons (S3/S5 fill later)', async () => {
+    it('portfolio-summary + product-grid regions host their real widgets; sidebar keeps the placeholder skeleton (S5 fills later)', async () => {
       renderDashboard();
       // S2 widget mounts (starts in loading state → tiles skeleton visible).
       await waitFor(() => {
@@ -100,10 +105,16 @@ describe('Dashboard shell (HUB-1644)', () => {
       expect(
         screen.queryByTestId('dashboard-portfolio-summary-placeholder'),
       ).toBeNull();
-      // Other regions still hold the shell placeholders.
+      // S3 widget mounts (empty-state or loading; empty in this fixture).
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('product-grid-widget-empty'),
+        ).toBeInTheDocument();
+      });
       expect(
-        screen.getByTestId('dashboard-product-grid-placeholder'),
-      ).toBeInTheDocument();
+        screen.queryByTestId('dashboard-product-grid-placeholder'),
+      ).toBeNull();
+      // Sidebar still holds the shell placeholder.
       expect(
         screen.getByTestId('dashboard-sidebar-placeholder'),
       ).toBeInTheDocument();

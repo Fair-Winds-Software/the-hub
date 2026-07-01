@@ -13,12 +13,16 @@
 // the shell must not fetch anything of its own.
 // Authorized by HUB-1645 (E-FE-2 S2) — portfolio-summary region now hosts
 // the PortfolioSummaryWidget (MetricTile row + losing-money banner).
+// Authorized by HUB-1646 (E-FE-2 S3) — product-grid region now hosts the
+// ProductGridWidget (3-column responsive product cards, keyboard-navigable
+// links to /console/products/:productId).
 //
 // Heading structure: h1 = page title ("Dashboard"), then each region gets a
 // visually-hidden h2 keyed off the region's aria-label so screen readers
 // can navigate section-by-section. Widget children (added in S2/S3/S5) can
 // use h3+ inside their region without breaking heading order.
 import { PortfolioSummaryWidget } from './dashboard/PortfolioSummaryWidget';
+import { ProductGridWidget } from './dashboard/ProductGridWidget';
 
 const PAGE_TITLE = 'Dashboard | HUB Console';
 
@@ -86,7 +90,7 @@ export default function Dashboard(): React.ReactElement {
         >
           Portfolio products
         </h2>
-        <RegionPlaceholder testId="dashboard-product-grid-placeholder" />
+        <ProductGridWidget />
       </section>
 
       <section
