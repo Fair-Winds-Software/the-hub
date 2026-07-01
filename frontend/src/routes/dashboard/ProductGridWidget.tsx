@@ -3,6 +3,12 @@
 // list and renders a 3-column responsive card grid (2 columns at md, 1 at
 // mobile). Each card is a keyboard-navigable anchor to the HUB-1557
 // products detail view.
+// Authorized by HUB-1647 (E-FE-2 S4) — Jira ticket counts per card. Each
+// ProductCard fetches its OWN counts (independently error-bounded per the
+// FR-014 widget-isolation rule); a 429 / 500 / network failure or the
+// {available:false} degrade payload from HUB-1556 FR-001 renders "—" in
+// both slots with a tooltip explaining the temporary unavailability. No
+// error toast, no red badge — the card stays fully functional.
 //
 // Spec deviations (documented per ironclad-engineer):
 //
@@ -33,6 +39,10 @@ import { Link } from 'react-router-dom';
 import { apiClient } from '../../lib/api';
 
 const PORTFOLIO_PRODUCTS_PATH = '/api/v1/admin/portfolio/products?limit=100';
+const JIRA_TICKETS_PATH = (productId: string): string =>
+  `/api/v1/admin/integrations/jira/tickets?productId=${encodeURIComponent(productId)}`;
+const JIRA_DEGRADED_TOOLTIP =
+  'Jira temporarily unavailable. Refresh in 5 min.';
 
 interface PortfolioProduct {
   productId: string;
@@ -151,20 +161,121 @@ function StatusBadge({ status }: { status: string }): React.ReactElement {
   );
 }
 
-function TicketCountSkeleton({
-  testId,
+interface JiraCountsSuccess {
+  openCRs: number;
+  openBugs: number;
+  lastSyncedAt: string;
+}
+
+interface JiraCountsDegraded {
+  available: false;
+  reason: string;
+}
+
+type JiraTicketsResponse = JiraCountsSuccess | JiraCountsDegraded;
+
+type JiraState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; counts: JiraCountsSuccess }
+  | { kind: 'degraded'; reason: string };
+
+function isDegradedPayload(
+  data: JiraTicketsResponse,
+): data is JiraCountsDegraded {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'available' in data &&
+    data.available === false
+  );
+}
+
+const MINUTES_PER_HOUR = 60;
+const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
+
+function relativeMinutesSince(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return 'unknown';
+  const mins = Math.max(0, Math.floor((Date.now() - t) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < MINUTES_PER_HOUR) return `${mins} min ago`;
+  if (mins < MINUTES_PER_DAY) {
+    const hrs = Math.floor(mins / MINUTES_PER_HOUR);
+    return `${hrs} h ago`;
+  }
+  const days = Math.floor(mins / MINUTES_PER_DAY);
+  return `${days} d ago`;
+}
+
+function useJiraTicketCounts(productId: string): JiraState {
+  const [state, setState] = useState<JiraState>({ kind: 'loading' });
+  useEffect(() => {
+    let cancelled = false;
+    void apiClient
+      .get<JiraTicketsResponse>(JIRA_TICKETS_PATH(productId))
+      .then((res) => {
+        if (cancelled) return;
+        if (isDegradedPayload(res)) {
+          setState({ kind: 'degraded', reason: res.reason });
+        } else {
+          setState({ kind: 'ready', counts: res });
+        }
+      })
+      .catch(() => {
+        // Independent per-card boundary (FR-014). A 429 / 500 / network /
+        // 404 collapses to the same degrade state — no toast, no red badge.
+        if (cancelled) return;
+        setState({ kind: 'degraded', reason: 'jira-down' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [productId]);
+  return state;
+}
+
+function TicketCountValue({
+  productId,
+  kind,
+  state,
 }: {
-  testId: string;
+  productId: string;
+  kind: 'cr' | 'bug';
+  state: JiraState;
 }): React.ReactElement {
-  // S4 (HUB-1647) swaps this pulse for the real count once the Jira
-  // integration lands. Rendered as a fixed-width dash so the card layout
-  // doesn't shift when the number arrives (CLS < 0.05 per S7).
+  const testIdBase = kind === 'cr' ? 'product-card-cr-count' : 'product-card-bug-count';
+  if (state.kind === 'loading') {
+    return (
+      <span
+        data-testid={`${testIdBase}-skeleton-${productId}`}
+        className="inline-block h-4 w-6 animate-pulse rounded bg-deep-charcoal/10"
+        aria-hidden="true"
+      />
+    );
+  }
+  if (state.kind === 'degraded') {
+    return (
+      <span
+        data-testid={`${testIdBase}-degraded-${productId}`}
+        title={JIRA_DEGRADED_TOOLTIP}
+        aria-label={JIRA_DEGRADED_TOOLTIP}
+        className="inline-block min-w-[1.5rem] text-center text-deep-charcoal/40"
+      >
+        —
+      </span>
+    );
+  }
+  const value = kind === 'cr' ? state.counts.openCRs : state.counts.openBugs;
+  const syncLabel = `last synced ${relativeMinutesSince(state.counts.lastSyncedAt)}`;
   return (
     <span
-      data-testid={testId}
-      className="inline-block h-4 w-6 animate-pulse rounded bg-deep-charcoal/10"
-      aria-hidden="true"
-    />
+      data-testid={`${testIdBase}-${productId}`}
+      title={syncLabel}
+      aria-label={syncLabel}
+      className="inline-block min-w-[1.5rem] text-center font-medium text-primary-navy"
+    >
+      {value}
+    </span>
   );
 }
 
@@ -173,6 +284,7 @@ function ProductCard({
 }: {
   product: PortfolioProduct;
 }): React.ReactElement {
+  const jira = useJiraTicketCounts(product.productId);
   const ariaLabel = `${product.productName}, status ${product.status || 'unknown'}, MRR ${formatDollarsFromCents(product.mrrCents)}`;
   return (
     <Link
@@ -207,14 +319,18 @@ function ProductCard({
       <div className="mt-1 flex items-center gap-3 text-xs font-body text-deep-charcoal/70">
         <span className="inline-flex items-center gap-1">
           Open CRs:{' '}
-          <TicketCountSkeleton
-            testId={`product-card-cr-count-skeleton-${product.productId}`}
+          <TicketCountValue
+            productId={product.productId}
+            kind="cr"
+            state={jira}
           />
         </span>
         <span className="inline-flex items-center gap-1">
           Open Bugs:{' '}
-          <TicketCountSkeleton
-            testId={`product-card-bug-count-skeleton-${product.productId}`}
+          <TicketCountValue
+            productId={product.productId}
+            kind="bug"
+            state={jira}
           />
         </span>
       </div>

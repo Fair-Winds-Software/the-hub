@@ -3,6 +3,10 @@
 // formatting + link-wrapping (open-in-new-tab friendly) + keyboard focus
 // path + CRs/Bugs slot skeletons (S4 fills) + loading skeleton + error
 // state + retry + empty state + axe-core zero violations.
+// Authorized by HUB-1647 (E-FE-2 S4) — Jira ticket counts fill the CR/Bug
+// slots per card; graceful degrade (network error / 4xx / 5xx OR the
+// {available: false} payload from HUB-1556 FR-001) renders "—" with the
+// "Jira temporarily unavailable" tooltip.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   act,
@@ -22,6 +26,8 @@ vi.mock('../../../lib/api', () => ({
     get: (...args: unknown[]) => apiGetMock(...args),
   },
 }));
+
+const JIRA_UNAVAILABLE_DEFAULT = new Error('jira-unavailable');
 
 const P1 = {
   productId: 'p-1',
@@ -58,6 +64,11 @@ function mockProducts(products: unknown[] = [P1, P2, P3]) {
   apiGetMock.mockImplementation((path: string) => {
     if (path.startsWith('/api/v1/admin/portfolio/products')) {
       return Promise.resolve({ data: products, total: products.length });
+    }
+    if (path.startsWith('/api/v1/admin/integrations/jira/tickets')) {
+      // Default: Jira endpoint not yet built (HUB-1556 FR-001) — resolves
+      // to the degrade state per S4 graceful-degrade rule.
+      return Promise.reject(JIRA_UNAVAILABLE_DEFAULT);
     }
     return Promise.reject(new Error(`unexpected: ${path}`));
   });
@@ -177,19 +188,18 @@ describe('ProductGridWidget (HUB-1646)', () => {
       expect(mrrValues).toEqual(['$500', '$0', '$100']);
     });
 
-    it('CR + Bug count slots reserve S4 layout via skeleton pulses', async () => {
+    it('CR + Bug count slots collapse to the degrade state when the Jira endpoint is unavailable', async () => {
       mockProducts([P1]);
       await act(async () => {
         renderWidget();
       });
       await waitFor(() => {
-        expect(screen.getByTestId('product-card-p-1')).toBeInTheDocument();
+        expect(
+          screen.getByTestId('product-card-cr-count-degraded-p-1'),
+        ).toBeInTheDocument();
       });
       expect(
-        screen.getByTestId('product-card-cr-count-skeleton-p-1'),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByTestId('product-card-bug-count-skeleton-p-1'),
+        screen.getByTestId('product-card-bug-count-degraded-p-1'),
       ).toBeInTheDocument();
     });
   });
@@ -251,6 +261,140 @@ describe('ProductGridWidget (HUB-1646)', () => {
       expect(
         screen.getByTestId('product-grid-widget-empty').textContent,
       ).toMatch(/No products/i);
+    });
+  });
+
+  describe('HUB-1647 — Jira ticket counts + graceful degrade', () => {
+    it('renders openCRs + openBugs when the Jira endpoint returns counts', async () => {
+      apiGetMock.mockImplementation((path: string) => {
+        if (path.startsWith('/api/v1/admin/portfolio/products')) {
+          return Promise.resolve({ data: [P1], total: 1 });
+        }
+        if (path.startsWith('/api/v1/admin/integrations/jira/tickets')) {
+          return Promise.resolve({
+            openCRs: 3,
+            openBugs: 5,
+            lastSyncedAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+          });
+        }
+        return Promise.reject(new Error(`unexpected: ${path}`));
+      });
+      await act(async () => {
+        renderWidget();
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('product-card-cr-count-p-1'),
+        ).toBeInTheDocument();
+      });
+      expect(
+        screen.getByTestId('product-card-cr-count-p-1').textContent,
+      ).toBe('3');
+      expect(
+        screen.getByTestId('product-card-bug-count-p-1').textContent,
+      ).toBe('5');
+      // "last synced N min ago" tooltip is exposed via aria-label + title.
+      expect(
+        screen
+          .getByTestId('product-card-cr-count-p-1')
+          .getAttribute('aria-label'),
+      ).toMatch(/last synced 4 min ago/);
+    });
+
+    it('degrades gracefully when the endpoint returns {available:false}', async () => {
+      apiGetMock.mockImplementation((path: string) => {
+        if (path.startsWith('/api/v1/admin/portfolio/products')) {
+          return Promise.resolve({ data: [P1], total: 1 });
+        }
+        if (path.startsWith('/api/v1/admin/integrations/jira/tickets')) {
+          return Promise.resolve({
+            available: false,
+            reason: 'rate-limited',
+          });
+        }
+        return Promise.reject(new Error(`unexpected: ${path}`));
+      });
+      await act(async () => {
+        renderWidget();
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('product-card-cr-count-degraded-p-1'),
+        ).toBeInTheDocument();
+      });
+      const dash = screen.getByTestId('product-card-cr-count-degraded-p-1');
+      expect(dash.textContent).toBe('—');
+      expect(dash.getAttribute('title')).toMatch(
+        /Jira temporarily unavailable/,
+      );
+      expect(dash.getAttribute('aria-label')).toMatch(
+        /Jira temporarily unavailable/,
+      );
+      // No error toast / red banner surfaces at the widget level.
+      expect(
+        screen.queryByTestId('product-grid-widget-error'),
+      ).toBeNull();
+    });
+
+    it('degrades gracefully on network / 5xx failure of the Jira endpoint (no toast, no red badge)', async () => {
+      apiGetMock.mockImplementation((path: string) => {
+        if (path.startsWith('/api/v1/admin/portfolio/products')) {
+          return Promise.resolve({ data: [P1], total: 1 });
+        }
+        if (path.startsWith('/api/v1/admin/integrations/jira/tickets')) {
+          return Promise.reject(new Error('network fault'));
+        }
+        return Promise.reject(new Error(`unexpected: ${path}`));
+      });
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      await act(async () => {
+        renderWidget();
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('product-card-cr-count-degraded-p-1'),
+        ).toBeInTheDocument();
+      });
+      expect(
+        screen.queryByTestId('product-grid-widget-error'),
+      ).toBeNull();
+      errSpy.mockRestore();
+    });
+
+    it('per-card independence — one product’s Jira failure does NOT prevent another product’s counts from rendering', async () => {
+      apiGetMock.mockImplementation((path: string) => {
+        if (path.startsWith('/api/v1/admin/portfolio/products')) {
+          return Promise.resolve({ data: [P1, P2], total: 2 });
+        }
+        if (path.startsWith('/api/v1/admin/integrations/jira/tickets')) {
+          if (path.includes('p-1')) {
+            return Promise.reject(new Error('rate limited'));
+          }
+          return Promise.resolve({
+            openCRs: 7,
+            openBugs: 2,
+            lastSyncedAt: new Date().toISOString(),
+          });
+        }
+        return Promise.reject(new Error(`unexpected: ${path}`));
+      });
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      await act(async () => {
+        renderWidget();
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('product-card-cr-count-degraded-p-1'),
+        ).toBeInTheDocument();
+      });
+      // P2 rendered its real counts even though P1 failed.
+      expect(
+        screen.getByTestId('product-card-cr-count-p-2').textContent,
+      ).toBe('7');
+      expect(
+        screen.getByTestId('product-card-bug-count-p-2').textContent,
+      ).toBe('2');
+      errSpy.mockRestore();
     });
   });
 
