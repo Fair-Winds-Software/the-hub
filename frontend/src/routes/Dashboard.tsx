@@ -1,0 +1,102 @@
+// Authorized by HUB-1644 (E-FE-2 S1) — Dashboard route shell. This is the
+// canonical post-login landing per HUB-1546 §7 step 2 / HUB-1555 FR-004; the
+// route is registered by App.tsx with the same product_admin guard that the
+// prior DashboardStub used. The shell owns only the layout container + three
+// named widget regions wrapped in `<section aria-label>` landmarks; the
+// regions are populated by:
+//
+//   - Portfolio summary  (aria-label="Portfolio summary")   → S2 (HUB-1645)
+//   - Portfolio products (aria-label="Portfolio products")  → S3 (HUB-1646)
+//   - Dashboard sidebar  (aria-label="Dashboard sidebar")   → S5 (HUB-1648)
+//
+// Each region is intentionally empty at S1 (renders a placeholder skeleton
+// so the smoke test can assert the region resolved without throwing). Data
+// fetching lives entirely inside the child widgets per FR-014 / S7 — the
+// shell must not fetch anything of its own.
+//
+// Heading structure: h1 = page title ("Dashboard"), then each region gets a
+// visually-hidden h2 keyed off the region's aria-label so screen readers
+// can navigate section-by-section. Widget children (added in S2/S3/S5) can
+// use h3+ inside their region without breaking heading order.
+
+const PAGE_TITLE = 'Dashboard | HUB Console';
+
+function RegionPlaceholder({
+  testId,
+}: {
+  testId: string;
+}): React.ReactElement {
+  // aria-label is intentionally omitted — axe forbids aria-label on plain
+  // <div> without a role, and the enclosing <section aria-labelledby> already
+  // carries the accessible region name for screen readers.
+  return (
+    <div
+      data-testid={testId}
+      className="min-h-[6rem] animate-pulse rounded-md bg-deep-charcoal/5"
+    />
+  );
+}
+
+export default function Dashboard(): React.ReactElement {
+  // Match the pattern used by the other console routes — set the tab title
+  // on mount, restore on unmount so subsequent routes get their own title.
+  if (typeof document !== 'undefined' && document.title !== PAGE_TITLE) {
+    document.title = PAGE_TITLE;
+  }
+
+  return (
+    <div
+      id="main-content"
+      data-testid="dashboard-page"
+      className="flex flex-col gap-6"
+    >
+      <header className="flex flex-col gap-1">
+        <h1
+          data-testid="dashboard-heading"
+          className="font-heading text-2xl text-primary-navy"
+        >
+          Dashboard
+        </h1>
+        <p className="font-body text-sm text-deep-charcoal/70">
+          Portfolio overview — MRR, per-product status, and recent activity.
+        </p>
+      </header>
+
+      <section
+        aria-labelledby="dashboard-region-portfolio-summary-heading"
+        data-testid="dashboard-region-portfolio-summary"
+      >
+        <h2
+          id="dashboard-region-portfolio-summary-heading"
+          className="sr-only"
+        >
+          Portfolio summary
+        </h2>
+        <RegionPlaceholder testId="dashboard-portfolio-summary-placeholder" />
+      </section>
+
+      <section
+        aria-labelledby="dashboard-region-product-grid-heading"
+        data-testid="dashboard-region-product-grid"
+      >
+        <h2
+          id="dashboard-region-product-grid-heading"
+          className="sr-only"
+        >
+          Portfolio products
+        </h2>
+        <RegionPlaceholder testId="dashboard-product-grid-placeholder" />
+      </section>
+
+      <section
+        aria-labelledby="dashboard-region-sidebar-heading"
+        data-testid="dashboard-region-sidebar"
+      >
+        <h2 id="dashboard-region-sidebar-heading" className="sr-only">
+          Dashboard sidebar
+        </h2>
+        <RegionPlaceholder testId="dashboard-sidebar-placeholder" />
+      </section>
+    </div>
+  );
+}

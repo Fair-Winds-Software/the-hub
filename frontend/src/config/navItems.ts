@@ -1,7 +1,8 @@
 // Authorized by HUB-1577 — nav items config (icon + label + route + RBAC) for the Console Sidebar.
 // Downstream Epics will append items (Products, Audit, Plan Advisor, etc.) as they ship; this
-// v0.1 list is intentionally minimal: dashboard is real (DashboardStub), audit/settings are
-// placeholders the sidebar filter in HUB-1578 will RBAC-gate.
+// v0.1 list is intentionally minimal: dashboard is real (HUB-1644 Dashboard shell — replaced
+// the HUB-1577/1694 DashboardStub), audit/settings are placeholders the sidebar filter in
+// HUB-1578 will RBAC-gate.
 import { LayoutDashboard, ScrollText, Settings, type LucideIcon } from 'lucide-react';
 import type { OperatorRole } from '../stores/sessionStore';
 

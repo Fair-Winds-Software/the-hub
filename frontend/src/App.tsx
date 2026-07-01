@@ -23,6 +23,10 @@
 // Authorized by HUB-1622 (E-FE-8 S3) — /console/compliance route registered. Both
 //   product_admin and super_admin may access (RBAC scope-specific filtering is BE
 //   per HUB-1628 S9).
+// Authorized by HUB-1644 (E-FE-2 S1) — /console/dashboard now routes to the real
+//   Dashboard shell (three named widget regions: portfolioSummary, productGrid,
+//   sidebar). Supersedes the HUB-1577 / HUB-1694 DashboardStub per HUB-1546 §7
+//   step 2. Same product_admin guard.
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -33,7 +37,7 @@ import { drainPendingRevokes } from './lib/pendingRevokes';
 import { useSessionStore } from './stores/sessionStore';
 
 const Login = lazy(() => import('./routes/Login'));
-const DashboardStub = lazy(() => import('./routes/DashboardStub'));
+const Dashboard = lazy(() => import('./routes/Dashboard'));
 const Audit = lazy(() => import('./routes/Audit'));
 const Products = lazy(() => import('./routes/Products'));
 const ProductDetail = lazy(() => import('./routes/ProductDetail'));
@@ -72,7 +76,7 @@ export function App() {
               path="/console/dashboard"
               element={
                 <GuardedRoute requiredRole="product_admin">
-                  <DashboardStub />
+                  <Dashboard />
                 </GuardedRoute>
               }
             />
