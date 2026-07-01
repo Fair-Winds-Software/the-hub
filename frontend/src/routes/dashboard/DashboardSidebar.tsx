@@ -28,6 +28,13 @@
 //      error as a degrade → friendly "activity feed unavailable" panel
 //      instead of a hard error banner. The three quick actions and the
 //      rest of the dashboard stay fully usable (FR-014).
+//
+// Authorized by HUB-1649 (E-FE-2 S6) — RBAC scope wiring. The activity
+// feed trusts server-side scope enforcement in operatorRbac.ts (per FR-013)
+// and renders EXACTLY what the server returns; the FE does NOT re-filter,
+// because doing so would mask server bugs where an unscoped row leaked
+// through. This is the same server-authoritative contract used by
+// HUB-1642 for plan-advisor scope wiring.
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../lib/api';

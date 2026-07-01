@@ -9,6 +9,14 @@
 // {available:false} degrade payload from HUB-1556 FR-001 renders "—" in
 // both slots with a tooltip explaining the temporary unavailability. No
 // error toast, no red badge — the card stays fully functional.
+// Authorized by HUB-1649 (E-FE-2 S6) — RBAC scope wiring. Server is
+// authoritative: /api/v1/admin/portfolio/products already filters by the
+// operator's tenant_id (HUB-1700), so product_admin sees only their
+// scoped products and super_admin sees all. This widget does NOT
+// re-filter — the FE renders whatever the server returns, matching the
+// same pattern used by HUB-1642 for the plan advisor. URL-hack redirects
+// on the products detail route are handled by HUB-1555 GuardedRoute +
+// the destination view's PermissionDeniedError handler.
 //
 // Spec deviations (documented per ironclad-engineer):
 //
