@@ -63,6 +63,9 @@
 //   history + New/Archive). All 5 settings sub-routes are now real; the
 //   SettingsPlaceholder import is removed from App.tsx (still used by the
 //   Settings shell test file).
+// Authorized by HUB-1675 (E-FE-7 S2) — /console/system-health portfolio grid
+//   route registered. product_admin + super_admin may access; scoping is
+//   server-authoritative via HUB-1674.
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -118,6 +121,7 @@ const EscalationManager = lazy(
 const WorkflowHooksManager = lazy(
   () => import('./routes/settings/WorkflowHooksManager'),
 );
+const SystemHealth = lazy(() => import('./routes/SystemHealth'));
 
 export function App() {
   useEffect(() => {
@@ -239,6 +243,14 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <PlanAdvisor />
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/system-health"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <SystemHealth />
                 </GuardedRoute>
               }
             />
