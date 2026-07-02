@@ -245,9 +245,14 @@ const adminNotificationsRoutes: FastifyPluginAsync = async (fastify) => {
     assertUUID(tenantId, 'tenantId');
     assertUUID(productId, 'productId');
     assertTenantAccess(request, tenantId);
-
+    // HUB-1661 (E-FE-6 S2): archived_at IS NULL = active; ?includeArchived=true reveals tombstones.
+    const q = request.query as Record<string, string | undefined>;
+    const includeArchived = q.includeArchived === 'true';
     const { rows } = await pool.query(
-      `SELECT ${CHANNEL_SELECT} FROM notification_channels WHERE tenant_id = $1 AND product_id = $2 ORDER BY created_at ASC`,
+      `SELECT ${CHANNEL_SELECT} FROM notification_channels
+        WHERE tenant_id = $1 AND product_id = $2
+          ${includeArchived ? '' : 'AND archived_at IS NULL'}
+        ORDER BY created_at ASC`,
       [tenantId, productId],
     );
     return reply.send({ channels: rows });
@@ -294,9 +299,13 @@ const adminNotificationsRoutes: FastifyPluginAsync = async (fastify) => {
     assertUUID(productId, 'productId');
     assertUUID(channelId, 'channelId');
     assertTenantAccess(request, tenantId);
-
+    // HUB-1661 (E-FE-6 S2): soft-archive per Ironclad Interface invariant 1
+    // (never destroy data). Idempotent: re-archiving stays 204 without
+    // resetting archived_at.
     const { rowCount } = await pool.query(
-      `DELETE FROM notification_channels WHERE id = $1 AND tenant_id = $2 AND product_id = $3`,
+      `UPDATE notification_channels
+          SET archived_at = COALESCE(archived_at, NOW())
+        WHERE id = $1 AND tenant_id = $2 AND product_id = $3`,
       [channelId, tenantId, productId],
     );
     if (rowCount === 0) throw new AppError(404, 'Channel not found');
@@ -328,8 +337,15 @@ const adminNotificationsRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const contacts = validateContacts(escalation_contacts);
 
+    // HUB-1661 (E-FE-6 S2): only count active (non-archived) rules toward
+    // the 2-tier cap so an operator can re-tier after archiving.
     const { rows: countRows } = await pool.query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM escalation_rules WHERE tenant_id = $1 AND product_id = $2 AND alert_type = $3`,
+      `SELECT COUNT(*) AS count
+         FROM escalation_rules
+        WHERE tenant_id = $1
+          AND product_id = $2
+          AND alert_type = $3
+          AND archived_at IS NULL`,
       [tenantId, productId, alert_type],
     );
     if (parseInt(countRows[0]!.count, 10) >= 2) {
@@ -357,12 +373,15 @@ const adminNotificationsRoutes: FastifyPluginAsync = async (fastify) => {
     assertUUID(tenantId, 'tenantId');
     assertUUID(productId, 'productId');
     assertTenantAccess(request, tenantId);
-
+    // HUB-1661 (E-FE-6 S2): archived_at IS NULL = active; ?includeArchived=true reveals tombstones.
+    const q = request.query as Record<string, string | undefined>;
+    const includeArchived = q.includeArchived === 'true';
     const { rows } = await pool.query(
       `SELECT id, tenant_id, product_id, alert_type, tier, threshold_minutes, escalation_contacts
-       FROM escalation_rules
-       WHERE tenant_id = $1 AND product_id = $2
-       ORDER BY alert_type ASC, tier ASC`,
+         FROM escalation_rules
+        WHERE tenant_id = $1 AND product_id = $2
+          ${includeArchived ? '' : 'AND archived_at IS NULL'}
+        ORDER BY alert_type ASC, tier ASC`,
       [tenantId, productId],
     );
     return reply.send({ rules: rows });
@@ -374,9 +393,11 @@ const adminNotificationsRoutes: FastifyPluginAsync = async (fastify) => {
     assertUUID(productId, 'productId');
     assertUUID(ruleId, 'ruleId');
     assertTenantAccess(request, tenantId);
-
+    // HUB-1661 (E-FE-6 S2): soft-archive per Ironclad Interface invariant 1.
     const { rowCount } = await pool.query(
-      `DELETE FROM escalation_rules WHERE id = $1 AND tenant_id = $2 AND product_id = $3`,
+      `UPDATE escalation_rules
+          SET archived_at = COALESCE(archived_at, NOW())
+        WHERE id = $1 AND tenant_id = $2 AND product_id = $3`,
       [ruleId, tenantId, productId],
     );
     if (rowCount === 0) throw new AppError(404, 'Escalation rule not found');
@@ -436,14 +457,17 @@ const adminNotificationsRoutes: FastifyPluginAsync = async (fastify) => {
     const { tenantId } = request.params as { tenantId: string };
     assertUUID(tenantId, 'tenantId');
     assertTenantAccess(request, tenantId);
-
+    // HUB-1661 (E-FE-6 S2): archived_at IS NULL = active; ?includeArchived=true reveals tombstones.
+    const q = request.query as Record<string, string | undefined>;
+    const includeArchived = q.includeArchived === 'true';
     const { rows } = await pool.query(
       `SELECT id, tenant_id, product_id, trigger_event_type, action_type,
               jsonb_set(action_config, '{hmac_secret}', '"***"') AS action_config,
               enabled, created_at
-       FROM workflow_hooks
-       WHERE tenant_id = $1
-       ORDER BY created_at ASC`,
+         FROM workflow_hooks
+        WHERE tenant_id = $1
+          ${includeArchived ? '' : 'AND archived_at IS NULL'}
+        ORDER BY created_at ASC`,
       [tenantId],
     );
     return reply.send(rows);
@@ -454,9 +478,11 @@ const adminNotificationsRoutes: FastifyPluginAsync = async (fastify) => {
     assertUUID(tenantId, 'tenantId');
     assertUUID(hookId, 'hookId');
     assertTenantAccess(request, tenantId);
-
+    // HUB-1661 (E-FE-6 S2): soft-archive per Ironclad Interface invariant 1.
     const { rowCount } = await pool.query(
-      `DELETE FROM workflow_hooks WHERE id = $1 AND tenant_id = $2`,
+      `UPDATE workflow_hooks
+          SET archived_at = COALESCE(archived_at, NOW())
+        WHERE id = $1 AND tenant_id = $2`,
       [hookId, tenantId],
     );
     if (rowCount === 0) throw new AppError(404, 'Hook not found');
