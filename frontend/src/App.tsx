@@ -41,6 +41,11 @@
 //   Same super_admin guard.
 // Authorized by HUB-1658 (E-FE-5 S8) — /console/products/:productId/pricing/freeze
 //   route registered (BillingFreezeControls). Same super_admin guard.
+// Authorized by HUB-1662 (E-FE-6 S3) — /console/settings shell now nests five
+//   sub-routes (operators, hub, notifications, escalation, hooks). Each is
+//   independently deep-linkable and super_admin-guarded; default redirect
+//   /console/settings → /console/settings/operators. Un-merged sub-routes
+//   render SettingsPlaceholder pending S4..S8. Supersedes HUB-1578 SettingsStub.
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -49,6 +54,7 @@ import { Toaster } from './components/Toaster';
 import { apiClient } from './lib/api';
 import { drainPendingRevokes } from './lib/pendingRevokes';
 import { useSessionStore } from './stores/sessionStore';
+import { SettingsPlaceholder } from './routes/settings/SettingsPlaceholder';
 
 const Login = lazy(() => import('./routes/Login'));
 const Dashboard = lazy(() => import('./routes/Dashboard'));
@@ -80,7 +86,7 @@ const NewRecommendationFlow = lazy(
 const RecommendationResultView = lazy(
   () => import('./routes/planAdvisor/RecommendationResultView'),
 );
-const SettingsStub = lazy(() => import('./routes/SettingsStub'));
+const Settings = lazy(() => import('./routes/Settings'));
 
 export function App() {
   useEffect(() => {
@@ -225,10 +231,65 @@ export function App() {
               path="/console/settings"
               element={
                 <GuardedRoute requiredRole="super_admin">
-                  <SettingsStub />
+                  <Settings />
                 </GuardedRoute>
               }
-            />
+            >
+              <Route
+                index
+                element={<Navigate to="/console/settings/operators" replace />}
+              />
+              <Route
+                path="operators"
+                element={
+                  <SettingsPlaceholder
+                    sectionLabel="Operators"
+                    sectionId="operators"
+                    storyKey="HUB-1663"
+                  />
+                }
+              />
+              <Route
+                path="hub"
+                element={
+                  <SettingsPlaceholder
+                    sectionLabel="HUB Settings"
+                    sectionId="hub"
+                    storyKey="HUB-1664"
+                  />
+                }
+              />
+              <Route
+                path="notifications"
+                element={
+                  <SettingsPlaceholder
+                    sectionLabel="Notifications"
+                    sectionId="notifications"
+                    storyKey="HUB-1665"
+                  />
+                }
+              />
+              <Route
+                path="escalation"
+                element={
+                  <SettingsPlaceholder
+                    sectionLabel="Escalation"
+                    sectionId="escalation"
+                    storyKey="HUB-1666"
+                  />
+                }
+              />
+              <Route
+                path="hooks"
+                element={
+                  <SettingsPlaceholder
+                    sectionLabel="Workflow Hooks"
+                    sectionId="hooks"
+                    storyKey="HUB-1667"
+                  />
+                }
+              />
+            </Route>
           </Route>
           <Route path="*" element={<Navigate to="/console/login" replace />} />
         </Routes>
