@@ -52,6 +52,9 @@
 // Authorized by HUB-1664 (E-FE-6 S5) — /hub sub-route replaced by real
 //   HubSettingsManager (catalog-driven editor + JSON fallback). Placeholder
 //   for /hub removed.
+// Authorized by HUB-1665 (E-FE-6 S6) — /notifications sub-route replaced by
+//   real NotificationsManager (product picker + channel CRUD + soft-archive).
+//   Placeholder for /notifications removed.
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -98,6 +101,9 @@ const OperatorsManager = lazy(
 );
 const HubSettingsManager = lazy(
   () => import('./routes/settings/HubSettingsManager'),
+);
+const NotificationsManager = lazy(
+  () => import('./routes/settings/NotificationsManager'),
 );
 
 export function App() {
@@ -253,16 +259,7 @@ export function App() {
               />
               <Route path="operators" element={<OperatorsManager />} />
               <Route path="hub" element={<HubSettingsManager />} />
-              <Route
-                path="notifications"
-                element={
-                  <SettingsPlaceholder
-                    sectionLabel="Notifications"
-                    sectionId="notifications"
-                    storyKey="HUB-1665"
-                  />
-                }
-              />
+              <Route path="notifications" element={<NotificationsManager />} />
               <Route
                 path="escalation"
                 element={
