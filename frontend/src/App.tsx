@@ -58,6 +58,11 @@
 // Authorized by HUB-1666 (E-FE-6 S7) — /escalation sub-route replaced by real
 //   EscalationManager (product picker + per-alert-type tier list + New/Archive
 //   flows within the BE 2-tier cap). Placeholder for /escalation removed.
+// Authorized by HUB-1667 (E-FE-6 S8) — /hooks sub-route replaced by real
+//   WorkflowHooksManager (tenant picker + hook list + expandable execution
+//   history + New/Archive). All 5 settings sub-routes are now real; the
+//   SettingsPlaceholder import is removed from App.tsx (still used by the
+//   Settings shell test file).
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -66,7 +71,6 @@ import { Toaster } from './components/Toaster';
 import { apiClient } from './lib/api';
 import { drainPendingRevokes } from './lib/pendingRevokes';
 import { useSessionStore } from './stores/sessionStore';
-import { SettingsPlaceholder } from './routes/settings/SettingsPlaceholder';
 
 const Login = lazy(() => import('./routes/Login'));
 const Dashboard = lazy(() => import('./routes/Dashboard'));
@@ -110,6 +114,9 @@ const NotificationsManager = lazy(
 );
 const EscalationManager = lazy(
   () => import('./routes/settings/EscalationManager'),
+);
+const WorkflowHooksManager = lazy(
+  () => import('./routes/settings/WorkflowHooksManager'),
 );
 
 export function App() {
@@ -267,16 +274,7 @@ export function App() {
               <Route path="hub" element={<HubSettingsManager />} />
               <Route path="notifications" element={<NotificationsManager />} />
               <Route path="escalation" element={<EscalationManager />} />
-              <Route
-                path="hooks"
-                element={
-                  <SettingsPlaceholder
-                    sectionLabel="Workflow Hooks"
-                    sectionId="hooks"
-                    storyKey="HUB-1667"
-                  />
-                }
-              />
+              <Route path="hooks" element={<WorkflowHooksManager />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/console/login" replace />} />
