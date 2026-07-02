@@ -333,9 +333,15 @@ export async function assignPlanBulk(input: AssignPlanBulkInput): Promise<BulkAs
 
 // ── listDiscounts / applyDiscount / deleteDiscount ─────────────────────────────
 
+// HUB-1653 (E-FE-5 S3) — VERIFIED soft-archive: deleteDiscount() sets
+// active=false + writes audit_log. active=false is the canonical "archived"
+// state (no separate archived_at column). listDiscounts() accepts
+// { includeArchived } so the HUB-1657 FE UI can toggle archived-visibility
+// without altering the default active-only filter.
 export async function listDiscounts(
   tenantId: string,
   productId: string,
+  options: { includeArchived?: boolean } = {},
 ): Promise<TenantDiscount[]> {
   const pool = getPool();
   const { rows } = await pool.query<{
@@ -352,7 +358,8 @@ export async function listDiscounts(
     `SELECT id, tenant_id, product_id, discount_type, discount_value::TEXT,
             expiry_date, notes, active, created_at
      FROM tenant_discounts
-     WHERE tenant_id = $1 AND product_id = $2 AND active = true
+     WHERE tenant_id = $1 AND product_id = $2
+       ${options.includeArchived ? '' : 'AND active = true'}
      ORDER BY created_at DESC`,
     [tenantId, productId],
   );
@@ -471,9 +478,13 @@ export async function deleteDiscount(discountId: string, operatorId?: string): P
 
 // ── listOverrides / applyOverride / deleteOverride ────────────────────────────
 
+// HUB-1653 (E-FE-5 S3) — VERIFIED soft-archive: deleteOverride() sets
+// active=false + writes audit_log. Symmetric to listDiscounts:
+// { includeArchived } toggles the default active-only filter.
 export async function listOverrides(
   tenantId: string,
   productId: string,
+  options: { includeArchived?: boolean } = {},
 ): Promise<TenantPricingOverride[]> {
   const pool = getPool();
   const { rows } = await pool.query<{
@@ -487,7 +498,8 @@ export async function listOverrides(
   }>(
     `SELECT id, tenant_id, product_id, metric_name, unit_price_cents, active, created_at
      FROM tenant_pricing_overrides
-     WHERE tenant_id = $1 AND product_id = $2 AND active = true
+     WHERE tenant_id = $1 AND product_id = $2
+       ${options.includeArchived ? '' : 'AND active = true'}
      ORDER BY metric_name`,
     [tenantId, productId],
   );

@@ -161,13 +161,20 @@ const adminOperatorConsoleRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── HUB-1147: Discounts ───────────────────────────────────────────────────────
+  //
+  // HUB-1653 (E-FE-5 S3): VERIFIED that deleteDiscount() is already soft-archive
+  // (sets active=false + writes audit_log; see operatorConsoleService.deleteDiscount).
+  // No migration required. The GET now accepts ?includeArchived=true so the
+  // HUB-1657 FE discount UI can toggle visibility of archived entries.
 
   fastify.get('/api/v1/admin/console/discounts/:tenantId/:productId', async (request, reply) => {
     const { tenantId, productId } = request.params as { tenantId: string; productId: string };
     assertUUID(tenantId, 'tenantId');
     assertUUID(productId, 'productId');
 
-    const discounts = await listDiscounts(tenantId, productId);
+    const q = request.query as Record<string, string | undefined>;
+    const includeArchived = q.includeArchived === 'true';
+    const discounts = await listDiscounts(tenantId, productId, { includeArchived });
     return reply.send({ data: discounts });
   });
 
@@ -213,13 +220,20 @@ const adminOperatorConsoleRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── HUB-1147: Pricing overrides ───────────────────────────────────────────────
+  //
+  // HUB-1653 (E-FE-5 S3): VERIFIED that deleteOverride() is already soft-archive
+  // (sets active=false + writes audit_log; see operatorConsoleService.deleteOverride).
+  // No migration required. The GET now accepts ?includeArchived=true so the
+  // HUB-1657 FE override UI can toggle visibility of archived entries.
 
   fastify.get('/api/v1/admin/console/overrides/:tenantId/:productId', async (request, reply) => {
     const { tenantId, productId } = request.params as { tenantId: string; productId: string };
     assertUUID(tenantId, 'tenantId');
     assertUUID(productId, 'productId');
 
-    const overrides = await listOverrides(tenantId, productId);
+    const q = request.query as Record<string, string | undefined>;
+    const includeArchived = q.includeArchived === 'true';
+    const overrides = await listOverrides(tenantId, productId, { includeArchived });
     return reply.send({ data: overrides });
   });
 
