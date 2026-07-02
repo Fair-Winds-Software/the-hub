@@ -39,6 +39,8 @@
 // Authorized by HUB-1657 (E-FE-5 S7) — /console/products/:productId/pricing/exceptions
 //   route registered (PricingExceptionsManager: Discounts + Overrides tabs).
 //   Same super_admin guard.
+// Authorized by HUB-1658 (E-FE-5 S8) — /console/products/:productId/pricing/freeze
+//   route registered (BillingFreezeControls). Same super_admin guard.
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -64,6 +66,9 @@ const AddOnsManager = lazy(
 );
 const PricingExceptionsManager = lazy(
   () => import('./routes/productDetail/PricingExceptionsManager'),
+);
+const BillingFreezeControls = lazy(
+  () => import('./routes/productDetail/BillingFreezeControls'),
 );
 const Compliance = lazy(() => import('./routes/Compliance'));
 const ComplianceDetail = lazy(() => import('./routes/ComplianceDetail'));
@@ -157,6 +162,14 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="super_admin">
                   <PricingExceptionsManager />
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/products/:productId/pricing/freeze"
+              element={
+                <GuardedRoute requiredRole="super_admin">
+                  <BillingFreezeControls />
                 </GuardedRoute>
               }
             />
