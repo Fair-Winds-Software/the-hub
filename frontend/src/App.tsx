@@ -71,6 +71,9 @@
 //   / webhooks). Each sub-route is independently deep-linkable and lazy-
 //   mounted via React Router's <Outlet>. Un-shipped tab content renders
 //   SystemHealthTabPlaceholder pending HUB-1677 (S4) + HUB-1678 (S5).
+// Authorized by HUB-1677 (E-FE-7 S4) — /liveness + /errors sub-routes
+//   replaced by real tab components (badge + re-probe / audit-log row
+//   drawer). Placeholders for those two tabs removed.
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -129,6 +132,12 @@ const WorkflowHooksManager = lazy(
 );
 const SystemHealth = lazy(() => import('./routes/SystemHealth'));
 const SystemHealthDetail = lazy(() => import('./routes/SystemHealthDetail'));
+const SystemHealthLivenessTab = lazy(
+  () => import('./routes/systemHealth/SystemHealthLivenessTab'),
+);
+const SystemHealthErrorsTab = lazy(
+  () => import('./routes/systemHealth/SystemHealthErrorsTab'),
+);
 
 export function App() {
   useEffect(() => {
@@ -270,26 +279,8 @@ export function App() {
               }
             >
               <Route index element={<Navigate to="liveness" replace />} />
-              <Route
-                path="liveness"
-                element={
-                  <SystemHealthTabPlaceholder
-                    tabLabel="Liveness"
-                    tabId="liveness"
-                    storyKey="HUB-1677"
-                  />
-                }
-              />
-              <Route
-                path="errors"
-                element={
-                  <SystemHealthTabPlaceholder
-                    tabLabel="Errors"
-                    tabId="errors"
-                    storyKey="HUB-1677"
-                  />
-                }
-              />
+              <Route path="liveness" element={<SystemHealthLivenessTab />} />
+              <Route path="errors" element={<SystemHealthErrorsTab />} />
               <Route
                 path="queues"
                 element={
