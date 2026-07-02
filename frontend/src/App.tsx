@@ -55,6 +55,9 @@
 // Authorized by HUB-1665 (E-FE-6 S6) — /notifications sub-route replaced by
 //   real NotificationsManager (product picker + channel CRUD + soft-archive).
 //   Placeholder for /notifications removed.
+// Authorized by HUB-1666 (E-FE-6 S7) — /escalation sub-route replaced by real
+//   EscalationManager (product picker + per-alert-type tier list + New/Archive
+//   flows within the BE 2-tier cap). Placeholder for /escalation removed.
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -104,6 +107,9 @@ const HubSettingsManager = lazy(
 );
 const NotificationsManager = lazy(
   () => import('./routes/settings/NotificationsManager'),
+);
+const EscalationManager = lazy(
+  () => import('./routes/settings/EscalationManager'),
 );
 
 export function App() {
@@ -260,16 +266,7 @@ export function App() {
               <Route path="operators" element={<OperatorsManager />} />
               <Route path="hub" element={<HubSettingsManager />} />
               <Route path="notifications" element={<NotificationsManager />} />
-              <Route
-                path="escalation"
-                element={
-                  <SettingsPlaceholder
-                    sectionLabel="Escalation"
-                    sectionId="escalation"
-                    storyKey="HUB-1666"
-                  />
-                }
-              />
+              <Route path="escalation" element={<EscalationManager />} />
               <Route
                 path="hooks"
                 element={
