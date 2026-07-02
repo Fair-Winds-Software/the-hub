@@ -27,6 +27,9 @@
 //   Dashboard shell (three named widget regions: portfolioSummary, productGrid,
 //   sidebar). Supersedes the HUB-1577 / HUB-1694 DashboardStub per HUB-1546 §7
 //   step 2. Same product_admin guard.
+// Authorized by HUB-1654 (E-FE-5 S4) — /console/products/:productId/pricing
+//   route registered (Pricing Model Editor). super_admin only per FR-002 (PUT
+//   route BE enforcement); guard is super_admin.
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -41,6 +44,9 @@ const Dashboard = lazy(() => import('./routes/Dashboard'));
 const Audit = lazy(() => import('./routes/Audit'));
 const Products = lazy(() => import('./routes/Products'));
 const ProductDetail = lazy(() => import('./routes/ProductDetail'));
+const PricingModelEditor = lazy(
+  () => import('./routes/productDetail/PricingModelEditor'),
+);
 const Compliance = lazy(() => import('./routes/Compliance'));
 const ComplianceDetail = lazy(() => import('./routes/ComplianceDetail'));
 const SdkVersions = lazy(() => import('./routes/SdkVersions'));
@@ -101,6 +107,14 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <ProductDetail />
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/products/:productId/pricing"
+              element={
+                <GuardedRoute requiredRole="super_admin">
+                  <PricingModelEditor />
                 </GuardedRoute>
               }
             />
