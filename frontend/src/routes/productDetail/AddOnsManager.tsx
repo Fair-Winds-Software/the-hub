@@ -27,6 +27,7 @@ import { Link, useParams } from 'react-router-dom';
 import { apiClient } from '../../lib/api';
 import { PermissionDeniedError } from '../../lib/errors';
 import { AccessDeniedPage } from '../../components/AccessDeniedPage';
+import { formatCurrency } from './pricing-formatters';
 
 const ADDONS_PATH = '/api/v1/admin/addons';
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
@@ -77,15 +78,6 @@ const BILLING_INTERVALS: BillingInterval[] = [
   'year',
   'one_time',
 ];
-
-function formatUSD(cents: number | null | undefined): string {
-  if (cents == null) return '—';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(cents / 100);
-}
 
 function keyFromName(name: string): string {
   return name
@@ -266,7 +258,7 @@ function NewAddOnModal({ productId, onCancel, onCreated }: NewAddOnModalProps): 
             />
             {draft.unit_amount_cents && (
               <span className="text-xs text-deep-charcoal/60">
-                = {formatUSD(parseInt(draft.unit_amount_cents, 10) || 0)}
+                = {formatCurrency(parseInt(draft.unit_amount_cents, 10) || 0)}
               </span>
             )}
             {errors.unit_amount_cents && (
@@ -401,7 +393,7 @@ function EditAddOnModal({ addon, onCancel, onSaved }: EditAddOnModalProps): Reac
             />
             {unitAmount && (
               <span className="text-xs text-deep-charcoal/60">
-                = {formatUSD(parseInt(unitAmount, 10) || 0)}
+                = {formatCurrency(parseInt(unitAmount, 10) || 0)}
               </span>
             )}
           </label>
@@ -688,7 +680,7 @@ export default function AddOnsManager(): React.ReactElement {
                 <p className="font-heading text-base text-primary-navy">{a.name}</p>
                 <p className="font-mono text-xs text-deep-charcoal/60">{a.key}</p>
                 <p className="text-xs font-body text-deep-charcoal/70">
-                  {formatUSD(a.unit_amount_cents)} · {a.billing_type}
+                  {formatCurrency(a.unit_amount_cents)} · {a.billing_type}
                   {a.billing_interval ? ` · ${a.billing_interval}` : ''}
                 </p>
               </div>

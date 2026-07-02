@@ -41,6 +41,7 @@ import { Link, useParams } from 'react-router-dom';
 import { apiClient } from '../../lib/api';
 import { PermissionDeniedError } from '../../lib/errors';
 import { AccessDeniedPage } from '../../components/AccessDeniedPage';
+import { formatCurrency } from './pricing-formatters';
 
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
 const PAGE_TITLE = 'Pricing model | HUB Console';
@@ -240,14 +241,6 @@ function validateDraft(draft: EditableDraft): ValidationResult {
   return { errors, parsedConfig, parsedTiers };
 }
 
-function formatUSD(cents: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(cents / 100);
-}
-
 function ActiveSubscribersBanner({
   productName,
   onDismiss,
@@ -369,7 +362,7 @@ function TierEditor({ tiers, errors, onChange }: TierEditorProps): React.ReactEl
                 className="rounded border border-deep-charcoal/20 p-1 text-sm text-primary-navy focus:outline-none focus:ring-2 focus:ring-accent-brass"
               />
               <span className="text-[0.65rem] text-deep-charcoal/50">
-                {formatUSD(parseInt(t.unit_price_cents, 10) || 0)}
+                {formatCurrency(parseInt(t.unit_price_cents, 10) || 0)}
               </span>
               {unitErr && (
                 <span
@@ -688,7 +681,7 @@ export default function PricingModelEditor(): React.ReactElement {
         />
         {draft.marginFloorCents && (
           <span className="text-xs text-deep-charcoal/60">
-            = {formatUSD(parseInt(draft.marginFloorCents, 10) || 0)}
+            = {formatCurrency(parseInt(draft.marginFloorCents, 10) || 0)}
           </span>
         )}
         {errors.marginFloorCents && (

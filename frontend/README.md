@@ -66,6 +66,20 @@ When a future Epic adds a new `/console/*` route:
 Re-run `npm run e2e && npm run lighthouse` locally to verify gates still pass
 before opening the PR.
 
+## Pricing & Billing NFR gate (HUB-1659)
+
+The a11y + RBAC gate for the five HUB-1563 pricing routes
+(`/console/products/:productId/pricing`, `/pricing/plans`,
+`/pricing/addons`, `/pricing/exceptions`, `/pricing/freeze`) is enforced
+via `src/routes/productDetail/__tests__/pricing.nfr.test.tsx`: axe
+zero-violations across each of the S4..S8 surfaces + static-source
+verification that every pricing route sits behind
+`GuardedRoute(super_admin)` in App.tsx. All currency + date rendering
+routes through `src/routes/productDetail/pricing-formatters.ts` so the
+FR-021 "raw cents never visible" invariant holds across the whole Epic.
+Lighthouse CWV measurement of the pricing routes defers to Stage 4 per
+D-HUB-SCOPE-051.
+
 ## Dashboard NFR gate (HUB-1650)
 
 The a11y + CWV gate for `/console/dashboard` is enforced via

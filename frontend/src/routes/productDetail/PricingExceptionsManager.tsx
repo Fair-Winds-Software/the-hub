@@ -32,6 +32,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../lib/api';
 import { PermissionDeniedError } from '../../lib/errors';
 import { AccessDeniedPage } from '../../components/AccessDeniedPage';
+import { formatCurrency, formatDateAbsolute } from './pricing-formatters';
 
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
 const PAGE_TITLE = 'Pricing exceptions | HUB Console';
@@ -80,33 +81,13 @@ type State =
       overrides: OverrideRow[];
     };
 
-function formatUSD(cents: number | null | undefined): string {
-  if (cents == null) return '—';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(cents / 100);
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(d);
-}
-
 function discountDisplay(d: DiscountRow): string {
   if (d.discount_type === 'percentage') {
     return `${d.discount_value}%`;
   }
   const cents = parseInt(d.discount_value, 10);
   if (isNaN(cents)) return d.discount_value;
-  return formatUSD(cents);
+  return formatCurrency(cents);
 }
 
 function discountStatus(d: DiscountRow): 'active' | 'expired' | 'archived' {
@@ -408,7 +389,7 @@ function NewOverrideModal({
             />
             {draft.unit_price_cents && (
               <span className="text-xs text-deep-charcoal/60">
-                = {formatUSD(parseInt(draft.unit_price_cents, 10) || 0)}
+                = {formatCurrency(parseInt(draft.unit_price_cents, 10) || 0)}
               </span>
             )}
             {errors.unit_price_cents && (
@@ -758,7 +739,7 @@ export default function PricingExceptionsManager(): React.ReactElement {
                       {discountDisplay(d)}
                     </p>
                     <p className="text-xs font-body text-deep-charcoal/70">
-                      Expires: {formatDate(d.expiry_date)}
+                      Expires: {formatDateAbsolute(d.expiry_date)}
                     </p>
                     {d.notes && (
                       <p className="text-xs font-body text-deep-charcoal/60 italic">
@@ -817,7 +798,7 @@ export default function PricingExceptionsManager(): React.ReactElement {
                   {o.metric_name}
                 </p>
                 <p className="text-xs font-body text-deep-charcoal/70">
-                  {formatUSD(o.unit_price_cents)} per unit
+                  {formatCurrency(o.unit_price_cents)} per unit
                 </p>
               </div>
               <div className="flex items-center gap-2">

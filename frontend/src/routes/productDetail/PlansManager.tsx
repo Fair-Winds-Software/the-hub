@@ -37,6 +37,7 @@ import { Link, useParams } from 'react-router-dom';
 import { apiClient } from '../../lib/api';
 import { PermissionDeniedError } from '../../lib/errors';
 import { AccessDeniedPage } from '../../components/AccessDeniedPage';
+import { formatCurrency } from './pricing-formatters';
 
 const PLANS_PATH = '/api/v1/admin/plans';
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
@@ -81,15 +82,6 @@ type State =
   | { kind: 'error'; message: string }
   | { kind: 'denied' }
   | { kind: 'ready'; product: PortfolioProduct; plans: PlanRow[] };
-
-function formatUSD(cents: number | null | undefined): string {
-  if (cents == null) return '—';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(cents / 100);
-}
 
 function keyFromName(name: string): string {
   return name
@@ -330,7 +322,7 @@ function NewPlanModal({ productId, onCancel, onCreated }: NewPlanModalProps): Re
             />
             {draft.unit_amount_cents && (
               <span className="text-xs text-deep-charcoal/60">
-                = {formatUSD(parseInt(draft.unit_amount_cents, 10) || 0)}
+                = {formatCurrency(parseInt(draft.unit_amount_cents, 10) || 0)}
               </span>
             )}
             {errors.unit_amount_cents && (
@@ -487,7 +479,7 @@ function EditPlanModal({ plan, onCancel, onSaved }: EditPlanModalProps): React.R
             />
             {unitAmount && (
               <span className="text-xs text-deep-charcoal/60">
-                = {formatUSD(parseInt(unitAmount, 10) || 0)}
+                = {formatCurrency(parseInt(unitAmount, 10) || 0)}
               </span>
             )}
           </label>
@@ -806,7 +798,7 @@ export default function PlansManager(): React.ReactElement {
                 <p className="font-heading text-base text-primary-navy">{p.name}</p>
                 <p className="font-mono text-xs text-deep-charcoal/60">{p.key}</p>
                 <p className="text-xs font-body text-deep-charcoal/70">
-                  {formatUSD(p.unit_amount_cents)} · {p.billing_type}
+                  {formatCurrency(p.unit_amount_cents)} · {p.billing_type}
                   {p.billing_interval ? ` · ${p.billing_interval}` : ''}
                 </p>
               </div>
