@@ -49,6 +49,9 @@
 // Authorized by HUB-1663 (E-FE-6 S4) — operators sub-route replaced by real
 //   OperatorsManager (list + New + Edit + Deactivate + last-super_admin
 //   FE-side guard). Placeholder for /operators removed from the sub-route.
+// Authorized by HUB-1664 (E-FE-6 S5) — /hub sub-route replaced by real
+//   HubSettingsManager (catalog-driven editor + JSON fallback). Placeholder
+//   for /hub removed.
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -92,6 +95,9 @@ const RecommendationResultView = lazy(
 const Settings = lazy(() => import('./routes/Settings'));
 const OperatorsManager = lazy(
   () => import('./routes/settings/OperatorsManager'),
+);
+const HubSettingsManager = lazy(
+  () => import('./routes/settings/HubSettingsManager'),
 );
 
 export function App() {
@@ -246,16 +252,7 @@ export function App() {
                 element={<Navigate to="/console/settings/operators" replace />}
               />
               <Route path="operators" element={<OperatorsManager />} />
-              <Route
-                path="hub"
-                element={
-                  <SettingsPlaceholder
-                    sectionLabel="HUB Settings"
-                    sectionId="hub"
-                    storyKey="HUB-1664"
-                  />
-                }
-              />
+              <Route path="hub" element={<HubSettingsManager />} />
               <Route
                 path="notifications"
                 element={
