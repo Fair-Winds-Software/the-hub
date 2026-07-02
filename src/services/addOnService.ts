@@ -3,10 +3,14 @@
 // Authorized by HUB-1475 — deactivateAddOn(): staged period-end removal of Stripe subscription item (D-002)
 // Authorized by HUB-1476 — listActiveAddOns(), getAddOnById(), listAddOnsByProduct()
 // Authorized by HUB-1478 — archiveAddOn(), activateAddOnDefinition(); AUDIT-003 delta_data compliance
+// Authorized by HUB-1652 (E-FE-5 S2) — updateAddOn + softArchiveAddOn: partial-patch update
+//   with audit_log emission and a soft-archive path guarded by tenant_add_ons.status='active'
+//   references. Mirrors the HUB-1651 plans extension for shape + audit contract.
 import { getPool } from '../db/pool.js';
 import { getStripe, stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../lib/logger.js';
+import { writeAuditEntry } from './auditLogService.js';
 
 export type AddOnBillingType = 'recurring' | 'one_time';
 export type AddOnBillingInterval = 'month' | 'quarter' | 'year' | 'one_time';
@@ -345,4 +349,157 @@ export async function listAddOnsByProduct(
     [productId],
   );
   return rows;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HUB-1652 (E-FE-5 S2) — admin CRUD extensions
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UpdateAddOnPatch {
+  name?: string;
+  description?: string | null;
+  unit_amount_cents?: number;
+}
+
+/**
+ * HUB-1652 (E-FE-5 S2): partial update of an add-on's mutable fields
+ * (name, description, unit_amount_cents). Emits an audit_log entry with
+ * before/after values. Throws 404 if the add-on does not exist. Fields
+ * not present on the patch object are left untouched. Stripe artifacts
+ * are NOT touched — the FE UI cannot rename or reprice the Stripe Price;
+ * if operators need to change unit_amount_cents on the Stripe side, they
+ * must archive + create a new add-on.
+ */
+export async function updateAddOn(
+  addOnId: string,
+  patch: UpdateAddOnPatch,
+  actorId: string | null,
+): Promise<AddOnRow> {
+  const pool = getPool();
+
+  const setFragments: string[] = [];
+  const params: unknown[] = [];
+  let idx = 1;
+  if (patch.name !== undefined) {
+    setFragments.push(`name = $${idx++}`);
+    params.push(patch.name);
+  }
+  if (patch.description !== undefined) {
+    setFragments.push(`description = $${idx++}`);
+    params.push(patch.description);
+  }
+  if (patch.unit_amount_cents !== undefined) {
+    setFragments.push(`unit_amount_cents = $${idx++}`);
+    params.push(patch.unit_amount_cents);
+  }
+
+  const { rows: before } = await pool.query<AddOnRow>(
+    'SELECT * FROM add_ons WHERE id = $1',
+    [addOnId],
+  );
+  if (!before[0]) throw new AppError(404, 'Add-on not found');
+
+  if (setFragments.length === 0) return before[0];
+
+  setFragments.push('updated_at = NOW()');
+  params.push(addOnId);
+
+  const { rows: updated } = await pool.query<AddOnRow>(
+    `UPDATE add_ons SET ${setFragments.join(', ')} WHERE id = $${idx} RETURNING *`,
+    params,
+  );
+
+  await writeAuditEntry({
+    tenant_id: '00000000-0000-0000-0000-0000000000a1',
+    product_id: before[0].product_id,
+    actor_id: actorId,
+    actor_type: 'operator',
+    operation: 'UPDATE',
+    table_name: 'add_ons',
+    record_id: addOnId,
+    old_values: {
+      name: before[0].name,
+      description: before[0].description,
+      unit_amount_cents: before[0].unit_amount_cents,
+    },
+    new_values: {
+      name: updated[0]!.name,
+      description: updated[0]!.description,
+      unit_amount_cents: updated[0]!.unit_amount_cents,
+    },
+  });
+
+  return updated[0]!;
+}
+
+/**
+ * HUB-1652 (E-FE-5 S2): soft-archive an add-on with an active-references
+ * guard. Checks tenant_add_ons for rows referencing this addOnId with
+ * status='active'; if any exist, throws AppError(422) whose message
+ * contains the current active count so the route can echo it back to the
+ * operator UI. Otherwise sets `active=false` AND `archived_at=NOW()`
+ * atomically, writes an audit_log entry, and returns the updated row.
+ * Idempotent: re-archiving an already-archived add-on returns the row
+ * without a second audit write.
+ */
+export interface SoftArchiveAddOnError422 extends AppError {
+  activeSubscribers: number;
+}
+
+export async function softArchiveAddOn(
+  addOnId: string,
+  actorId: string | null,
+): Promise<AddOnRow> {
+  const pool = getPool();
+  const { rows: before } = await pool.query<AddOnRow & { archived_at: Date | null }>(
+    'SELECT * FROM add_ons WHERE id = $1',
+    [addOnId],
+  );
+  if (!before[0]) throw new AppError(404, 'Add-on not found');
+  if (before[0].archived_at !== null) return before[0];
+
+  const { rows: refs } = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::TEXT AS count
+       FROM tenant_add_ons
+      WHERE add_on_id = $1
+        AND status = 'active'`,
+    [addOnId],
+  );
+  const activeSubscribers = parseInt(refs[0]!.count, 10);
+  if (activeSubscribers > 0) {
+    const err = new AppError(
+      422,
+      `Add-on has ${activeSubscribers} active subscriber(s); archive blocked`,
+    ) as SoftArchiveAddOnError422;
+    err.activeSubscribers = activeSubscribers;
+    throw err;
+  }
+
+  const { rows: updated } = await pool.query<AddOnRow>(
+    `UPDATE add_ons
+        SET active = false,
+            archived_at = NOW(),
+            updated_at = NOW()
+      WHERE id = $1
+   RETURNING *`,
+    [addOnId],
+  );
+
+  await writeAuditEntry({
+    tenant_id: '00000000-0000-0000-0000-0000000000a1',
+    product_id: before[0].product_id,
+    actor_id: actorId,
+    actor_type: 'operator',
+    operation: 'DELETE',
+    table_name: 'add_ons',
+    record_id: addOnId,
+    old_values: { active: true, archived_at: null },
+    new_values: {
+      active: false,
+      archived_at: updated[0]!.updated_at,
+      event: 'addon.soft_archived',
+    },
+  });
+
+  return updated[0]!;
 }

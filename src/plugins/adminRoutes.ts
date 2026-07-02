@@ -27,6 +27,7 @@
 // Authorized by HUB-1147 — adminOperatorConsoleRoutes: tenant list, plan assignment, discounts, overrides, audit log
 // Authorized by HUB-1594 (E-BE-1 S11, CR-1) — adminIntegrationRoutes: Jira ticket counts + admin recovery
 // Authorized by HUB-1651 (E-FE-5 S1) — adminPlansRoutes: plans CRUD (list/create/update/soft-archive)
+// Authorized by HUB-1652 (E-FE-5 S2) — adminAddOnsRoutes: add-ons CRUD (list/create/update/soft-archive)
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { operatorRbacHook } from '../hooks/operatorRbac.js';
@@ -46,6 +47,7 @@ import adminOperatorConsoleRoutes from '../routes/admin/operatorConsole.js';
 import adminIntegrationRoutes from '../routes/admin/integrations.js';
 import adminSdkVersionsRoutes from '../routes/admin/sdkVersions.js';
 import adminPlansRoutes from '../routes/admin/plans.js';
+import adminAddOnsRoutes from '../routes/admin/addons.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -72,6 +74,8 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminSdkVersionsRoutes);
     // HUB-1651 (E-FE-5 S1): Plans CRUD (list / create / update / soft-archive)
     await scope.register(adminPlansRoutes);
+    // HUB-1652 (E-FE-5 S2): Add-ons CRUD (list / create / update / soft-archive)
+    await scope.register(adminAddOnsRoutes);
   });
 };
 
