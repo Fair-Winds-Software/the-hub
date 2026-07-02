@@ -46,6 +46,9 @@
 //   independently deep-linkable and super_admin-guarded; default redirect
 //   /console/settings → /console/settings/operators. Un-merged sub-routes
 //   render SettingsPlaceholder pending S4..S8. Supersedes HUB-1578 SettingsStub.
+// Authorized by HUB-1663 (E-FE-6 S4) — operators sub-route replaced by real
+//   OperatorsManager (list + New + Edit + Deactivate + last-super_admin
+//   FE-side guard). Placeholder for /operators removed from the sub-route.
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -87,6 +90,9 @@ const RecommendationResultView = lazy(
   () => import('./routes/planAdvisor/RecommendationResultView'),
 );
 const Settings = lazy(() => import('./routes/Settings'));
+const OperatorsManager = lazy(
+  () => import('./routes/settings/OperatorsManager'),
+);
 
 export function App() {
   useEffect(() => {
@@ -239,16 +245,7 @@ export function App() {
                 index
                 element={<Navigate to="/console/settings/operators" replace />}
               />
-              <Route
-                path="operators"
-                element={
-                  <SettingsPlaceholder
-                    sectionLabel="Operators"
-                    sectionId="operators"
-                    storyKey="HUB-1663"
-                  />
-                }
-              />
+              <Route path="operators" element={<OperatorsManager />} />
               <Route
                 path="hub"
                 element={
