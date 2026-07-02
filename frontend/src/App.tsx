@@ -34,6 +34,8 @@
 //   route registered (PlansManager: list + New + Edit + Archive). super_admin
 //   only per Epic AC #2 (POST /api/v1/admin/plans + PUT + DELETE are mutations
 //   with immediate Stripe impact).
+// Authorized by HUB-1656 (E-FE-5 S6) — /console/products/:productId/pricing/addons
+//   route registered (AddOnsManager). Same super_admin guard.
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -53,6 +55,9 @@ const PricingModelEditor = lazy(
 );
 const PlansManager = lazy(
   () => import('./routes/productDetail/PlansManager'),
+);
+const AddOnsManager = lazy(
+  () => import('./routes/productDetail/AddOnsManager'),
 );
 const Compliance = lazy(() => import('./routes/Compliance'));
 const ComplianceDetail = lazy(() => import('./routes/ComplianceDetail'));
@@ -130,6 +135,14 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="super_admin">
                   <PlansManager />
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/products/:productId/pricing/addons"
+              element={
+                <GuardedRoute requiredRole="super_admin">
+                  <AddOnsManager />
                 </GuardedRoute>
               }
             />
