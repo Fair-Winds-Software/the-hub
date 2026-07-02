@@ -66,6 +66,18 @@ When a future Epic adds a new `/console/*` route:
 Re-run `npm run e2e && npm run lighthouse` locally to verify gates still pass
 before opening the PR.
 
+## Settings NFR gate (HUB-1668)
+
+The a11y + RBAC gate for the five HUB-1564 settings sub-routes
+(`/console/settings/{operators, hub, notifications, escalation, hooks}`)
+is enforced via `src/routes/settings/__tests__/settings.nfr.test.tsx`:
+axe zero-violations across each of the S4..S8 surfaces + static-source
+verification that App.tsx wires the parent `/console/settings` route
+behind `GuardedRoute(super_admin)` (all five sub-routes are nested
+children of that guarded parent so the guard cascades). Lighthouse
+CWV measurement of `/console/settings/*` routes defers to Stage 4 per
+D-HUB-SCOPE-051.
+
 ## Pricing & Billing NFR gate (HUB-1659)
 
 The a11y + RBAC gate for the five HUB-1563 pricing routes
