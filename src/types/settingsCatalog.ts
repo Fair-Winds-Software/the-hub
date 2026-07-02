@@ -102,6 +102,14 @@ export const SETTINGS_CATALOG: readonly SettingsCatalogEntry[] = [
       'Mapping from HUB product key → Atlassian project key (e.g., contenthelm → CH). Consumed by HUB-1593 jiraIntegrationService at request time to resolve which Atlassian project to query per HUB-tracked product.',
     introducedBy: 'HUB-1592',
   },
+  {
+    key: 'pricing_elasticity_coefficient',
+    default: -1.0,
+    type: 'number',
+    description:
+      'Plan-advisor pricing elasticity coefficient (dimensionless). Signed magnitude used by the scenario compute to translate a proposed price delta into a projected demand delta. Historical default (-1.0) approximates unit elasticity.',
+    introducedBy: 'HUB-1660',
+  },
 ] as const;
 
 /** Look up a catalog entry by key. Returns undefined for unknown keys. */
@@ -121,4 +129,26 @@ export function assertValueType(
   if (entry.type === 'string') return typeof value === 'string';
   if (entry.type === 'json') return typeof value === 'object' && value !== null;
   return false;
+}
+
+/**
+ * HUB-1660 (E-FE-6 S1): route-level validation shape. Returns
+ * `{ valid: true }` for unknown keys (FR-011: unknown keys fall through to
+ * FE JSON editing without catalog validation) and for known keys whose
+ * value matches the catalog type. Returns `{ valid: false, error }` when
+ * a known key's value fails the type check; the error message is the
+ * inline copy the PUT route echoes back at 422.
+ */
+export function validateCatalogValue(
+  key: string,
+  value: unknown,
+): { valid: true } | { valid: false; error: string } {
+  const entry = getCatalogEntry(key);
+  if (!entry) return { valid: true };
+  if (assertValueType(key, value)) return { valid: true };
+  const actual = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+  return {
+    valid: false,
+    error: `Setting '${key}' expects ${entry.type}; got ${actual}.`,
+  };
 }
