@@ -33,6 +33,7 @@ import {
 import { apiClient } from '../lib/api';
 import { PermissionDeniedError } from '../lib/errors';
 import { AccessDeniedPage } from '../components/AccessDeniedPage';
+import { HealthTabErrorBoundary } from './systemHealth/HealthTabErrorBoundary';
 
 const PORTFOLIO_HEALTH_PATH = '/api/v1/admin/system-health/portfolio';
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
@@ -301,7 +302,9 @@ export default function SystemHealthDetail(): React.ReactElement {
         aria-label="Tab content"
         data-testid="system-health-detail-content"
       >
-        <Outlet />
+        <HealthTabErrorBoundary tabLabel={currentTabId}>
+          <Outlet />
+        </HealthTabErrorBoundary>
       </section>
     </div>
   );

@@ -13,6 +13,7 @@
 // ready.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../../lib/api';
+import { formatCount, formatDuration } from './system-health-formatters';
 
 const QUEUES_PATH = '/api/v1/admin/system-health/queues';
 
@@ -31,16 +32,6 @@ type State =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
   | { kind: 'ready'; queues: QueueRow[] };
-
-const NUMBER_FORMATTER = new Intl.NumberFormat('en-US');
-
-function formatDuration(seconds: number | null): string {
-  if (seconds == null) return '—';
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h`;
-  return `${Math.floor(seconds / 86_400)}d`;
-}
 
 export default function SystemHealthQueuesTab(): React.ReactElement {
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -169,7 +160,7 @@ export default function SystemHealthQueuesTab(): React.ReactElement {
                   className="border-b border-deep-charcoal/10 text-xs"
                 >
                   <td className="py-2 font-mono">{q.name}</td>
-                  <td className="py-2">{NUMBER_FORMATTER.format(q.depth)}</td>
+                  <td className="py-2">{formatCount(q.depth)}</td>
                   <td className="py-2">
                     {dlqHot ? (
                       <span
@@ -178,11 +169,11 @@ export default function SystemHealthQueuesTab(): React.ReactElement {
                         aria-label={`${q.dlqSize} jobs in dead-letter queue`}
                       >
                         <span aria-hidden="true">⚠</span>
-                        {NUMBER_FORMATTER.format(q.dlqSize)}
+                        {formatCount(q.dlqSize)}
                       </span>
                     ) : (
                       <span data-testid={`queues-dlq-zero-${q.name}`}>
-                        {NUMBER_FORMATTER.format(q.dlqSize)}
+                        {formatCount(q.dlqSize)}
                       </span>
                     )}
                   </td>

@@ -13,7 +13,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '../../lib/api';
 import { MetricTile } from '../../components/MetricTile';
-import { formatDate } from '../productDetail/pricing-formatters';
+import {
+  formatCount,
+  formatPercent,
+  formatTimestamp,
+} from './system-health-formatters';
 
 const WEBHOOKS_PATH = '/api/v1/admin/system-health/stripe-webhooks';
 
@@ -40,12 +44,6 @@ const WINDOWS: readonly WindowOpt[] = [
   { label: '24h', hours: 24 },
   { label: '7d', hours: 7 * 24 },
 ] as const;
-
-const NUMBER_FORMATTER = new Intl.NumberFormat('en-US');
-const PERCENT_FORMATTER = new Intl.NumberFormat('en-US', {
-  style: 'percent',
-  maximumFractionDigits: 1,
-});
 
 export default function SystemHealthWebhooksTab(): React.ReactElement {
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -174,22 +172,22 @@ export default function SystemHealthWebhooksTab(): React.ReactElement {
       >
         <MetricTile
           title="Success rate"
-          value={PERCENT_FORMATTER.format(p.successRate)}
+          value={formatPercent(p.successRate)}
           verdict={successVerdict}
         />
         <MetricTile
           title="Successful"
-          value={NUMBER_FORMATTER.format(p.successCount)}
+          value={formatCount(p.successCount)}
           verdict="success"
         />
         <MetricTile
           title="Failed"
-          value={NUMBER_FORMATTER.format(p.failureCount)}
+          value={formatCount(p.failureCount)}
           verdict={failureVerdict}
         />
         <MetricTile
           title="Pending retries"
-          value={NUMBER_FORMATTER.format(p.pendingRetryCount)}
+          value={formatCount(p.pendingRetryCount)}
           verdict={pendingVerdict}
         />
       </div>
@@ -199,7 +197,7 @@ export default function SystemHealthWebhooksTab(): React.ReactElement {
         className="text-xs font-body text-deep-charcoal/70"
       >
         {p.lastFailedAt
-          ? `Last failure: ${formatDate(p.lastFailedAt)}`
+          ? `Last failure: ${formatTimestamp(p.lastFailedAt)}`
           : `No failures in the last ${WINDOWS.find((w) => w.hours === windowHours)?.label ?? '24h'}.`}
       </p>
     </div>
