@@ -66,6 +66,11 @@
 // Authorized by HUB-1675 (E-FE-7 S2) — /console/system-health portfolio grid
 //   route registered. product_admin + super_admin may access; scoping is
 //   server-authoritative via HUB-1674.
+// Authorized by HUB-1676 (E-FE-7 S3) — /console/system-health/:productId
+//   drill-in shell with 4 nested tab sub-routes (liveness / errors / queues
+//   / webhooks). Each sub-route is independently deep-linkable and lazy-
+//   mounted via React Router's <Outlet>. Un-shipped tab content renders
+//   SystemHealthTabPlaceholder pending HUB-1677 (S4) + HUB-1678 (S5).
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConsoleShell } from './components/shell/ConsoleShell';
@@ -74,6 +79,7 @@ import { Toaster } from './components/Toaster';
 import { apiClient } from './lib/api';
 import { drainPendingRevokes } from './lib/pendingRevokes';
 import { useSessionStore } from './stores/sessionStore';
+import { SystemHealthTabPlaceholder } from './routes/systemHealth/SystemHealthTabPlaceholder';
 
 const Login = lazy(() => import('./routes/Login'));
 const Dashboard = lazy(() => import('./routes/Dashboard'));
@@ -122,6 +128,7 @@ const WorkflowHooksManager = lazy(
   () => import('./routes/settings/WorkflowHooksManager'),
 );
 const SystemHealth = lazy(() => import('./routes/SystemHealth'));
+const SystemHealthDetail = lazy(() => import('./routes/SystemHealthDetail'));
 
 export function App() {
   useEffect(() => {
@@ -254,6 +261,56 @@ export function App() {
                 </GuardedRoute>
               }
             />
+            <Route
+              path="/console/system-health/:productId"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <SystemHealthDetail />
+                </GuardedRoute>
+              }
+            >
+              <Route index element={<Navigate to="liveness" replace />} />
+              <Route
+                path="liveness"
+                element={
+                  <SystemHealthTabPlaceholder
+                    tabLabel="Liveness"
+                    tabId="liveness"
+                    storyKey="HUB-1677"
+                  />
+                }
+              />
+              <Route
+                path="errors"
+                element={
+                  <SystemHealthTabPlaceholder
+                    tabLabel="Errors"
+                    tabId="errors"
+                    storyKey="HUB-1677"
+                  />
+                }
+              />
+              <Route
+                path="queues"
+                element={
+                  <SystemHealthTabPlaceholder
+                    tabLabel="Queues"
+                    tabId="queues"
+                    storyKey="HUB-1678"
+                  />
+                }
+              />
+              <Route
+                path="webhooks"
+                element={
+                  <SystemHealthTabPlaceholder
+                    tabLabel="Webhooks"
+                    tabId="webhooks"
+                    storyKey="HUB-1678"
+                  />
+                }
+              />
+            </Route>
             <Route
               path="/console/plan-advisor/new"
               element={
