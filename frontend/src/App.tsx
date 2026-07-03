@@ -148,6 +148,9 @@ const SystemHealthWebhooksTab = lazy(
   () => import('./routes/systemHealth/SystemHealthWebhooksTab'),
 );
 const CustomerHealth = lazy(() => import('./routes/CustomerHealth'));
+const CustomerHealthDetail = lazy(
+  () => import('./routes/CustomerHealthDetail'),
+);
 
 export function App() {
   useEffect(() => {
@@ -300,6 +303,15 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <CustomerHealth />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1683 (E-FE-9 S4) — drill-in shell */}
+            <Route
+              path="/console/customer-health/:tenantId"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <CustomerHealthDetail />
                 </GuardedRoute>
               }
             />
