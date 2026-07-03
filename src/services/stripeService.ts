@@ -402,3 +402,26 @@ export async function handleSubscriptionDeleted(eventId: string): Promise<void> 
 
   logger.info({ eventId, subId: sub.id }, 'subscription deleted');
 }
+
+// Authorized by HUB-1686 (E-FE-13 S1) — triggers a payment retry on a
+// stripe invoice. Wraps Stripe SDK's invoices.pay(invoiceId). Idempotent
+// against Stripe's own retry semantics (Stripe returns the invoice's
+// current state if already paid), but the FailedPaymentTracker route
+// layers a 30-second in-flight guard on top so double-clicks return 409
+// before hitting Stripe at all.
+export async function retryInvoicePayment(
+  stripeInvoiceId: string,
+): Promise<{ status: string; amountPaid: number }> {
+  const stripe = getStripe();
+  try {
+    const invoice = await stripe.invoices.pay(stripeInvoiceId);
+    return {
+      status: invoice.status ?? 'unknown',
+      amountPaid: invoice.amount_paid ?? 0,
+    };
+  } catch (err) {
+    mapStripeError(err);
+    // mapStripeError throws — this return is unreachable, satisfies TS.
+    throw err;
+  }
+}
