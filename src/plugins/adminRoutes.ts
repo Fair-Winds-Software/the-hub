@@ -29,6 +29,7 @@
 // Authorized by HUB-1651 (E-FE-5 S1) — adminPlansRoutes: plans CRUD (list/create/update/soft-archive)
 // Authorized by HUB-1652 (E-FE-5 S2) — adminAddOnsRoutes: add-ons CRUD (list/create/update/soft-archive)
 // Authorized by HUB-1674 (E-FE-7 S1) — adminSystemHealthRoutes: 4 GET endpoints for the System Health FE
+// Authorized by HUB-1680 (E-FE-9 S1) — adminCustomerHealthRoutes: 2 GET endpoints for the Customer Health FE
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { operatorRbacHook } from '../hooks/operatorRbac.js';
@@ -50,6 +51,7 @@ import adminSdkVersionsRoutes from '../routes/admin/sdkVersions.js';
 import adminPlansRoutes from '../routes/admin/plans.js';
 import adminAddOnsRoutes from '../routes/admin/addons.js';
 import adminSystemHealthRoutes from '../routes/admin/systemHealth.js';
+import adminCustomerHealthRoutes from '../routes/admin/customerHealth.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -80,6 +82,8 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminAddOnsRoutes);
     // HUB-1674 (E-FE-7 S1): System Health GET endpoints (portfolio / queues / stripe / audit-errors)
     await scope.register(adminSystemHealthRoutes);
+    // HUB-1680 (E-FE-9 S1): Customer Health GET endpoints (list + drill-in)
+    await scope.register(adminCustomerHealthRoutes);
   });
 };
 
