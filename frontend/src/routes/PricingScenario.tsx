@@ -26,6 +26,7 @@ import { ApiError, PermissionDeniedError } from '../lib/errors';
 import { AccessDeniedPage } from '../components/AccessDeniedPage';
 import { PricingScenarioInputs } from './pricingScenario/PricingScenarioInputs';
 import { PricingScenarioResults } from './pricingScenario/PricingScenarioResults';
+import { PricingScenarioCaveat } from './pricingScenario/PricingScenarioCaveat';
 
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
 const SCENARIO_PATH = '/api/v1/analytics/pricing-scenario';
@@ -181,6 +182,13 @@ export default function PricingScenario(): React.ReactElement {
     [],
   );
 
+  const handleReset = useCallback(() => {
+    setPriceChangePercent(0);
+    setChurnAssumptionPercent(0);
+  }, []);
+
+  const isAtBaseline = priceChangePercent === 0 && churnAssumptionPercent === 0;
+
   if (state.kind === 'loading') {
     return (
       <div
@@ -281,14 +289,30 @@ export default function PricingScenario(): React.ReactElement {
           data-testid="pricing-scenario-picked"
           className="grid grid-cols-1 gap-4 md:grid-cols-[20rem_1fr]"
         >
-          <PricingScenarioInputs
-            priceChangePercent={priceChangePercent}
-            churnAssumptionPercent={churnAssumptionPercent}
-            onChange={handleInputsChange}
-            disabled={compute.kind === 'loading'}
-          />
+          <div className="flex flex-col gap-3">
+            <PricingScenarioInputs
+              priceChangePercent={priceChangePercent}
+              churnAssumptionPercent={churnAssumptionPercent}
+              onChange={handleInputsChange}
+              disabled={compute.kind === 'loading'}
+            />
+            <button
+              type="button"
+              data-testid="pricing-scenario-reset"
+              onClick={handleReset}
+              disabled={isAtBaseline}
+              className="rounded border border-deep-charcoal/20 bg-transparent px-3 py-1 text-sm font-body text-deep-charcoal hover:bg-deep-charcoal/5 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent-brass"
+            >
+              Reset to baseline
+            </button>
+          </div>
 
           <div className="flex flex-col gap-3">
+            {compute.kind === 'ready' && (
+              <PricingScenarioCaveat
+                disclaimer={compute.payload.disclaimer}
+              />
+            )}
             {compute.kind === 'loading' && (
               <div
                 data-testid="pricing-scenario-compute-loading"
