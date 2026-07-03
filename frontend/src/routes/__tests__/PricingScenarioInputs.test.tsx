@@ -187,7 +187,7 @@ describe('PricingScenarioInputs (HUB-1670)', () => {
     });
   });
 
-  it('shows the compute-ready surface with the payload after fetch', async () => {
+  it('shows the compute-ready surface with the results table after fetch', async () => {
     await act(async () => {
       renderPage();
     });
@@ -200,9 +200,10 @@ describe('PricingScenarioInputs (HUB-1670)', () => {
         screen.getByTestId('pricing-scenario-compute-ready'),
       ).toBeInTheDocument();
     });
+    // S3's table renders inside the ready container.
     expect(
-      screen.getByTestId('pricing-scenario-compute-ready').textContent,
-    ).toContain('5000.00');
+      screen.getByTestId('pricing-scenario-results-table'),
+    ).toBeInTheDocument();
   });
 
   it('404 PRICING-001 → shows the "no pricing model" resolution surface', async () => {

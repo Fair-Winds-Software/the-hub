@@ -25,6 +25,7 @@ import { apiClient } from '../lib/api';
 import { ApiError, PermissionDeniedError } from '../lib/errors';
 import { AccessDeniedPage } from '../components/AccessDeniedPage';
 import { PricingScenarioInputs } from './pricingScenario/PricingScenarioInputs';
+import { PricingScenarioResults } from './pricingScenario/PricingScenarioResults';
 
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
 const SCENARIO_PATH = '/api/v1/analytics/pricing-scenario';
@@ -321,17 +322,8 @@ export default function PricingScenario(): React.ReactElement {
               </div>
             )}
             {compute.kind === 'ready' && (
-              // HUB-1671 (S3) fills in the baseline / scenario / delta table
-              // here. This placeholder confirms the ready-state contract.
-              <div
-                data-testid="pricing-scenario-compute-ready"
-                className="rounded-md border border-deep-charcoal/15 bg-sailcloth p-4 text-sm font-body text-deep-charcoal/70"
-              >
-                Scenario computed at {compute.payload.generatedAt}. Baseline
-                revenue (30d):{' '}
-                {(compute.payload.baseline.revenueLast30dCents / 100).toFixed(2)}{' '}
-                USD. Results table lands in HUB-1671 (S3); caveat + reset in
-                HUB-1672 (S4).
+              <div data-testid="pricing-scenario-compute-ready">
+                <PricingScenarioResults payload={compute.payload} />
               </div>
             )}
           </div>
