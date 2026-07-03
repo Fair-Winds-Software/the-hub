@@ -152,6 +152,7 @@ const CustomerHealthDetail = lazy(
   () => import('./routes/CustomerHealthDetail'),
 );
 const PricingScenario = lazy(() => import('./routes/PricingScenario'));
+const FailedPayments = lazy(() => import('./routes/FailedPayments'));
 
 export function App() {
   useEffect(() => {
@@ -322,6 +323,15 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <PricingScenario />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1687 (E-FE-13 S2) — Failed Payment Tracker */}
+            <Route
+              path="/console/failed-payments"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <FailedPayments />
                 </GuardedRoute>
               }
             />
