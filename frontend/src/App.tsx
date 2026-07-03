@@ -147,6 +147,7 @@ const SystemHealthQueuesTab = lazy(
 const SystemHealthWebhooksTab = lazy(
   () => import('./routes/systemHealth/SystemHealthWebhooksTab'),
 );
+const CustomerHealth = lazy(() => import('./routes/CustomerHealth'));
 
 export function App() {
   useEffect(() => {
@@ -293,6 +294,15 @@ export function App() {
               <Route path="queues" element={<SystemHealthQueuesTab />} />
               <Route path="webhooks" element={<SystemHealthWebhooksTab />} />
             </Route>
+            {/* HUB-1681 (E-FE-9 S2) — /console/customer-health list */}
+            <Route
+              path="/console/customer-health"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <CustomerHealth />
+                </GuardedRoute>
+              }
+            />
             <Route
               path="/console/plan-advisor/new"
               element={
