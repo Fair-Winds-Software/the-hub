@@ -26,7 +26,7 @@
 // (1). With the S2 'New Recommendation' button click (1) that opens this
 // flow, the total reaches the AC-E1 4-click contract.
 import { useCallback, useEffect, useId, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../lib/api';
 import { PermissionDeniedError } from '../../lib/errors';
 
@@ -90,9 +90,15 @@ function daysSince(iso: string): number {
 
 export default function NewRecommendationFlow(): React.ReactElement {
   const navigate = useNavigate();
+  // HUB-1684 (E-FE-9 S5): honour ?productId= as an initial picker value
+  // so the Customer Health drill-in's "Run Plan Advisor" CTA deep-links
+  // directly into the flow with the right product pre-selected.
+  const [searchParams] = useSearchParams();
   const [products, setProducts] = useState<PortfolioProductListItem[]>([]);
   const [productsError, setProductsError] = useState<string | null>(null);
-  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [selectedProductId, setSelectedProductId] = useState<string>(
+    searchParams.get('productId') ?? '',
+  );
   const [recentRun, setRecentRun] = useState<AdvisorListRow | null>(null);
   const [submit, setSubmit] = useState<SubmitState>({ kind: 'idle' });
   const productPickerId = useId();
