@@ -12,35 +12,28 @@
 //     op.tenant_id) and is rejected 403 on audit-errors when the
 //     productId query param does not belong to that tenant.
 //
-// Spec deviations (documented per ironclad-engineer):
+// Cache-bypass contract:
 //
-//   1. Per-product reachable probe: no per-product health endpoint exists
-//      at v0.1. The `reachable` field uses `products.active` as a proxy;
-//      that answers the operator's practical question (is this product
-//      configured to accept billing today?). HUB-1545 tech debt candidate:
-//      wire a real per-product liveness probe.
+//   /portfolio accepts ?fresh=true which bypasses the 30s in-memory cache
+//   (recomputes from source + refreshes the cache entry). The FE Refresh
+//   controls in Queues + Webhooks tabs already pass this param; portfolio
+//   now honours it too.
 //
-//   2. Audit error semantics: the audit_log table has no `severity`
-//      column. 'Error' rows are identified as event_type LIKE '%.failure'
-//      per the AuditEventType union at auditLogService.ts:21 (auth.login
-//      .failure being the only current value). HUB-1545 tech debt
-//      candidate: introduce a severity column + backfill.
+// Remaining spec deviation (documented per ironclad-engineer):
 //
-//   3. Stripe webhook `pending_retry` status: the stripe_webhook_events
-//      table has no CHECK constraint on status; the v0.1 handler writes
-//      'received' / 'processed' / 'failed'. There is no 'pending_retry'
-//      value today; the endpoint returns pendingRetryCount = 0 until a
-//      retry-scheduling flow lands. HUB-1545 tech debt candidate.
-//
-//   4. Server-side 30s cache: the portfolio aggregator uses an
-//      in-memory Map with a TTL. In a multi-instance deployment the cache
-//      is per-instance (not shared). Acceptable at v0.1 (single-instance
-//      HUB); HUB-1545 tech debt candidate: move to Redis if we scale out.
+//   Server-side 30s cache: the portfolio aggregator uses an in-memory
+//   Map with a TTL. In a multi-instance deployment the cache is per-
+//   instance (not shared). Acceptable at v0.1 (single-instance HUB);
+//   HUB-1545 tech debt candidate: move to Redis if we scale out.
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { AppError } from '../../errors/AppError.js';
 import { getPool } from '../../db/pool.js';
 import { getSetting } from '../../services/adminSettings.js';
 import { getAllQueueDefinitions } from '../../queues/index.js';
+import {
+  getOrExecuteProbe,
+  type ProbeInput,
+} from '../../services/productHealthProbe.js';
 
 const PORTFOLIO_CACHE_TTL_MS = 30_000;
 
@@ -94,8 +87,15 @@ async function computePortfolio(
   const { rows: products } = await pool.query<{
     product_id: string;
     active: boolean;
+    health_check_url: string | null;
+    last_probe_at: Date | null;
+    last_probe_reachable: boolean | null;
+    last_probe_error: string | null;
+    last_probe_latency_ms: number | null;
   }>(
-    `SELECT p.id AS product_id, p.active
+    `SELECT p.id AS product_id, p.active,
+            p.health_check_url, p.last_probe_at, p.last_probe_reachable,
+            p.last_probe_error, p.last_probe_latency_ms
        FROM products p
        ${where}
       ORDER BY p.created_at ASC`,
@@ -122,10 +122,10 @@ async function computePortfolio(
   }>(
     `SELECT product_id,
             COUNT(*)::TEXT AS total_count,
-            COUNT(*) FILTER (WHERE event_type LIKE '%.failure')::TEXT AS failure_count,
-            MAX(occurred_at) FILTER (WHERE event_type LIKE '%.failure') AS last_failure_at,
+            COUNT(*) FILTER (WHERE severity = 'error')::TEXT AS failure_count,
+            MAX(occurred_at) FILTER (WHERE severity = 'error') AS last_failure_at,
             (ARRAY_AGG(new_values ORDER BY occurred_at DESC)
-               FILTER (WHERE event_type LIKE '%.failure'))[1] AS last_failure_new_values
+               FILTER (WHERE severity = 'error'))[1] AS last_failure_new_values
        FROM audit_log
       WHERE product_id = ANY($1::uuid[])
         AND occurred_at >= NOW() - INTERVAL '24 hours'
@@ -157,25 +157,47 @@ async function computePortfolio(
   }
 
   const now = new Date().toISOString();
-  const portfolioRows: PortfolioRow[] = products.map((p) => {
-    const stats = errIndex.get(p.product_id);
-    const total = stats?.total ?? 0;
-    const failure = stats?.failure ?? 0;
-    const errorRate24h = total > 0 ? failure / total : 0;
-    return {
-      productId: p.product_id,
-      reachable: p.active,
-      lastProbedAt: now,
-      errorRate24h,
-      lastErrorEvent:
-        stats?.lastAt && stats.lastMessage
-          ? {
-              timestamp: stats.lastAt.toISOString(),
-              message: stats.lastMessage,
-            }
-          : null,
-    };
-  });
+  const portfolioRows: PortfolioRow[] = await Promise.all(
+    products.map(async (p): Promise<PortfolioRow> => {
+      const stats = errIndex.get(p.product_id);
+      const total = stats?.total ?? 0;
+      const failure = stats?.failure ?? 0;
+      const errorRate24h = total > 0 ? failure / total : 0;
+
+      // Per-product reachability: when health_check_url is configured, use
+      // the on-demand probe (60s TTL). Otherwise fall back to
+      // products.active as the legacy proxy.
+      let reachable = p.active;
+      let lastProbedAt = now;
+      if (p.health_check_url) {
+        const probeInput: ProbeInput = {
+          product_id: p.product_id,
+          health_check_url: p.health_check_url,
+          last_probe_at: p.last_probe_at,
+          last_probe_reachable: p.last_probe_reachable,
+          last_probe_error: p.last_probe_error,
+          last_probe_latency_ms: p.last_probe_latency_ms,
+        };
+        const probe = await getOrExecuteProbe(probeInput);
+        reachable = probe.reachable;
+        lastProbedAt = probe.probedAt.toISOString();
+      }
+
+      return {
+        productId: p.product_id,
+        reachable,
+        lastProbedAt,
+        errorRate24h,
+        lastErrorEvent:
+          stats?.lastAt && stats.lastMessage
+            ? {
+                timestamp: stats.lastAt.toISOString(),
+                message: stats.lastMessage,
+              }
+            : null,
+      };
+    }),
+  );
 
   const threshold = await readErrorRateThreshold();
   return {
@@ -187,11 +209,13 @@ async function computePortfolio(
 
 async function getPortfolioPayload(
   request: FastifyRequest,
+  fresh: boolean,
 ): Promise<PortfolioCacheEntry['payload']> {
   const op = request.operatorUser!;
   const cacheKey = op.role === 'super_admin' ? 'all' : `t:${op.tenant_id ?? 'none'}`;
   const now = Date.now();
   if (
+    !fresh &&
     portfolioCache &&
     portfolioCache.key === cacheKey &&
     now - portfolioCache.computedAt < PORTFOLIO_CACHE_TTL_MS
@@ -204,6 +228,11 @@ async function getPortfolioPayload(
   return payload;
 }
 
+function isFreshRequested(request: FastifyRequest): boolean {
+  const q = request.query as Record<string, string | undefined>;
+  return q.fresh === 'true' || q.fresh === '1';
+}
+
 // Exposed for tests + defense in depth — allows the integration test to
 // blow the cache between assertions.
 export function _resetPortfolioCache(): void {
@@ -214,7 +243,7 @@ const adminSystemHealthRoutes: FastifyPluginAsync = async (fastify) => {
   // ── Portfolio ──────────────────────────────────────────────────────────
   fastify.get('/api/v1/admin/system-health/portfolio', async (request, reply) => {
     await assertOperator(request);
-    const payload = await getPortfolioPayload(request);
+    const payload = await getPortfolioPayload(request, isFreshRequested(request));
     return reply.send(payload);
   });
 
@@ -302,7 +331,7 @@ const adminSystemHealthRoutes: FastifyPluginAsync = async (fastify) => {
         last_failed_at: Date | null;
       }>(
         `SELECT
-           COUNT(*) FILTER (WHERE status <> 'failed')::TEXT AS success_count,
+           COUNT(*) FILTER (WHERE status IN ('received', 'dispatched', 'processed'))::TEXT AS success_count,
            COUNT(*) FILTER (WHERE status = 'failed')::TEXT AS failure_count,
            COUNT(*) FILTER (WHERE status = 'pending_retry')::TEXT AS pending_retry_count,
            MAX(received_at) FILTER (WHERE status = 'failed') AS last_failed_at
@@ -368,13 +397,14 @@ const adminSystemHealthRoutes: FastifyPluginAsync = async (fastify) => {
         product_id: string | null;
         actor_id: string | null;
         event_type: string | null;
+        severity: string;
         new_values: Record<string, unknown> | null;
         occurred_at: Date;
       }>(
-        `SELECT id, tenant_id, product_id, actor_id, event_type, new_values, occurred_at
+        `SELECT id, tenant_id, product_id, actor_id, event_type, severity, new_values, occurred_at
            FROM audit_log
           WHERE occurred_at >= NOW() - ($1::text || ' hours')::interval
-            AND event_type LIKE '%.failure'
+            AND severity = 'error'
             ${tenantFilterSql}
           ORDER BY occurred_at DESC
           LIMIT 100`,
@@ -387,6 +417,7 @@ const adminSystemHealthRoutes: FastifyPluginAsync = async (fastify) => {
           productId: r.product_id,
           actorId: r.actor_id,
           eventType: r.event_type,
+          severity: r.severity,
           message:
             (r.new_values as { message?: string } | null)?.message ?? null,
           occurredAt: r.occurred_at.toISOString(),

@@ -113,8 +113,24 @@ describe('GET /api/v1/admin/system-health/portfolio (HUB-1674)', () => {
       if (sql.includes('FROM products p')) {
         return Promise.resolve({
           rows: [
-            { product_id: PRODUCT_A, active: true },
-            { product_id: PRODUCT_B, active: false },
+            {
+              product_id: PRODUCT_A,
+              active: true,
+              health_check_url: null,
+              last_probe_at: null,
+              last_probe_reachable: null,
+              last_probe_error: null,
+              last_probe_latency_ms: null,
+            },
+            {
+              product_id: PRODUCT_B,
+              active: false,
+              health_check_url: null,
+              last_probe_at: null,
+              last_probe_reachable: null,
+              last_probe_error: null,
+              last_probe_latency_ms: null,
+            },
           ],
         });
       }
@@ -171,6 +187,23 @@ describe('GET /api/v1/admin/system-health/portfolio (HUB-1674)', () => {
     });
     expect(second.statusCode).toBe(200);
     expect(mockPoolQuery.mock.calls.length).toBe(firstDbCalls);
+  });
+
+  it('?fresh=true bypasses the 30s cache + recomputes from the DB', async () => {
+    mockPoolQuery.mockImplementation(() => Promise.resolve({ rows: [] }));
+    const first = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/system-health/portfolio',
+    });
+    expect(first.statusCode).toBe(200);
+    const firstDbCalls = mockPoolQuery.mock.calls.length;
+    // Second call WITH ?fresh=true must hit the DB again.
+    const second = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/system-health/portfolio?fresh=true',
+    });
+    expect(second.statusCode).toBe(200);
+    expect(mockPoolQuery.mock.calls.length).toBeGreaterThan(firstDbCalls);
   });
 
   it('product_admin gets a tenant-scoped portfolio call', async () => {
@@ -274,6 +307,7 @@ describe('GET /api/v1/admin/system-health/audit-errors (HUB-1674)', () => {
             product_id: PRODUCT_A,
             actor_id: 'op-1',
             event_type: 'auth.login.failure',
+            severity: 'error',
             new_values: { message: 'invalid password' },
             occurred_at: new Date('2026-06-30T00:00:00.000Z'),
           },

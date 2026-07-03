@@ -26,6 +26,8 @@ export type AuditEventType =
   | "auth.session.revoke_pending"
   | "analytics.pricing_scenario_compute";
 
+export type AuditSeverity = "info" | "warn" | "error";
+
 export interface AuditEntry {
   tenant_id: string;
   product_id?: string | null;
@@ -46,6 +48,22 @@ export interface AuditEntry {
    * CRUD audit entries (which classify via `operation` + `table_name`).
    */
   event_type?: AuditEventType | null;
+  /**
+   * HUB-1545 (System Health): first-class severity — 'info' (default), 'warn',
+   * or 'error'. When omitted, defaults to 'error' if event_type ends in
+   * '.failure', else 'info'. Callers can override to escalate specific
+   * events (e.g. security-relevant CRUD).
+   */
+  severity?: AuditSeverity | null;
+}
+
+export function deriveSeverity(
+  eventType: AuditEventType | null | undefined,
+  explicit: AuditSeverity | null | undefined,
+): AuditSeverity {
+  if (explicit) return explicit;
+  if (eventType && eventType.endsWith(".failure")) return "error";
+  return "info";
 }
 
 function redactSensitiveFields(
@@ -69,8 +87,8 @@ export async function writeAuditEntry(entry: AuditEntry): Promise<void> {
     await getPool().query(
       `INSERT INTO audit_log
          (tenant_id, product_id, actor_id, actor_type, operation, table_name, record_id,
-          old_values, new_values, delta_data, ip_address, trace_id, occurred_at, event_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+          old_values, new_values, delta_data, ip_address, trace_id, occurred_at, event_type, severity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
       [
         entry.tenant_id,
         entry.product_id ?? null,
@@ -88,6 +106,7 @@ export async function writeAuditEntry(entry: AuditEntry): Promise<void> {
         entry.trace_id ?? null,
         entry.occurred_at ?? new Date(),
         entry.event_type ?? null,
+        deriveSeverity(entry.event_type, entry.severity),
       ],
     );
   } catch (err: unknown) {

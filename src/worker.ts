@@ -22,6 +22,7 @@ import { registerHookDeliveryWorker } from './jobs/hookDeliveryWorker.js';
 import { sanitizePayload } from './utils/sanitize.js';
 import { validateObservabilityEnv } from './logging/env.js';
 import { createLogger } from './logging/index.js';
+import { reflectStripeWebhookRetry } from './services/stripeWebhookRetryReflector.js';
 
 validateObservabilityEnv();
 const logger = createLogger();
@@ -45,12 +46,29 @@ export function createWorkers(): BullWorker[] {
       logger.info({ queue: def.name, concurrency }, 'Worker watching queue');
       const worker = new BullWorker(def.name, def.processor!, { connection, concurrency });
 
-      // Move permanently failed jobs to DLQ with PII-safe structured logging
+      // Move permanently failed jobs to DLQ with PII-safe structured logging;
+      // for stripe event queues, also mirror the retry lifecycle back onto
+      // the stripe_webhook_events row (pending_retry while attempts remain,
+      // failed when exhausted) so /admin/system-health/stripe-webhooks can
+      // surface it (authorized by HUB-1545 System Health spec-deviation
+      // close-out).
       if (def.deadLetterQueue) {
         worker.on('failed', async (job: Job | undefined, err: Error) => {
           if (!job) return;
-          // Only act on final failure (all attempts exhausted)
           const isExhausted = !job.opts.attempts || job.attemptsMade >= job.opts.attempts;
+
+          // Reflect retry state onto the stripe_webhook_events row for
+          // stripe event-type queues (queue:stripe-event + queue:stripe:*).
+          if (def.name.startsWith('queue:stripe')) {
+            await reflectStripeWebhookRetry(job, isExhausted).catch((dbErr) => {
+              logger.error(
+                { err: dbErr, jobId: job.id, queue: def.name },
+                'reflectStripeWebhookRetry failed',
+              );
+            });
+          }
+
+          // Only act on final failure (all attempts exhausted) for DLQ move.
           if (!isExhausted) return;
 
           const sanitized = sanitizePayload(job.data);
