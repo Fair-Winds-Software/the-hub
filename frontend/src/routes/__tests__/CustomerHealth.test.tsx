@@ -60,7 +60,17 @@ const HAPPY_PAYLOAD = {
 };
 
 function mockHappy() {
-  apiGetMock.mockResolvedValue(HAPPY_PAYLOAD);
+  apiGetMock.mockImplementation((url: string) => {
+    if (url.startsWith('/api/v1/admin/portfolio/products')) {
+      return Promise.resolve({
+        data: [
+          { productId: PRODUCT_A, productName: 'Synapz' },
+          { productId: PRODUCT_B, productName: 'ContentHelm' },
+        ],
+      });
+    }
+    return Promise.resolve(HAPPY_PAYLOAD);
+  });
 }
 
 function renderAt(url: string = '/console/customer-health') {
@@ -173,12 +183,20 @@ describe('CustomerHealth (HUB-1681)', () => {
     await waitFor(() => {
       expect(apiGetMock).toHaveBeenCalled();
     });
-    const url = apiGetMock.mock.calls[0]![0] as string;
-    expect(url).toContain('fresh=true');
+    const healthCall = apiGetMock.mock.calls.find((c: unknown[]) =>
+      (c[0] as string).startsWith('/api/v1/admin/customer-health'),
+    );
+    expect(healthCall).toBeDefined();
+    expect(healthCall![0]).toContain('fresh=true');
   });
 
   it('403 → AccessDeniedPage', async () => {
-    apiGetMock.mockRejectedValueOnce(new PermissionDeniedError(403, 'no'));
+    apiGetMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/admin/portfolio/products')) {
+        return Promise.resolve({ data: [] });
+      }
+      return Promise.reject(new PermissionDeniedError(403, 'no'));
+    });
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     await act(async () => {
       renderAt();
@@ -190,10 +208,11 @@ describe('CustomerHealth (HUB-1681)', () => {
   });
 
   it('empty tenant list → empty state', async () => {
-    apiGetMock.mockResolvedValue({
-      ...HAPPY_PAYLOAD,
-      rows: [],
-      total: 0,
+    apiGetMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/admin/portfolio/products')) {
+        return Promise.resolve({ data: [] });
+      }
+      return Promise.resolve({ ...HAPPY_PAYLOAD, rows: [], total: 0 });
     });
     await act(async () => {
       renderAt();
@@ -204,7 +223,12 @@ describe('CustomerHealth (HUB-1681)', () => {
   });
 
   it('fetch throw → error surface with Retry', async () => {
-    apiGetMock.mockRejectedValueOnce(new Error('boom'));
+    apiGetMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/admin/portfolio/products')) {
+        return Promise.resolve({ data: [] });
+      }
+      return Promise.reject(new Error('boom'));
+    });
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     await act(async () => {
       renderAt();
