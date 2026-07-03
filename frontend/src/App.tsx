@@ -151,6 +151,7 @@ const CustomerHealth = lazy(() => import('./routes/CustomerHealth'));
 const CustomerHealthDetail = lazy(
   () => import('./routes/CustomerHealthDetail'),
 );
+const PricingScenario = lazy(() => import('./routes/PricingScenario'));
 
 export function App() {
   useEffect(() => {
@@ -312,6 +313,15 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <CustomerHealthDetail />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1669 (E-FE-11 S1) — Pricing Scenario Simulator */}
+            <Route
+              path="/console/pricing-scenario"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <PricingScenario />
                 </GuardedRoute>
               }
             />
