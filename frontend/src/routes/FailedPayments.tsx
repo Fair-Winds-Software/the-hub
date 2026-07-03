@@ -1,14 +1,17 @@
 // Authorized by HUB-1687 (E-FE-13 S2) — Failed Payment Tracker list at
 // /console/failed-payments. Fetches HUB-1686's aggregation endpoint and
-// renders a sortable table with 4-way status badges (color + icon +
-// text triple-encoding). Row click opens a drawer (wired by S4).
+// renders a sortable table with 4-way status badges.
+// Authorized by HUB-1688 (E-FE-13 S3) — Filter sidebar (status multi-
+// select + product dropdown + date range) with URL-synced state via
+// useSearchParams; counts panel shows the raw counts per status
+// (unaffected by the status filter, so operators always see the
+// portfolio-level shape).
 //
-// Row selection wiring lands in HUB-1692 S7 (bulk-email) — this story
-// only ships the table + badges + relative-time last-failed. Filters
-// + counts panel land in HUB-1688 S3. Retry / override actions land
-// in HUB-1690 S5 / HUB-1691 S6.
+// Row selection wiring lands in HUB-1692 S7 (bulk-email); drawer opens
+// via onRowClick lands in HUB-1689 S4.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../lib/api';
 import { PermissionDeniedError } from '../lib/errors';
 import { AccessDeniedPage } from '../components/AccessDeniedPage';
@@ -17,9 +20,44 @@ import {
   formatRelativeTime,
   statusLabel,
 } from './failedPayments/failed-payments-formatters';
+import {
+  FailedPaymentsFilters,
+  type FailedPaymentsFilterValue,
+  type FailedPaymentsProduct,
+  type StatusCounts,
+} from './failedPayments/FailedPaymentsFilters';
 
 const FAILED_PAYMENTS_PATH = '/api/v1/admin/billing/failed-payments';
+const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
 const PAGE_TITLE = 'Failed Payments | HUB Console';
+
+function parseFilters(sp: URLSearchParams): FailedPaymentsFilterValue {
+  const statusRaw = sp.get('status') ?? '';
+  const statuses = statusRaw
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s): s is FailedPaymentStatus =>
+      s === 'pending_retry' ||
+      s === 'exhausted' ||
+      s === 'recovered' ||
+      s === 'overridden',
+    );
+  return {
+    statuses,
+    productId: sp.get('product'),
+    from: sp.get('from'),
+    to: sp.get('to'),
+  };
+}
+
+function filtersToSearchParams(f: FailedPaymentsFilterValue): URLSearchParams {
+  const sp = new URLSearchParams();
+  if (f.statuses.length > 0) sp.set('status', f.statuses.join(','));
+  if (f.productId) sp.set('product', f.productId);
+  if (f.from) sp.set('from', f.from);
+  if (f.to) sp.set('to', f.to);
+  return sp;
+}
 
 export type FailedPaymentStatus =
   | 'pending_retry'
@@ -100,6 +138,9 @@ export default function FailedPayments({
   onRowClick,
 }: FailedPaymentsProps): React.ReactElement {
   const [state, setState] = useState<State>({ kind: 'loading' });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
+  const [products, setProducts] = useState<FailedPaymentsProduct[]>([]);
 
   useEffect(() => {
     const prev = document.title;
@@ -112,7 +153,13 @@ export default function FailedPayments({
   const load = useCallback(async (fresh: boolean = false): Promise<void> => {
     if (!fresh) setState({ kind: 'loading' });
     try {
+      // Only pass product + date-range filters to the BE. Status filter
+      // is applied CLIENT-side so the counts panel can reflect the
+      // portfolio-level shape regardless of the status filter.
       const params = new URLSearchParams();
+      if (filters.productId) params.set('productId', filters.productId);
+      if (filters.from) params.set('from', filters.from);
+      if (filters.to) params.set('to', filters.to);
       if (fresh) params.set('fresh', 'true');
       const url = params.toString()
         ? `${FAILED_PAYMENTS_PATH}?${params.toString()}`
@@ -128,16 +175,62 @@ export default function FailedPayments({
         err instanceof Error ? err.message : 'Failed to load failed payments';
       setState({ kind: 'error', message });
     }
-  }, []);
+  }, [filters.productId, filters.from, filters.to]);
 
   useEffect(() => {
     void load(false);
   }, [load]);
 
-  const rows = useMemo(() => {
+  // Populate product dropdown (product_admin gets a server-scoped list).
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get<{ data: FailedPaymentsProduct[] }>(PORTFOLIO_PATH)
+      .then((res) => {
+        if (!cancelled) setProducts(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setProducts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleFiltersChange = useCallback(
+    (next: FailedPaymentsFilterValue) => {
+      setSearchParams(filtersToSearchParams(next), { replace: true });
+    },
+    [setSearchParams],
+  );
+  const handleReset = useCallback(() => {
+    setSearchParams(new URLSearchParams(), { replace: true });
+  }, [setSearchParams]);
+
+  const allRows = useMemo(() => {
     if (state.kind !== 'ready') return [] as FailedPaymentRow[];
     return state.payload.rows;
   }, [state]);
+
+  // Counts panel: raw counts per status BEFORE the status filter is
+  // applied so the operator always sees the portfolio-level shape.
+  const counts = useMemo<StatusCounts>(() => {
+    const c: StatusCounts = {
+      pending_retry: 0,
+      exhausted: 0,
+      recovered: 0,
+      overridden: 0,
+    };
+    for (const r of allRows) c[r.status] += 1;
+    return c;
+  }, [allRows]);
+
+  // Table rows: apply the client-side status filter.
+  const rows = useMemo(() => {
+    if (filters.statuses.length === 0) return allRows;
+    const set = new Set(filters.statuses);
+    return allRows.filter((r) => set.has(r.status));
+  }, [allRows, filters.statuses]);
 
   if (state.kind === 'loading') {
     return (
@@ -186,12 +279,25 @@ export default function FailedPayments({
     );
   }
 
+  const hasActiveFilters =
+    filters.statuses.length > 0 ||
+    filters.productId !== null ||
+    filters.from !== null ||
+    filters.to !== null;
   return (
     <div
       id="main-content"
       data-testid="failed-payments-page"
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-4 md:flex-row md:items-start"
     >
+      <FailedPaymentsFilters
+        value={filters}
+        onChange={handleFiltersChange}
+        onReset={handleReset}
+        products={products}
+        counts={counts}
+      />
+      <div className="flex flex-1 flex-col gap-4">
       <header className="flex items-center justify-between gap-2">
         <div className="flex flex-col gap-1">
           <h1 className="font-heading text-2xl text-primary-navy">
@@ -201,8 +307,8 @@ export default function FailedPayments({
             data-testid="failed-payments-total"
             className="text-xs font-body text-deep-charcoal/70"
           >
-            {rows.length} failed payment{rows.length === 1 ? '' : 's'} in the
-            last 30 days
+            {rows.length} failed payment{rows.length === 1 ? '' : 's'}
+            {hasActiveFilters ? ' matching filters' : ' in the last 30 days'}
           </p>
         </div>
         <button
@@ -287,6 +393,7 @@ export default function FailedPayments({
           </tbody>
         </table>
       )}
+      </div>
     </div>
   );
 }

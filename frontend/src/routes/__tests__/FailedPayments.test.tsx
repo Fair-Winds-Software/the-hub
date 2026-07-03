@@ -99,7 +99,17 @@ const HAPPY_PAYLOAD = {
 };
 
 function mockHappy() {
-  apiGetMock.mockResolvedValue(HAPPY_PAYLOAD);
+  apiGetMock.mockImplementation((url: string) => {
+    if (url.startsWith('/api/v1/admin/portfolio/products')) {
+      return Promise.resolve({
+        data: [
+          { productId: 'p-1', productName: 'Synapz' },
+          { productId: 'p-2', productName: 'ContentHelm' },
+        ],
+      });
+    }
+    return Promise.resolve(HAPPY_PAYLOAD);
+  });
 }
 
 function renderAt(url: string = '/console/failed-payments') {
@@ -226,11 +236,20 @@ describe('FailedPayments (HUB-1687)', () => {
     await waitFor(() => {
       expect(apiGetMock).toHaveBeenCalled();
     });
-    expect(apiGetMock.mock.calls[0]![0]).toContain('fresh=true');
+    const healthCall = apiGetMock.mock.calls.find((c: unknown[]) =>
+      (c[0] as string).startsWith('/api/v1/admin/billing/failed-payments'),
+    );
+    expect(healthCall).toBeDefined();
+    expect(healthCall![0]).toContain('fresh=true');
   });
 
   it('empty state renders when total is 0', async () => {
-    apiGetMock.mockResolvedValue({ ...HAPPY_PAYLOAD, rows: [], total: 0 });
+    apiGetMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/admin/portfolio/products')) {
+        return Promise.resolve({ data: [] });
+      }
+      return Promise.resolve({ ...HAPPY_PAYLOAD, rows: [], total: 0 });
+    });
     await act(async () => {
       renderAt();
     });
@@ -243,7 +262,12 @@ describe('FailedPayments (HUB-1687)', () => {
   });
 
   it('403 → AccessDeniedPage', async () => {
-    apiGetMock.mockRejectedValueOnce(new PermissionDeniedError(403, 'no'));
+    apiGetMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/admin/portfolio/products')) {
+        return Promise.resolve({ data: [] });
+      }
+      return Promise.reject(new PermissionDeniedError(403, 'no'));
+    });
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     await act(async () => {
       renderAt();
@@ -255,7 +279,12 @@ describe('FailedPayments (HUB-1687)', () => {
   });
 
   it('fetch throw → error surface with Retry', async () => {
-    apiGetMock.mockRejectedValueOnce(new Error('boom'));
+    apiGetMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/admin/portfolio/products')) {
+        return Promise.resolve({ data: [] });
+      }
+      return Promise.reject(new Error('boom'));
+    });
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     await act(async () => {
       renderAt();
