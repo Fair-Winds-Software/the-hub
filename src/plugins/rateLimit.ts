@@ -1,4 +1,11 @@
 // Authorized by HUB-99 — Redis-backed rate-limit plugin; slot 3 in app.ts plugin chain
+// Authorized by HUB-1551 — per-test-suite isolation. In NODE_ENV=test the
+//   Redis SafeStore is swapped for the plugin's default in-memory store so
+//   every buildApp() invocation gets a fresh counter. Fixes the ~110-test
+//   429 cascade that was previously misdiagnosed as a bcrypt-login 401 issue.
+//   The plugin STILL RUNS in test mode (still enforces limits, still returns
+//   429) — only the STORE changes. A dedicated integration test in this
+//   plugin's __tests__ dir proves the enforcement is exercised.
 import fp from 'fastify-plugin';
 import rateLimit from '@fastify/rate-limit';
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest, RouteOptions } from 'fastify';
@@ -58,13 +65,11 @@ function makeSafeStoreCtor(redis: Redis, fastify: FastifyInstance): RLStoreCtor 
 }
 
 const rateLimitPlugin: FastifyPluginAsync = async (fastify) => {
-  const redis = getRedisClient();
+  const isTest = process.env.NODE_ENV === 'test';
 
-  await fastify.register(rateLimit, {
+  const baseOptions = {
     max: parseInt(process.env.RATE_LIMIT_MAX ?? '100', 10),
     timeWindow: parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? '60000', 10),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    store: makeSafeStoreCtor(redis, fastify) as any,
     skipOnError: true,
     keyGenerator: (request: FastifyRequest) => {
       // After HUB-98 (service auth), request may carry tenant_id; fall back to IP otherwise
@@ -86,6 +91,20 @@ const rateLimitPlugin: FastifyPluginAsync = async (fastify) => {
       'x-ratelimit-remaining': true,
       'x-ratelimit-reset': true,
     },
+  };
+
+  if (isTest) {
+    // HUB-1551: plugin's default in-memory store is per-plugin-instance.
+    // Every buildApp() call gets a fresh counter → no cross-test cascade.
+    await fastify.register(rateLimit, baseOptions);
+    return;
+  }
+
+  const redis = getRedisClient();
+  await fastify.register(rateLimit, {
+    ...baseOptions,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    store: makeSafeStoreCtor(redis, fastify) as any,
   });
 };
 
