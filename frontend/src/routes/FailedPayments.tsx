@@ -26,6 +26,7 @@ import {
   type FailedPaymentsProduct,
   type StatusCounts,
 } from './failedPayments/FailedPaymentsFilters';
+import { FailedPaymentsDrawer } from './failedPayments/FailedPaymentsDrawer';
 
 const FAILED_PAYMENTS_PATH = '/api/v1/admin/billing/failed-payments';
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
@@ -141,6 +142,15 @@ export default function FailedPayments({
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
   const [products, setProducts] = useState<FailedPaymentsProduct[]>([]);
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
+
+  const handleRowClick = useCallback(
+    (row: FailedPaymentRow): void => {
+      setOpenRowId(row.id);
+      onRowClick?.(row);
+    },
+    [onRowClick],
+  );
 
   useEffect(() => {
     const prev = document.title;
@@ -370,7 +380,7 @@ export default function FailedPayments({
                   <button
                     type="button"
                     data-testid={`failed-payments-row-link-${r.id}`}
-                    onClick={() => onRowClick?.(r)}
+                    onClick={() => handleRowClick(r)}
                     className="text-primary-navy underline decoration-primary-navy/40 underline-offset-2 hover:decoration-primary-navy focus:outline-none focus:ring-2 focus:ring-accent-brass"
                   >
                     {r.tenantName}
@@ -394,6 +404,10 @@ export default function FailedPayments({
         </table>
       )}
       </div>
+      <FailedPaymentsDrawer
+        invoiceRowId={openRowId}
+        onClose={() => setOpenRowId(null)}
+      />
     </div>
   );
 }
