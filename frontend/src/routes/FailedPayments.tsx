@@ -27,6 +27,7 @@ import {
   type StatusCounts,
 } from './failedPayments/FailedPaymentsFilters';
 import { FailedPaymentsDrawer } from './failedPayments/FailedPaymentsDrawer';
+import { FailedPaymentsBulkEmailBar } from './failedPayments/FailedPaymentsBulkEmailBar';
 
 const FAILED_PAYMENTS_PATH = '/api/v1/admin/billing/failed-payments';
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
@@ -143,6 +144,7 @@ export default function FailedPayments({
   const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
   const [products, setProducts] = useState<FailedPaymentsProduct[]>([]);
   const [openRowId, setOpenRowId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const handleRowClick = useCallback(
     (row: FailedPaymentRow): void => {
@@ -151,6 +153,16 @@ export default function FailedPayments({
     },
     [onRowClick],
   );
+
+  const toggleSelected = useCallback((id: string): void => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   useEffect(() => {
     const prev = document.title;
@@ -331,6 +343,15 @@ export default function FailedPayments({
         </button>
       </header>
 
+      <FailedPaymentsBulkEmailBar
+        selectedRows={rows.filter((r) => selectedIds.has(r.id))}
+        onClearSelection={clearSelection}
+        onSuccess={() => {
+          clearSelection();
+          void load(true);
+        }}
+      />
+
       {rows.length === 0 ? (
         <div
           data-testid="failed-payments-empty"
@@ -346,6 +367,9 @@ export default function FailedPayments({
         >
           <thead>
             <tr className="border-b border-deep-charcoal/15 text-xs text-deep-charcoal/60">
+              <th scope="col" className="w-8 py-2 text-left">
+                <span className="sr-only">Select</span>
+              </th>
               <th scope="col" className="py-2 text-left">
                 Failed at
               </th>
@@ -373,6 +397,16 @@ export default function FailedPayments({
                 data-testid={`failed-payments-row-${r.id}`}
                 className="border-b border-deep-charcoal/10 hover:bg-deep-charcoal/5"
               >
+                <td className="py-2">
+                  <input
+                    type="checkbox"
+                    data-testid={`failed-payments-row-select-${r.id}`}
+                    checked={selectedIds.has(r.id)}
+                    onChange={() => toggleSelected(r.id)}
+                    aria-label={`Select ${r.tenantName}`}
+                    className="rounded focus:ring-2 focus:ring-accent-brass"
+                  />
+                </td>
                 <td className="py-2 text-xs font-mono text-deep-charcoal/80">
                   {formatRelativeTime(r.createdAt)}
                 </td>
