@@ -28,7 +28,7 @@ Canonical SSoT for everything this project depends on. Maintained by `/infra-aud
 ```bash
 docker-compose up -d         # Start postgres + redis + adminer
 npm install
-cp .env.example .env         # Fill in missing required vars — see "Required env vars" below
+cp .env.example .env         # Dev defaults filled in — no edits needed for local Docker stack
 npm run migrate              # Apply all 45 SQL migrations
                              # (seeds the Maverick Launch internal tenant via migration 001 INSERT)
 npm start                    # Boot the API (validateEnv() enforces all required env vars at startup)
@@ -36,15 +36,15 @@ npm start                    # Boot the API (validateEnv() enforces all required
 
 Open Adminer at http://localhost:8080 (system: PostgreSQL, server: postgres, user: hub, password: hub, database: hub_dev).
 
-**Required env vars** (enforced by `validateEnv()` at startup):
+**Required env vars** (enforced by `validateEnv()` at startup — all pre-filled with dev defaults in `.env.example` per HUB-1548):
 
-- `DATABASE_URL` — provided in `.env.example`, already matches Docker postgres
-- `REDIS_URL` — `redis://localhost:6379` for local Docker redis
-- `JWT_SECRET`, `OPERATOR_JWT_SECRET` — secrets for token signing
-- `LEASE_ENCRYPTION_KEY`, `HOOK_ENCRYPTION_KEY` — must be 64 hex chars each (`openssl rand -hex 32`)
-- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SIGNING_SECRET` — Stripe API credentials
+- `DATABASE_URL`, `REDIS_URL` — matches the Docker stack out of the box
+- `JWT_SECRET`, `OPERATOR_JWT_SECRET` — token-signing secrets (dev defaults in `.env.example`; replace for prod)
+- `LEASE_ENCRYPTION_KEY`, `HOOK_ENCRYPTION_KEY` — 64 hex chars each (dev defaults are all-zero placeholders; regenerate for prod via `openssl rand -hex 32`)
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SIGNING_SECRET` — dev placeholders; real values from Stripe dashboard for prod
+- `JIRA_SERVICE_TOKEN`, `JIRA_SERVICE_EMAIL`, `JIRA_WORKSPACE_URL` — Atlassian Cloud Basic-auth pair; dev placeholders will 401 against Atlassian but the app boots + non-Jira endpoints work
 
-See the GitHub Actions CI workflow for example dev values. The current `.env.example` only lists DB vars; expanding it with safe dev defaults for all required vars is tracked as a follow-up ticket.
+`cp .env.example .env && npm start` works against a fresh Docker stack. Every DEV-ONLY value in `.env.example` is clearly marked and must be replaced before deploying to production.
 
 **Migration runner note:** `src/db/migrate.ts` applies all SQL files in `db/migrations/` lexicographically. Migration `041_audit_log.sql` includes an idempotent `CREATE ROLE hub_app` guard (commit `7972b5e`) so re-runs against existing roles don't fail.
 
