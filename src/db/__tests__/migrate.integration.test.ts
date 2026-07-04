@@ -26,6 +26,35 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // HUB-1709 (revised diagnosis): this test file drops schema_migrations in
+  // every beforeEach as part of exercising runMigrations against a synthetic
+  // migrations dir. Without a restore step, the real applied-migrations
+  // tracking is lost — which breaks other integration tests that check
+  // "was migration 046 recorded" (billingMode, invoicesExternalProvider,
+  // jiraProjectMapping, settingsCatalogSeeds, roleRename). Restore the
+  // table state by backfilling every filename from db/migrations/ that
+  // actually exists on disk, matching the state a fresh migration run
+  // would produce.
+  const migrationsDir = path.resolve(process.cwd(), 'db', 'migrations');
+  if (fs.existsSync(migrationsDir)) {
+    const files = fs
+      .readdirSync(migrationsDir)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+    await client.query(
+      `CREATE TABLE IF NOT EXISTS schema_migrations (
+         filename   TEXT NOT NULL,
+         applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         PRIMARY KEY (filename)
+       )`,
+    );
+    for (const file of files) {
+      await client.query(
+        'INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING',
+        [file],
+      );
+    }
+  }
   await client.end();
 });
 
