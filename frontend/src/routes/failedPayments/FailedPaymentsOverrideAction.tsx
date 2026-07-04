@@ -91,9 +91,9 @@ export function FailedPaymentsOverrideAction({
             </h2>
             <p className="mb-3 text-sm font-body text-deep-charcoal">
               This flags the failure as written off (manual reconciliation).
-              The row is never deleted — it stays visible with an "Overridden"
-              badge, and this action is audit-logged with your operator id
-              and the reason you provide.
+              The row is never deleted — it stays visible with an
+              &ldquo;Overridden&rdquo; badge, and this action is
+              audit-logged with your operator id and the reason you provide.
             </p>
             <label
               htmlFor="failed-payments-override-reason"

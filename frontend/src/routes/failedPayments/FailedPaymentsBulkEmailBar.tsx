@@ -129,8 +129,8 @@ export function FailedPaymentsBulkEmailBar({
               {selectedRows.length === 1 ? '' : 's'}?
             </h2>
             <p className="mb-3 text-sm font-body text-deep-charcoal">
-              A payment-retry email will be sent to each tenant's billing
-              address using the standard template. This action is
+              A payment-retry email will be sent to each tenant&apos;s
+              billing address using the standard template. This action is
               audit-logged.
             </p>
             <ul
