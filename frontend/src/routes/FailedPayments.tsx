@@ -407,6 +407,7 @@ export default function FailedPayments({
       <FailedPaymentsDrawer
         invoiceRowId={openRowId}
         onClose={() => setOpenRowId(null)}
+        onActionComplete={() => void load(true)}
       />
     </div>
   );

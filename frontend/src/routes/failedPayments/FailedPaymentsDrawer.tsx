@@ -21,6 +21,7 @@ import {
   statusLabel,
 } from './failed-payments-formatters';
 import type { FailedPaymentStatus } from '../FailedPayments';
+import { FailedPaymentsRetryAction } from './FailedPaymentsRetryAction';
 
 const DRILL_IN_PATH = '/api/v1/admin/billing/failed-payments';
 
@@ -56,6 +57,11 @@ type DetailState =
 interface FailedPaymentsDrawerProps {
   invoiceRowId: string | null;
   onClose: () => void;
+  /**
+   * HUB-1690 (S5) — fires after a successful retry so the parent list
+   * refetches. Optional so S4 stayed valid without an action wired.
+   */
+  onActionComplete?: () => void;
 }
 
 function stripeDashboardUrl(subscriptionId: string): string {
@@ -65,8 +71,20 @@ function stripeDashboardUrl(subscriptionId: string): string {
 export function FailedPaymentsDrawer({
   invoiceRowId,
   onClose,
+  onActionComplete,
 }: FailedPaymentsDrawerProps): React.ReactElement {
   const [state, setState] = useState<DetailState>({ kind: 'loading' });
+
+  const handleActionSuccess = (): void => {
+    onActionComplete?.();
+    onClose();
+  };
+
+  // Retry is available only when the row is in a state that can be retried.
+  const canRetry =
+    state.kind === 'ready' &&
+    (state.payload.status === 'pending_retry' ||
+      state.payload.status === 'exhausted');
 
   useEffect(() => {
     if (!invoiceRowId) return;
@@ -205,17 +223,30 @@ export function FailedPaymentsDrawer({
             )}
           </section>
 
-          {state.payload.stripeSubscriptionId && (
-            <a
-              data-testid="failed-payments-drawer-stripe-link"
-              href={stripeDashboardUrl(state.payload.stripeSubscriptionId)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center rounded border border-primary-navy/40 bg-primary-navy px-3 py-1.5 text-sm font-body text-sailcloth no-underline hover:bg-primary-navy/90 focus:outline-none focus:ring-2 focus:ring-accent-brass"
-            >
-              View in Stripe →
-            </a>
-          )}
+          <div
+            data-testid="failed-payments-drawer-actions"
+            className="flex flex-col gap-2 border-t border-deep-charcoal/10 pt-3"
+          >
+            {canRetry && (
+              <FailedPaymentsRetryAction
+                invoiceRowId={state.payload.id}
+                amountCents={state.payload.amountCents}
+                currency={state.payload.currency}
+                onRetrySuccess={handleActionSuccess}
+              />
+            )}
+            {state.payload.stripeSubscriptionId && (
+              <a
+                data-testid="failed-payments-drawer-stripe-link"
+                href={stripeDashboardUrl(state.payload.stripeSubscriptionId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center rounded border border-deep-charcoal/20 bg-transparent px-3 py-1.5 text-sm font-body text-deep-charcoal no-underline hover:bg-deep-charcoal/5 focus:outline-none focus:ring-2 focus:ring-accent-brass"
+              >
+                View in Stripe →
+              </a>
+            )}
+          </div>
         </div>
       )}
     </SideDrawer>
