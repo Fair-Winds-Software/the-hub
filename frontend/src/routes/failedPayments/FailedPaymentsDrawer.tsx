@@ -22,6 +22,7 @@ import {
 } from './failed-payments-formatters';
 import type { FailedPaymentStatus } from '../FailedPayments';
 import { FailedPaymentsRetryAction } from './FailedPaymentsRetryAction';
+import { FailedPaymentsOverrideAction } from './FailedPaymentsOverrideAction';
 
 const DRILL_IN_PATH = '/api/v1/admin/billing/failed-payments';
 
@@ -85,6 +86,9 @@ export function FailedPaymentsDrawer({
     state.kind === 'ready' &&
     (state.payload.status === 'pending_retry' ||
       state.payload.status === 'exhausted');
+  // Override is available on anything that hasn't already been overridden.
+  const canOverride =
+    state.kind === 'ready' && state.payload.status !== 'overridden';
 
   useEffect(() => {
     if (!invoiceRowId) return;
@@ -233,6 +237,12 @@ export function FailedPaymentsDrawer({
                 amountCents={state.payload.amountCents}
                 currency={state.payload.currency}
                 onRetrySuccess={handleActionSuccess}
+              />
+            )}
+            {canOverride && (
+              <FailedPaymentsOverrideAction
+                invoiceRowId={state.payload.id}
+                onOverrideSuccess={handleActionSuccess}
               />
             )}
             {state.payload.stripeSubscriptionId && (
