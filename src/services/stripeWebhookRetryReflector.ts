@@ -4,8 +4,10 @@
 // first-class value (previously always 0 because no code path wrote it).
 //
 // Wired from worker.ts's shared worker.on('failed') listener for any
-// queue whose name starts with `queue:stripe` — the stripe event queue
-// or the event-type-specific queues (queue:stripe:invoice.created, etc.).
+// queue whose name is `stripe-event` (the stripe event queue) or starts with
+// `stripe.` (event-type-specific queues like stripe.invoice.created).
+// HUB-1712 renamed these off their prior `queue:stripe*` names because
+// BullMQ 5.x rejects `:` in queue names.
 
 import type { Job } from 'bullmq';
 import { getPool } from '../db/pool.js';

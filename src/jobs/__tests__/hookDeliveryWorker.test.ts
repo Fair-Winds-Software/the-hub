@@ -8,7 +8,7 @@ vi.mock('bullmq', () => ({
 }));
 
 vi.mock('../../redis/client.js', () => ({
-  getRedisClient: vi.fn().mockReturnValue({}),
+  getRedisClientForBullMQ: vi.fn().mockReturnValue({}),
 }));
 
 const mockPoolQuery = vi.hoisted(() => vi.fn());
@@ -73,9 +73,9 @@ beforeEach(() => {
 });
 
 describe('registerHookDeliveryWorker', () => {
-  it('returns a Worker on queue:workflow:hook', () => {
+  it('returns a Worker on workflow.hook', () => {
     registerHookDeliveryWorker();
-    expect(mockWorkerConstructor.mock.calls[0]![0]).toBe('queue:workflow:hook');
+    expect(mockWorkerConstructor.mock.calls[0]![0]).toBe('workflow.hook');
   });
 
   it('registers on(failed) listener for DLQ warn', () => {

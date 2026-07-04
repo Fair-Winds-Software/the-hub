@@ -8,7 +8,7 @@ vi.mock('bullmq', () => ({
 }));
 
 vi.mock('../../redis/client.js', () => ({
-  getRedisClient: vi.fn().mockReturnValue({}),
+  getRedisClientForBullMQ: vi.fn().mockReturnValue({}),
 }));
 
 const mockSendMail = vi.hoisted(() => vi.fn());
@@ -68,7 +68,7 @@ describe('registerEscalationDeliveryWorker', () => {
   it('returns a Worker instance listening on correct queue', () => {
     const worker = registerEscalationDeliveryWorker();
     expect(worker).toBeDefined();
-    expect(mockWorkerConstructor.mock.calls[0]![0]).toBe('queue:escalation:deliver');
+    expect(mockWorkerConstructor.mock.calls[0]![0]).toBe('escalation.deliver');
   });
 
   it('registers on(failed) listener', () => {

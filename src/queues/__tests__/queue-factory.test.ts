@@ -16,16 +16,16 @@ vi.mock('bullmq', () => ({
 
 // Mock Redis client
 vi.mock('../../redis/client.js', () => ({
-  getRedisClient: vi.fn().mockReturnValue({ status: 'ready' }),
+  getRedisClientForBullMQ: vi.fn().mockReturnValue({ status: 'ready' }),
 }));
 
 // ── Queue Factory ─────────────────────────────────────────────────────────────
 
 describe('getBatchSweepQueue()', () => {
-  it('returns a Queue with name queue:batch-sweep', async () => {
+  it('returns a Queue with name batch-sweep', async () => {
     const { getBatchSweepQueue } = await import('../index.js');
     const q = getBatchSweepQueue();
-    expect(q.name).toBe('queue:batch-sweep');
+    expect(q.name).toBe('batch-sweep');
   });
 
   it('returns the same instance on repeated calls (singleton)', async () => {
@@ -37,10 +37,10 @@ describe('getBatchSweepQueue()', () => {
 });
 
 describe('getLicenseCheckQueue()', () => {
-  it('returns a Queue with name queue:license-check', async () => {
+  it('returns a Queue with name license-check', async () => {
     const { getLicenseCheckQueue } = await import('../index.js');
     const q = getLicenseCheckQueue();
-    expect(q.name).toBe('queue:license-check');
+    expect(q.name).toBe('license-check');
   });
 
   it('returns the same instance on repeated calls (singleton)', async () => {
@@ -56,13 +56,13 @@ describe('getAllQueueDefinitions()', () => {
     const { getAllQueueDefinitions } = await import('../index.js');
     const defs = getAllQueueDefinitions();
     const names = defs.map((d) => d.name);
-    expect(names).toContain('queue:batch-sweep');
-    expect(names).toContain('queue:license-check');
+    expect(names).toContain('batch-sweep');
+    expect(names).toContain('license-check');
   });
 
   it('batch-sweep definition has concurrency, maxAttempts, and exponential backoff', async () => {
     const { getAllQueueDefinitions } = await import('../index.js');
-    const def = getAllQueueDefinitions().find((d) => d.name === 'queue:batch-sweep')!;
+    const def = getAllQueueDefinitions().find((d) => d.name === 'batch-sweep')!;
     expect(def.concurrency).toBeGreaterThan(0);
     expect(def.maxAttempts).toBeGreaterThan(0);
     expect(def.backoff).toMatchObject({ type: 'exponential' });
@@ -70,7 +70,7 @@ describe('getAllQueueDefinitions()', () => {
 
   it('license-check definition has concurrency, maxAttempts, and exponential backoff', async () => {
     const { getAllQueueDefinitions } = await import('../index.js');
-    const def = getAllQueueDefinitions().find((d) => d.name === 'queue:license-check')!;
+    const def = getAllQueueDefinitions().find((d) => d.name === 'license-check')!;
     expect(def.concurrency).toBeGreaterThan(0);
     expect(def.maxAttempts).toBeGreaterThan(0);
     expect(def.backoff).toMatchObject({ type: 'exponential' });
@@ -108,6 +108,6 @@ describe('BullMQ retention policy (HUB-1523)', () => {
   it('retention:monthly queue is registered in getAllQueueDefinitions()', async () => {
     const { getAllQueueDefinitions } = await import('../index.js');
     const names = getAllQueueDefinitions().map((d) => d.name);
-    expect(names).toContain('queue:retention:monthly');
+    expect(names).toContain('retention.monthly');
   });
 });

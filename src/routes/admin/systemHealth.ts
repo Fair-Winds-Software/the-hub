@@ -274,13 +274,13 @@ const adminSystemHealthRoutes: FastifyPluginAsync = async (fastify) => {
             ): Promise<Array<{ timestamp?: number }>>;
           }
           let instance: QueueInstance | null = null;
-          if (def.name === 'queue:stripe-event')
+          if (def.name === 'stripe-event')
             instance = mod.getStripeEventQueue() as unknown as QueueInstance;
-          else if (def.name === 'queue:batch-sweep')
+          else if (def.name === 'batch-sweep')
             instance = mod.getBatchSweepQueue() as unknown as QueueInstance;
-          else if (def.name === 'queue:license-check')
+          else if (def.name === 'license-check')
             instance = mod.getLicenseCheckQueue() as unknown as QueueInstance;
-          else if (def.name === 'queue:dlq')
+          else if (def.name === 'dlq')
             instance = mod.getDlqQueue() as unknown as QueueInstance;
           const counts =
             instance !== null ? await instance.getJobCounts() : {};

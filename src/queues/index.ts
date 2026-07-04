@@ -16,7 +16,7 @@
 // Authorized by HUB-504 — billing-payment-failed processor; routes to billingFreezeService.handleBillingPaymentFailed
 // Authorized by HUB-517 — grace-period-expiry-scanner queue; CRON-driven expiry resolution
 // Authorized by HUB-719 — alert source queues for grace_period_expired, payment_failed, sdk_version_deprecated
-// Authorized by HUB-707 — notifications deliver queue; hub:queue:notifications:deliver; consumed by E19
+// Authorized by HUB-707 — notifications deliver queue; hub:queue:notifications.deliver:*; consumed by E19
 // Authorized by HUB-787 — escalation scanner queue; CRON-driven scan every 5 minutes; consumed by E20
 // Authorized by HUB-808 — escalation deliver queue; contact fan-out; 3-retry DLQ policy
 // Authorized by HUB-829 — workflow hook delivery queue; event-driven; 3-retry DLQ policy
@@ -24,9 +24,17 @@
 // Authorized by HUB-1355 — drift-detection queue; daily CRON posture score drift detector
 // Authorized by HUB-1145 — plan-advisor queue; weekly CRON advisor engine for all active product/tenant pairs
 // Authorized by HUB-1489 — billing-jobs queue; grandfather-subscribers + confirm-plan-change processors
+// Authorized by HUB-1712 — BullMQ 5.x rejects `:` in queue names and rejects ioredis
+//   clients with keyPrefix set. All queue names below are colon-free; getOrCreateQueue
+//   uses the dedicated Redis client from getRedisClientForBullMQ() and passes
+//   `prefix: 'hub:queue'` to preserve the `hub:queue:<name>:*` Redis key structure.
 import { Queue } from 'bullmq';
 import type { ConnectionOptions, BackoffOptions, Job, JobsOptions } from 'bullmq';
-import { getRedisClient } from '../redis/client.js';
+import { getRedisClientForBullMQ } from '../redis/client.js';
+
+// BullMQ per-Queue prefix — replaces the ioredis `hub:` keyPrefix that BullMQ rejects.
+// Keys remain `hub:queue:<queueName>:*` in Redis; existing ops tooling / dashboards unchanged.
+const BULLMQ_PREFIX = 'hub:queue';
 
 type JobProcessor = (job: Job) => Promise<void>;
 
@@ -71,9 +79,10 @@ function getOrCreateQueue(name: string, connection?: ConnectionOptions): Queue {
   const existing = _queueInstances.get(name);
   if (existing) return existing;
   // Cast required: BullMQ bundles its own ioredis version; same pattern as worker.ts
-  const conn = connection ?? (getRedisClient() as unknown as ConnectionOptions);
+  const conn = connection ?? (getRedisClientForBullMQ() as unknown as ConnectionOptions);
   const q = new Queue(name, {
     connection: conn,
+    prefix: BULLMQ_PREFIX,
     defaultJobOptions: QUEUE_RETENTION_OPTIONS,
   });
   _queueInstances.set(name, q);
@@ -81,10 +90,11 @@ function getOrCreateQueue(name: string, connection?: ConnectionOptions): Queue {
 }
 
 // ── Concrete Queue Definitions ──────────────────────────────────────────────
-// Names are prefixed `queue:` so Redis keys become `hub:queue:<name>:*` via
-// the `hub:` keyPrefix already set on the ioredis client (HUB-125).
+// Queue names are colon-free (HUB-1712 — BullMQ 5.x rejects `:` in names).
+// The `hub:queue:<name>:*` Redis key structure is preserved by passing
+// `prefix: 'hub:queue'` at Queue construction time (see getOrCreateQueue above).
 
-export const DLQ_QUEUE_NAME = 'queue:dlq';
+export const DLQ_QUEUE_NAME = 'dlq';
 
 // Sentinel entry — no processor; worker skips it. Jobs land here via failed-event handler.
 const DLQ_DEF: QueueDefinition = {
@@ -93,7 +103,7 @@ const DLQ_DEF: QueueDefinition = {
 };
 
 const STRIPE_EVENT_DEF: QueueDefinition = {
-  name: 'queue:stripe-event',
+  name: 'stripe-event',
   concurrency: 5,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 500 },
@@ -101,7 +111,7 @@ const STRIPE_EVENT_DEF: QueueDefinition = {
 };
 
 const BATCH_SWEEP_DEF: QueueDefinition = {
-  name: 'queue:batch-sweep',
+  name: 'batch-sweep',
   concurrency: 2,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 1000 },
@@ -115,7 +125,7 @@ const BATCH_SWEEP_DEF: QueueDefinition = {
 };
 
 const LICENSE_CHECK_DEF: QueueDefinition = {
-  name: 'queue:license-check',
+  name: 'license-check',
   concurrency: 5,
   maxAttempts: 5,
   backoff: { type: 'exponential', delay: 500 },
@@ -148,10 +158,10 @@ export function getDlqQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(DLQ_DEF.name, connection);
 }
 
-// Returns true if a queue definition for hub:queue:stripe:[eventType] is registered.
+// Returns true if a queue definition for stripe.[eventType] is registered.
 // E10–E12 billing Epics call registerQueue() to make their event-type queues discoverable here.
 export function hasQueueForEventType(eventType: string): boolean {
-  return _queues.some((q) => q.name === `queue:stripe:${eventType}`);
+  return _queues.some((q) => q.name === `stripe.${eventType}`);
 }
 
 // Semantic alias for the pre-INSERT recognized-type gate (HUB-203).
@@ -164,12 +174,12 @@ export function isRecognizedEventType(eventType: string): boolean {
 // Returns the registered event-type queue, or the DLQ if no factory is registered.
 // Callers are responsible for logging before invoking when they detect a fallback route.
 export function getQueueForEventType(eventType: string): Queue {
-  const queueName = `queue:stripe:${eventType}`;
+  const queueName = `stripe.${eventType}`;
   return hasQueueForEventType(eventType) ? getOrCreateQueue(queueName) : getDlqQueue();
 }
 
 const SUBSCRIPTION_UPDATED_DEF: QueueDefinition = {
-  name: 'queue:stripe:customer.subscription.updated',
+  name: 'stripe.customer.subscription.updated',
   concurrency: 5,
   maxAttempts: 5,
   backoff: { type: 'exponential', delay: 500 },
@@ -181,7 +191,7 @@ const SUBSCRIPTION_UPDATED_DEF: QueueDefinition = {
 };
 
 const SUBSCRIPTION_DELETED_DEF: QueueDefinition = {
-  name: 'queue:stripe:customer.subscription.deleted',
+  name: 'stripe.customer.subscription.deleted',
   concurrency: 5,
   maxAttempts: 5,
   backoff: { type: 'exponential', delay: 500 },
@@ -195,7 +205,7 @@ const SUBSCRIPTION_DELETED_DEF: QueueDefinition = {
 // ── E11 Invoice event queues ──────────────────────────────────────────────────
 
 const INVOICE_CREATED_DEF: QueueDefinition = {
-  name: 'queue:stripe:invoice.created',
+  name: 'stripe.invoice.created',
   concurrency: 5,
   maxAttempts: 5,
   backoff: { type: 'exponential', delay: 500 },
@@ -207,7 +217,7 @@ const INVOICE_CREATED_DEF: QueueDefinition = {
 };
 
 const INVOICE_FINALIZED_DEF: QueueDefinition = {
-  name: 'queue:stripe:invoice.finalized',
+  name: 'stripe.invoice.finalized',
   concurrency: 5,
   maxAttempts: 5,
   backoff: { type: 'exponential', delay: 500 },
@@ -219,7 +229,7 @@ const INVOICE_FINALIZED_DEF: QueueDefinition = {
 };
 
 const INVOICE_PAYMENT_SUCCEEDED_DEF: QueueDefinition = {
-  name: 'queue:stripe:invoice.payment_succeeded',
+  name: 'stripe.invoice.payment_succeeded',
   concurrency: 5,
   maxAttempts: 5,
   backoff: { type: 'exponential', delay: 500 },
@@ -231,7 +241,7 @@ const INVOICE_PAYMENT_SUCCEEDED_DEF: QueueDefinition = {
 };
 
 const INVOICE_PAYMENT_FAILED_DEF: QueueDefinition = {
-  name: 'queue:stripe:invoice.payment_failed',
+  name: 'stripe.invoice.payment_failed',
   concurrency: 5,
   maxAttempts: 5,
   backoff: { type: 'exponential', delay: 500 },
@@ -245,7 +255,7 @@ const INVOICE_PAYMENT_FAILED_DEF: QueueDefinition = {
 // Downstream queue: receives billing_payment_failed jobs enqueued by handleInvoicePaymentFailed.
 // Not an event-type queue — not discoverable via isRecognizedEventType().
 const BILLING_PAYMENT_FAILED_DEF: QueueDefinition = {
-  name: 'queue:billing-payment-failed',
+  name: 'billing-payment-failed',
   concurrency: 5,
   maxAttempts: 5,
   backoff: { type: 'exponential', delay: 1000 },
@@ -262,7 +272,7 @@ export function getBillingPaymentFailedQueue(connection?: ConnectionOptions): Qu
 
 // Grace period expiry scanner: CRON-driven scan for expired open grace periods.
 const GRACE_PERIOD_EXPIRY_SCANNER_DEF: QueueDefinition = {
-  name: 'queue:grace-period-expiry-scanner',
+  name: 'grace-period-expiry-scanner',
   concurrency: 1,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 1000 },
@@ -279,7 +289,7 @@ export function getGracePeriodExpiryScannerQueue(connection?: ConnectionOptions)
 
 // Alerts queue: receives below_floor events from E15 evaluateMargin(); consumed by I-5 (E18+)
 const ALERTS_DEF: QueueDefinition = {
-  name: 'queue:alerts:below_floor',
+  name: 'alerts.below_floor',
   concurrency: 0, // publisher only at E15; worker registered by I-5 (E18+)
 };
 
@@ -289,7 +299,7 @@ export function getAlertsQueue(connection?: ConnectionOptions): Queue {
 
 // Alert source queues registered by E18 — consumed by registerAlertHandlers() workers (HUB-719)
 const GRACE_PERIOD_EXPIRED_ALERTS_DEF: QueueDefinition = {
-  name: 'queue:alerts:grace_period_expired',
+  name: 'alerts.grace_period_expired',
   concurrency: 0,
 };
 
@@ -298,7 +308,7 @@ export function getGracePeriodExpiredAlertsQueue(connection?: ConnectionOptions)
 }
 
 const PAYMENT_FAILED_ALERTS_DEF: QueueDefinition = {
-  name: 'queue:alerts:payment_failed',
+  name: 'alerts.payment_failed',
   concurrency: 0,
 };
 
@@ -307,7 +317,7 @@ export function getPaymentFailedAlertsQueue(connection?: ConnectionOptions): Que
 }
 
 const SDK_VERSION_DEPRECATED_ALERTS_DEF: QueueDefinition = {
-  name: 'queue:alerts:sdk_version_deprecated',
+  name: 'alerts.sdk_version_deprecated',
   concurrency: 0,
 };
 
@@ -317,7 +327,7 @@ export function getSdkVersionDeprecatedAlertsQueue(connection?: ConnectionOption
 
 // Notifications delivery queue: receives jobs from ingestAlert(); consumed by E19 deliver worker (HUB-707)
 const NOTIFICATIONS_DELIVER_DEF: QueueDefinition = {
-  name: 'queue:notifications:deliver',
+  name: 'notifications.deliver',
   concurrency: 1,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 2000 },
@@ -330,7 +340,7 @@ export function getNotificationsDeliverQueue(connection?: ConnectionOptions): Qu
 
 // Escalation scanner queue: receives CRON-triggered jobs; consumed by registerEscalationScannerJob() worker (HUB-787)
 const ESCALATION_SCANNER_DEF: QueueDefinition = {
-  name: 'queue:escalation:scanner',
+  name: 'escalation.scanner',
   concurrency: 0, // publisher only at CRON layer; worker registered externally via registerEscalationScannerJob()
 };
 
@@ -340,7 +350,7 @@ export function getEscalationScannerQueue(connection?: ConnectionOptions): Queue
 
 // Escalation deliver queue: receives jobs from escalationService; consumed by registerEscalationDeliveryWorker() (HUB-808)
 const ESCALATION_DELIVER_DEF: QueueDefinition = {
-  name: 'queue:escalation:deliver',
+  name: 'escalation.deliver',
   concurrency: 1,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 2000 },
@@ -353,7 +363,7 @@ export function getEscalationDeliverQueue(connection?: ConnectionOptions): Queue
 
 // Workflow hook delivery queue: event-driven; consumed by registerHookDeliveryWorker() (HUB-829)
 const WORKFLOW_HOOK_DEF: QueueDefinition = {
-  name: 'queue:workflow:hook',
+  name: 'workflow.hook',
   concurrency: 1,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 2000 },
@@ -366,7 +376,7 @@ export function getWorkflowHookQueue(connection?: ConnectionOptions): Queue {
 
 // Period cost aggregation queue: monthly CRON aggregates cost_ledger into billing_period_costs
 const PERIOD_COST_AGGREGATOR_DEF: QueueDefinition = {
-  name: 'queue:billing:period-aggregation',
+  name: 'billing.period-aggregation',
   concurrency: 1,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 5000 },
@@ -383,7 +393,7 @@ export function getPeriodCostAggregatorQueue(connection?: ConnectionOptions): Qu
 
 // Margin review queue: daily CRON triggers evaluateMargin() for all enabled configs
 const MARGIN_REVIEW_DEF: QueueDefinition = {
-  name: 'queue:margin-review',
+  name: 'margin-review',
   concurrency: 1,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 5000 },
@@ -400,7 +410,7 @@ export function getMarginReviewQueue(connection?: ConnectionOptions): Queue {
 
 // Compliance evaluation queue: daily CRON triggers runComplianceEvaluation() for all registered products
 const COMPLIANCE_EVAL_DEF: QueueDefinition = {
-  name: 'queue:compliance:evaluation',
+  name: 'compliance.evaluation',
   concurrency: 1,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 5000 },
@@ -417,7 +427,7 @@ export function getComplianceEvalQueue(connection?: ConnectionOptions): Queue {
 
 // Human escalation queue: daily CRON fires T-7/T-1/T-0/overdue reminders for human controls (HUB-1354)
 const HUMAN_ESCALATION_DEF: QueueDefinition = {
-  name: 'queue:compliance:human-escalation',
+  name: 'compliance.human-escalation',
   concurrency: 1,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 5000 },
@@ -434,7 +444,7 @@ export function getHumanEscalationQueue(connection?: ConnectionOptions): Queue {
 
 // Drift detection queue: daily CRON detects 7-day posture score drops (HUB-1355)
 const DRIFT_DETECTION_DEF: QueueDefinition = {
-  name: 'queue:compliance:drift-detection',
+  name: 'compliance.drift-detection',
   concurrency: 1,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 5000 },
@@ -451,7 +461,7 @@ export function getDriftDetectionQueue(connection?: ConnectionOptions): Queue {
 
 // Plan advisor queue: weekly CRON runs advisor for all active (product, tenant) pairs (HUB-1145)
 const PLAN_ADVISOR_DEF: QueueDefinition = {
-  name: 'queue:advisor:weekly',
+  name: 'advisor.weekly',
   concurrency: 1,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 5000 },
@@ -468,7 +478,7 @@ export function getPlanAdvisorQueue(connection?: ConnectionOptions): Queue {
 
 // Billing jobs queue: processes grandfather-subscribers and confirm-plan-change jobs (HUB-1489/1491)
 const BILLING_JOBS_DEF: QueueDefinition = {
-  name: 'queue:billing-jobs',
+  name: 'billing-jobs',
   concurrency: 5,
   maxAttempts: 5,
   backoff: { type: 'exponential', delay: 500 },
@@ -495,7 +505,7 @@ export function getBillingJobsQueue(connection?: ConnectionOptions): Queue {
 
 // Monthly data retention CRON job: audit_log (36-month floor) + cost_ledger (RETAIN_MONTHS)
 const RETENTION_MONTHLY_DEF: QueueDefinition = {
-  name: 'queue:retention:monthly',
+  name: 'retention.monthly',
   concurrency: 1,
   maxAttempts: 3,
   backoff: { type: 'exponential', delay: 5000 },

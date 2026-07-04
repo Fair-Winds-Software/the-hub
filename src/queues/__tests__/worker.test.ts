@@ -14,7 +14,7 @@ vi.mock('bullmq', () => ({
 
 // Mock Redis client — no real connection attempted
 vi.mock('../../redis/client.js', () => ({
-  getRedisClient: vi.fn().mockReturnValue({ status: 'ready' }),
+  getRedisClientForBullMQ: vi.fn().mockReturnValue({ status: 'ready' }),
 }));
 
 // Queue registry mock — controllable from tests

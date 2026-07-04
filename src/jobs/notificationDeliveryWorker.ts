@@ -1,7 +1,7 @@
 // Authorized by HUB-732 — notification delivery worker; channel fanout; 3-retry DLQ policy
 import { Worker } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
-import { getRedisClient } from '../redis/client.js';
+import { getRedisClientForBullMQ } from '../redis/client.js';
 import { getPool } from '../db/pool.js';
 import { handleEmailDelivery } from '../services/notifications/emailHandler.js';
 import { handleWebhookDelivery } from '../services/notifications/webhookHandler.js';
@@ -9,10 +9,11 @@ import { handleInAppDelivery } from '../services/notifications/inAppHandler.js';
 import logger from '../lib/logger.js';
 import type { AlertJobData, NotificationChannel } from '../services/notifications/types.js';
 
-const QUEUE_NAME = 'queue:notifications:deliver';
+// HUB-1712: colon-free name + BullMQ-compatible client + explicit prefix
+const QUEUE_NAME = 'notifications.deliver';
 
 export function registerNotificationDeliveryWorker(): Worker {
-  const connection = getRedisClient() as unknown as ConnectionOptions;
+  const connection = getRedisClientForBullMQ() as unknown as ConnectionOptions;
 
   const worker = new Worker(
     QUEUE_NAME,
@@ -73,7 +74,7 @@ export function registerNotificationDeliveryWorker(): Worker {
         throw new Error(`Delivery failed for channels: ${failedChannels.join(', ')}`);
       }
     },
-    { connection, concurrency: 1 },
+    { connection, concurrency: 1, prefix: 'hub:queue' },
   );
 
   // Emit warn after all retries exhausted

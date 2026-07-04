@@ -1,15 +1,16 @@
 // Authorized by HUB-787 — escalation scanner CRON worker; 5-min tick; 30s overrun warn; re-throws on error
 import { Worker } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
-import { getRedisClient } from '../redis/client.js';
+import { getRedisClientForBullMQ } from '../redis/client.js';
 import { runEscalationScan } from '../services/escalationService.js';
 import logger from '../lib/logger.js';
 
-const QUEUE_NAME = 'queue:escalation:scanner';
+// HUB-1712: colon-free name + BullMQ-compatible client + explicit prefix
+const QUEUE_NAME = 'escalation.scanner';
 const OVERRUN_WARN_MS = 30_000;
 
 export function registerEscalationScannerJob(): Worker {
-  const connection = getRedisClient() as unknown as ConnectionOptions;
+  const connection = getRedisClientForBullMQ() as unknown as ConnectionOptions;
 
   const worker = new Worker(
     QUEUE_NAME,
@@ -29,7 +30,7 @@ export function registerEscalationScannerJob(): Worker {
         throw err;
       }
     },
-    { connection, concurrency: 1 },
+    { connection, concurrency: 1, prefix: 'hub:queue' },
   );
 
   return worker;

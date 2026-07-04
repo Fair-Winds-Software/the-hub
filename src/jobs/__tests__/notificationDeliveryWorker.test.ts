@@ -10,7 +10,7 @@ vi.mock('bullmq', () => ({
 }));
 
 vi.mock('../../redis/client.js', () => ({
-  getRedisClient: vi.fn().mockReturnValue({}),
+  getRedisClientForBullMQ: vi.fn().mockReturnValue({}),
 }));
 
 const mockPoolQuery = vi.hoisted(() => vi.fn());

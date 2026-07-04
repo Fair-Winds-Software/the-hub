@@ -18,7 +18,7 @@ const MockWorker = vi.hoisted(() =>
 vi.mock('bullmq', () => ({ Worker: MockWorker }));
 
 vi.mock('../../redis/client.js', () => ({
-  getRedisClient: vi.fn().mockReturnValue({}),
+  getRedisClientForBullMQ: vi.fn().mockReturnValue({}),
 }));
 
 vi.mock('../../lib/logger.js', () => ({
@@ -49,28 +49,28 @@ describe('registerAlertHandlers()', () => {
     expect(MockWorker).toHaveBeenCalledTimes(4);
   });
 
-  it('creates worker for queue:alerts:below_floor', () => {
+  it('creates worker for alerts.below_floor', () => {
     registerAlertHandlers();
     const names = MockWorker.mock.calls.map((c) => c[0] as string);
-    expect(names).toContain('queue:alerts:below_floor');
+    expect(names).toContain('alerts.below_floor');
   });
 
-  it('creates worker for queue:alerts:grace_period_expired', () => {
+  it('creates worker for alerts.grace_period_expired', () => {
     registerAlertHandlers();
     const names = MockWorker.mock.calls.map((c) => c[0] as string);
-    expect(names).toContain('queue:alerts:grace_period_expired');
+    expect(names).toContain('alerts.grace_period_expired');
   });
 
-  it('creates worker for queue:alerts:payment_failed', () => {
+  it('creates worker for alerts.payment_failed', () => {
     registerAlertHandlers();
     const names = MockWorker.mock.calls.map((c) => c[0] as string);
-    expect(names).toContain('queue:alerts:payment_failed');
+    expect(names).toContain('alerts.payment_failed');
   });
 
-  it('creates worker for queue:alerts:sdk_version_deprecated', () => {
+  it('creates worker for alerts.sdk_version_deprecated', () => {
     registerAlertHandlers();
     const names = MockWorker.mock.calls.map((c) => c[0] as string);
-    expect(names).toContain('queue:alerts:sdk_version_deprecated');
+    expect(names).toContain('alerts.sdk_version_deprecated');
   });
 
   it('all workers are created with concurrency 1', () => {
@@ -93,7 +93,7 @@ describe('below_floor handler', () => {
     registerAlertHandlers();
     mockIngestAlert.mockResolvedValueOnce({ alertId: ALERT_ID, isDedup: false, fireCount: 1 });
 
-    const [call] = MockWorker.mock.calls.filter((c) => c[0] === 'queue:alerts:below_floor');
+    const [call] = MockWorker.mock.calls.filter((c) => c[0] === 'alerts.below_floor');
     const handler = call![1] as (job: { data: Record<string, unknown> }) => Promise<void>;
     await handler({ data: { tenantId: TENANT_ID, productId: PRODUCT_ID, marginPercentage: 15, floorPercentage: 20, dedupKey: 'dk-1' } });
 
@@ -110,7 +110,7 @@ describe('below_floor handler', () => {
     registerAlertHandlers();
     mockIngestAlert.mockResolvedValueOnce({ alertId: ALERT_ID, isDedup: false, fireCount: 1 });
 
-    const [call] = MockWorker.mock.calls.filter((c) => c[0] === 'queue:alerts:below_floor');
+    const [call] = MockWorker.mock.calls.filter((c) => c[0] === 'alerts.below_floor');
     const handler = call![1] as (job: { data: Record<string, unknown> }) => Promise<void>;
     await handler({ data: { tenantId: TENANT_ID, productId: PRODUCT_ID, marginPercentage: 5, floorPercentage: 25 } });
 
@@ -122,7 +122,7 @@ describe('below_floor handler', () => {
     registerAlertHandlers();
     mockIngestAlert.mockRejectedValueOnce(new Error('DB down'));
 
-    const [call] = MockWorker.mock.calls.filter((c) => c[0] === 'queue:alerts:below_floor');
+    const [call] = MockWorker.mock.calls.filter((c) => c[0] === 'alerts.below_floor');
     const handler = call![1] as (job: { data: Record<string, unknown> }) => Promise<void>;
     await expect(handler({ data: { tenantId: TENANT_ID, productId: PRODUCT_ID, marginPercentage: 10, floorPercentage: 20 } }))
       .rejects.toThrow('DB down');
@@ -136,7 +136,7 @@ describe('grace_period_expired handler', () => {
     registerAlertHandlers();
     mockIngestAlert.mockResolvedValueOnce({ alertId: ALERT_ID, isDedup: false, fireCount: 1 });
 
-    const [call] = MockWorker.mock.calls.filter((c) => c[0] === 'queue:alerts:grace_period_expired');
+    const [call] = MockWorker.mock.calls.filter((c) => c[0] === 'alerts.grace_period_expired');
     const handler = call![1] as (job: { data: Record<string, unknown> }) => Promise<void>;
     await handler({ data: { tenantId: TENANT_ID, productId: PRODUCT_ID, leaseId: 'lease-1', expiredAt: '2026-06-01T00:00:00Z' } });
 
@@ -154,7 +154,7 @@ describe('payment_failed handler', () => {
     registerAlertHandlers();
     mockIngestAlert.mockResolvedValueOnce({ alertId: ALERT_ID, isDedup: false, fireCount: 1 });
 
-    const [call] = MockWorker.mock.calls.filter((c) => c[0] === 'queue:alerts:payment_failed');
+    const [call] = MockWorker.mock.calls.filter((c) => c[0] === 'alerts.payment_failed');
     const handler = call![1] as (job: { data: Record<string, unknown> }) => Promise<void>;
     await handler({ data: { tenantId: TENANT_ID, productId: PRODUCT_ID, stripeInvoiceId: 'inv_123', failureReason: 'card_declined' } });
 
@@ -172,7 +172,7 @@ describe('sdk_version_deprecated handler', () => {
     registerAlertHandlers();
     mockIngestAlert.mockResolvedValueOnce({ alertId: ALERT_ID, isDedup: false, fireCount: 1 });
 
-    const [call] = MockWorker.mock.calls.filter((c) => c[0] === 'queue:alerts:sdk_version_deprecated');
+    const [call] = MockWorker.mock.calls.filter((c) => c[0] === 'alerts.sdk_version_deprecated');
     const handler = call![1] as (job: { data: Record<string, unknown> }) => Promise<void>;
     await handler({ data: { tenantId: TENANT_ID, productId: PRODUCT_ID, sdkVersion: '1.2.3', deprecatedAt: '2026-06-01T00:00:00Z' } });
 

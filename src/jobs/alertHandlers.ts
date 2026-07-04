@@ -1,17 +1,18 @@
 // Authorized by HUB-719 — four BullMQ workers consuming alert source queues; delegate to ingestAlert()
 import { Worker } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
-import { getRedisClient } from '../redis/client.js';
+import { getRedisClientForBullMQ } from '../redis/client.js';
 import { ingestAlert } from '../services/alertService.js';
 import logger from '../lib/logger.js';
 
+// HUB-1712: colon-free names + BullMQ-compatible client + explicit prefix
 export function registerAlertHandlers(): Worker[] {
-  const connection = getRedisClient() as unknown as ConnectionOptions;
+  const connection = getRedisClientForBullMQ() as unknown as ConnectionOptions;
   const workers: Worker[] = [];
 
   workers.push(
     new Worker(
-      'queue:alerts:below_floor',
+      'alerts.below_floor',
       async (job) => {
         const { tenantId, productId, dedupKey, marginPercentage, floorPercentage } = job.data as {
           tenantId: string; productId: string; dedupKey?: string;
@@ -30,13 +31,13 @@ export function registerAlertHandlers(): Worker[] {
           throw err;
         }
       },
-      { connection, concurrency: 1 },
+      { connection, concurrency: 1, prefix: 'hub:queue' },
     ),
   );
 
   workers.push(
     new Worker(
-      'queue:alerts:grace_period_expired',
+      'alerts.grace_period_expired',
       async (job) => {
         const { tenantId, productId, dedupKey, leaseId, expiredAt } = job.data as {
           tenantId: string; productId: string; dedupKey?: string;
@@ -55,13 +56,13 @@ export function registerAlertHandlers(): Worker[] {
           throw err;
         }
       },
-      { connection, concurrency: 1 },
+      { connection, concurrency: 1, prefix: 'hub:queue' },
     ),
   );
 
   workers.push(
     new Worker(
-      'queue:alerts:payment_failed',
+      'alerts.payment_failed',
       async (job) => {
         const { tenantId, productId, dedupKey, stripeInvoiceId, failureReason } = job.data as {
           tenantId: string; productId: string; dedupKey?: string;
@@ -80,13 +81,13 @@ export function registerAlertHandlers(): Worker[] {
           throw err;
         }
       },
-      { connection, concurrency: 1 },
+      { connection, concurrency: 1, prefix: 'hub:queue' },
     ),
   );
 
   workers.push(
     new Worker(
-      'queue:alerts:sdk_version_deprecated',
+      'alerts.sdk_version_deprecated',
       async (job) => {
         const { tenantId, productId, dedupKey, sdkVersion, deprecatedAt } = job.data as {
           tenantId: string; productId: string; dedupKey?: string;
@@ -105,7 +106,7 @@ export function registerAlertHandlers(): Worker[] {
           throw err;
         }
       },
-      { connection, concurrency: 1 },
+      { connection, concurrency: 1, prefix: 'hub:queue' },
     ),
   );
 

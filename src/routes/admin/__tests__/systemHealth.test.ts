@@ -16,8 +16,8 @@ const mockGetSetting = vi.hoisted(() => vi.fn());
 const mockPoolQuery = vi.hoisted(() => vi.fn());
 const mockGetAllQueueDefinitions = vi.hoisted(() =>
   vi.fn(() => [
-    { name: 'queue:stripe-event', concurrency: 5 },
-    { name: 'queue:dlq', concurrency: 0 },
+    { name: 'stripe-event', concurrency: 5 },
+    { name: 'dlq', concurrency: 0 },
   ]),
 );
 const mockGetJobCounts = vi.hoisted(() =>
@@ -237,7 +237,7 @@ describe('GET /api/v1/admin/system-health/queues (HUB-1674)', () => {
     const body = res.json();
     expect(body.queues).toHaveLength(2);
     const stripe = body.queues.find(
-      (q: { name: string }) => q.name === 'queue:stripe-event',
+      (q: { name: string }) => q.name === 'stripe-event',
     );
     // waiting(3) + active(1) + delayed(0) = 4; dlq = failed(2)
     expect(stripe.depth).toBe(4);

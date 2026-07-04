@@ -8,7 +8,7 @@ vi.mock('bullmq', () => ({
 }));
 
 vi.mock('../../redis/client.js', () => ({
-  getRedisClient: vi.fn().mockReturnValue({}),
+  getRedisClientForBullMQ: vi.fn().mockReturnValue({}),
 }));
 
 const mockRunEscalationScan = vi.hoisted(() => vi.fn());
@@ -37,7 +37,7 @@ describe('registerEscalationScannerJob', () => {
     const worker = registerEscalationScannerJob();
     expect(worker).toBeDefined();
     expect(mockWorkerConstructor).toHaveBeenCalledOnce();
-    expect(mockWorkerConstructor.mock.calls[0]![0]).toBe('queue:escalation:scanner');
+    expect(mockWorkerConstructor.mock.calls[0]![0]).toBe('escalation.scanner');
   });
 
   it('logs info on successful tick', async () => {

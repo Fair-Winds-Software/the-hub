@@ -2,7 +2,7 @@
 import { Worker } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
 import nodemailer from 'nodemailer';
-import { getRedisClient } from '../redis/client.js';
+import { getRedisClientForBullMQ } from '../redis/client.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../lib/logger.js';
 
@@ -15,10 +15,11 @@ interface EscalationJobData {
   productId: string;
 }
 
-const QUEUE_NAME = 'queue:escalation:deliver';
+// HUB-1712: colon-free name + BullMQ-compatible client + explicit prefix
+const QUEUE_NAME = 'escalation.deliver';
 
 export function registerEscalationDeliveryWorker(): Worker {
-  const connection = getRedisClient() as unknown as ConnectionOptions;
+  const connection = getRedisClientForBullMQ() as unknown as ConnectionOptions;
 
   const worker = new Worker(
     QUEUE_NAME,
@@ -53,7 +54,7 @@ export function registerEscalationDeliveryWorker(): Worker {
         throw failures[failures.length - 1];
       }
     },
-    { connection, concurrency: 1 },
+    { connection, concurrency: 1, prefix: 'hub:queue' },
   );
 
   worker.on('failed', (job, err) => {

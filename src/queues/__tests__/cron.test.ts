@@ -15,17 +15,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ── Mock queue factories ──────────────────────────────────────────────────────
 const mockRemoveRepeatable = vi.fn().mockResolvedValue(true);
 const mockAdd = vi.fn().mockResolvedValue({ id: 'job-1' });
-const mockQueue = { name: 'queue:batch-sweep', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
-const mockQueue2 = { name: 'queue:license-check', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
-const mockQueue3 = { name: 'queue:grace-period-expiry-scanner', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
-const mockQueue4 = { name: 'queue:margin-review', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
-const mockQueue5 = { name: 'queue:billing:period-aggregation', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
-const mockQueue6 = { name: 'queue:escalation:scanner', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
-const mockQueue7 = { name: 'queue:compliance:evaluation', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
-const mockQueue8 = { name: 'queue:compliance:human-escalation', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
-const mockQueue9 = { name: 'queue:compliance:drift-detection', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
-const mockQueue10 = { name: 'queue:advisor:weekly', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
-const mockQueue11 = { name: 'queue:retention:monthly', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue = { name: 'batch-sweep', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue2 = { name: 'license-check', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue3 = { name: 'grace-period-expiry-scanner', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue4 = { name: 'margin-review', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue5 = { name: 'billing.period-aggregation', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue6 = { name: 'escalation.scanner', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue7 = { name: 'compliance.evaluation', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue8 = { name: 'compliance.human-escalation', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue9 = { name: 'compliance.drift-detection', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue10 = { name: 'advisor.weekly', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
+const mockQueue11 = { name: 'retention.monthly', removeRepeatable: mockRemoveRepeatable, add: mockAdd };
 
 vi.mock('../index.js', () => ({
   getBatchSweepQueue: vi.fn().mockReturnValue(mockQueue),

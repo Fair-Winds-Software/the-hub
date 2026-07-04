@@ -11,7 +11,7 @@ import 'dotenv/config';
 import { Worker as BullWorker, type Job } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
 import { fileURLToPath } from 'url';
-import { getRedisClient } from './redis/client.js';
+import { getRedisClientForBullMQ } from './redis/client.js';
 import { getAllQueueDefinitions, getDlqQueue } from './queues/index.js';
 import { registerAllCronJobs } from './queues/cron.js';
 import { registerAlertHandlers } from './jobs/alertHandlers.js';
@@ -32,7 +32,8 @@ const DRAIN_TIMEOUT_MS = 30_000;
 export function createWorkers(): BullWorker[] {
   // Cast required: BullMQ bundles its own ioredis version, causing structural
   // type incompatibility at compile time despite runtime compatibility.
-  const connection = getRedisClient() as unknown as ConnectionOptions;
+  // HUB-1712: dedicated Redis client with no keyPrefix + maxRetriesPerRequest: null
+  const connection = getRedisClientForBullMQ() as unknown as ConnectionOptions;
   const definitions = getAllQueueDefinitions();
 
   // Skip processor-less entries (e.g. DLQ sentinel) — they have no active worker
@@ -44,7 +45,7 @@ export function createWorkers(): BullWorker[] {
       const concurrency = parseInt(process.env[envKey] ?? String(def.concurrency), 10);
 
       logger.info({ queue: def.name, concurrency }, 'Worker watching queue');
-      const worker = new BullWorker(def.name, def.processor!, { connection, concurrency });
+      const worker = new BullWorker(def.name, def.processor!, { connection, concurrency, prefix: 'hub:queue' });
 
       // Move permanently failed jobs to DLQ with PII-safe structured logging;
       // for stripe event queues, also mirror the retry lifecycle back onto
@@ -58,8 +59,8 @@ export function createWorkers(): BullWorker[] {
           const isExhausted = !job.opts.attempts || job.attemptsMade >= job.opts.attempts;
 
           // Reflect retry state onto the stripe_webhook_events row for
-          // stripe event-type queues (queue:stripe-event + queue:stripe:*).
-          if (def.name.startsWith('queue:stripe')) {
+          // stripe event-type queues (stripe-event + stripe.*). HUB-1712: colon-free names.
+          if (def.name === 'stripe-event' || def.name.startsWith('stripe.')) {
             await reflectStripeWebhookRetry(job, isExhausted).catch((dbErr) => {
               logger.error(
                 { err: dbErr, jobId: job.id, queue: def.name },

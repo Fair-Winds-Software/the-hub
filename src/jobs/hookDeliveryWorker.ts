@@ -1,7 +1,7 @@
 // Authorized by HUB-829 — hook delivery BullMQ worker; fan-out to matching hooks; 3-retry DLQ policy
 import { Worker } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
-import { getRedisClient } from '../redis/client.js';
+import { getRedisClientForBullMQ } from '../redis/client.js';
 import { findMatchingHooks } from '../services/hookMatchingService.js';
 import { deliverHook } from '../services/hookDeliveryService.js';
 import { getPool } from '../db/pool.js';
@@ -15,10 +15,11 @@ interface HookJobData {
   alertEventId?: string;
 }
 
-const QUEUE_NAME = 'queue:workflow:hook';
+// HUB-1712: colon-free name + BullMQ-compatible client + explicit prefix
+const QUEUE_NAME = 'workflow.hook';
 
 export function registerHookDeliveryWorker(): Worker {
-  const connection = getRedisClient() as unknown as ConnectionOptions;
+  const connection = getRedisClientForBullMQ() as unknown as ConnectionOptions;
 
   const worker = new Worker(
     QUEUE_NAME,
@@ -71,7 +72,7 @@ export function registerHookDeliveryWorker(): Worker {
         throw failures[failures.length - 1];
       }
     },
-    { connection, concurrency: 1 },
+    { connection, concurrency: 1, prefix: 'hub:queue' },
   );
 
   worker.on('failed', (job, err) => {

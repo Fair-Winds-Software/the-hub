@@ -1,4 +1,4 @@
-// Authorized by HUB-707 — ingestAlert(): severity classification, dedup upsert, hub:queue:notifications:deliver enqueue
+// Authorized by HUB-707 — ingestAlert(): severity classification, dedup upsert, hub:queue:notifications.deliver enqueue
 import { getPool } from '../db/pool.js';
 import { getNotificationsDeliverQueue } from '../queues/index.js';
 import { AppError } from '../errors/AppError.js';
