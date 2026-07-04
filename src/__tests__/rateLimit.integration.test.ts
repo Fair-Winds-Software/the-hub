@@ -1,5 +1,5 @@
 // Authorized by HUB-99 — Redis-backed rate-limit plugin: 429 shape, headers, fail-open, key strategy
-import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
 import { closeRedis } from '../redis/client.js';
 
 // Mock must be hoisted before any imports that reference the module
@@ -18,6 +18,16 @@ beforeAll(() => {
   process.env.JWT_SECRET ??= 'test-jwt-secret-hub99';
   process.env.OPERATOR_JWT_SECRET ??= 'test-operator-jwt-secret-hub112';
   process.env.NODE_ENV = 'test';
+  // HUB-1711: this file specifically tests the Redis SafeStore's behaviour
+  // (mocked incr/pexpire counters + fail-open on ECONNREFUSED). Force the
+  // Redis path even under NODE_ENV=test so the mocks + assertions apply.
+  // HUB-1551 defaults every OTHER test file to the in-memory store to
+  // prevent the cross-test 429 cascade.
+  process.env.HUB_RATE_LIMIT_FORCE_REDIS = '1';
+});
+
+afterAll(() => {
+  delete process.env.HUB_RATE_LIMIT_FORCE_REDIS;
 });
 
 afterEach(async () => {

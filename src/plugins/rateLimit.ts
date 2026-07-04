@@ -6,6 +6,11 @@
 //   The plugin STILL RUNS in test mode (still enforces limits, still returns
 //   429) — only the STORE changes. A dedicated integration test in this
 //   plugin's __tests__ dir proves the enforcement is exercised.
+// Authorized by HUB-1711 — HUB_RATE_LIMIT_FORCE_REDIS=1 opt-in flag so
+//   the src/__tests__/rateLimit.integration.test.ts file (which tests the
+//   SafeStore's Redis-specific behaviour: mock counters, fail-open on
+//   ECONNREFUSED) can force the Redis path even under NODE_ENV=test. Every
+//   other test file gets the in-memory store default.
 import fp from 'fastify-plugin';
 import rateLimit from '@fastify/rate-limit';
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest, RouteOptions } from 'fastify';
@@ -66,6 +71,7 @@ function makeSafeStoreCtor(redis: Redis, fastify: FastifyInstance): RLStoreCtor 
 
 const rateLimitPlugin: FastifyPluginAsync = async (fastify) => {
   const isTest = process.env.NODE_ENV === 'test';
+  const forceRedis = process.env.HUB_RATE_LIMIT_FORCE_REDIS === '1';
 
   const baseOptions = {
     max: parseInt(process.env.RATE_LIMIT_MAX ?? '100', 10),
@@ -93,7 +99,7 @@ const rateLimitPlugin: FastifyPluginAsync = async (fastify) => {
     },
   };
 
-  if (isTest) {
+  if (isTest && !forceRedis) {
     // HUB-1551: plugin's default in-memory store is per-plugin-instance.
     // Every buildApp() call gets a fresh counter → no cross-test cascade.
     await fastify.register(rateLimit, baseOptions);
