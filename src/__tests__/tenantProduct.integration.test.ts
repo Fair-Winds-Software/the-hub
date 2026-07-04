@@ -3,6 +3,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
+import { cleanupProduct, cleanupTenant } from './_testCleanup.js';
 
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
@@ -197,9 +198,9 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         expect('client_secret' in detail).toBe(false);
         expect(detail['client_id']).toBe(prod.client_id);
 
-        // Cleanup
-        await getPool().query(`DELETE FROM products WHERE id = $1`, [prod.product_id]);
-        await getPool().query(`DELETE FROM tenants WHERE id = $1`, [tenant.id]);
+        // Cleanup — child-first FK order via HUB-1550 helper.
+        await cleanupProduct(getPool(), prod.product_id);
+        await cleanupTenant(getPool(), tenant.id);
       });
     });
 
@@ -248,9 +249,9 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         expect(await bcrypt.compare(rotated.client_secret, rows[0]!.client_secret_hash)).toBe(true);
         expect(await bcrypt.compare(oldSecret, rows[0]!.client_secret_hash)).toBe(false);
 
-        // Cleanup
-        await getPool().query(`DELETE FROM products WHERE id = $1`, [prod.product_id]);
-        await getPool().query(`DELETE FROM tenants WHERE id = $1`, [tenant.id]);
+        // Cleanup — child-first FK order via HUB-1550 helper.
+        await cleanupProduct(getPool(), prod.product_id);
+        await cleanupTenant(getPool(), tenant.id);
       });
     });
 
@@ -308,9 +309,9 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         );
         expect(rows2[0]!.active).toBe(false);
 
-        // Cleanup
-        await getPool().query(`DELETE FROM products WHERE id = $1`, [p1.product_id]);
-        await getPool().query(`DELETE FROM tenants WHERE id = $1`, [tenant.id]);
+        // Cleanup — child-first FK order via HUB-1550 helper.
+        await cleanupProduct(getPool(), p1.product_id);
+        await cleanupTenant(getPool(), tenant.id);
       });
     });
   },
