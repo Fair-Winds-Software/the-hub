@@ -153,6 +153,8 @@ const CustomerHealthDetail = lazy(
 );
 const PricingScenario = lazy(() => import('./routes/PricingScenario'));
 const FailedPayments = lazy(() => import('./routes/FailedPayments'));
+// HUB-1396 (E-CMP-WAVE4 S3) — GRC-Lite Device Compliance Register UI.
+const DeviceRegister = lazy(() => import('./routes/DeviceRegister'));
 
 export function App() {
   useEffect(() => {
@@ -258,6 +260,16 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <ComplianceDetail />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1396 (E-CMP-WAVE4 S3) — GRC-Lite Device Compliance Register.
+                Both roles may view; per-action super_admin gate is enforced inside the page. */}
+            <Route
+              path="/console/compliance/grc/devices"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <DeviceRegister />
                 </GuardedRoute>
               }
             />
