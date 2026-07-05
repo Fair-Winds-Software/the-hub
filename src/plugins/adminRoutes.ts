@@ -53,6 +53,7 @@ import adminAddOnsRoutes from '../routes/admin/addons.js';
 import adminSystemHealthRoutes from '../routes/admin/systemHealth.js';
 import adminCustomerHealthRoutes from '../routes/admin/customerHealth.js';
 import adminFailedPaymentsRoutes from '../routes/admin/failedPayments.js';
+import adminGrcRoutes from '../routes/admin/grc.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -87,6 +88,8 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminCustomerHealthRoutes);
     // HUB-1686 (E-FE-13 S1): Failed Payment Tracker endpoints (5 endpoints)
     await scope.register(adminFailedPaymentsRoutes);
+    // HUB-1385 (E-CMP-WAVE4 S2): GRC-Lite Wave 4 register CRUD (11 endpoints)
+    await scope.register(adminGrcRoutes);
   });
 };
 

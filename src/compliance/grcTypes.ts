@@ -12,6 +12,9 @@ export type DeviceComplianceStatus = 'compliant' | 'non_compliant' | 'pending_ve
 
 export type GrcRecordStatus = 'pending' | 'in_progress' | 'completed' | 'overdue';
 
+// HUB-1385 (migration 068) added the soft-delete lifecycle.
+export type DeviceInventoryStatus = 'active' | 'decommissioned';
+
 export interface DeviceInventory {
   id: string;
   product_id: string;
@@ -21,8 +24,18 @@ export interface DeviceInventory {
   model: string | null;
   serial_number: string | null;
   enrollment_date: string | null;
+  status: DeviceInventoryStatus;
+  decommissioned_at: string | null;
   added_at: string;
   updated_at: string;
+}
+
+// HUB-1385 pagination envelope for GET list endpoints.
+export interface PaginatedEnvelope<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface DeviceComplianceRecord {
