@@ -10,10 +10,16 @@
 // Authorized by HUB-1355 — drift_detection CRON entry; D-010 daily drift detection at 04:00 UTC
 // Authorized by HUB-1145 — plan_advisor CRON entry; D-011 weekly plan advisor Monday 02:00 UTC
 // Authorized by HUB-1524 — retention_monthly CRON entry: 3am on 1st of month
+// Authorized by HUB-1707 — role_rename_compat_flip CRON entry: 5-min tick; conditionally
+//   skipped at registration when settings.role_rename_compat_window_enabled is already
+//   false, so a re-deploy after the flag has flipped does not re-arm a stale job.
 import type { Queue } from 'bullmq';
-import { getBatchSweepQueue, getLicenseCheckQueue, getGracePeriodExpiryScannerQueue, getMarginReviewQueue, getPeriodCostAggregatorQueue, getEscalationScannerQueue, getComplianceEvalQueue, getHumanEscalationQueue, getDriftDetectionQueue, getPlanAdvisorQueue, getRetentionMonthlyQueue } from './index.js';
+import { getBatchSweepQueue, getLicenseCheckQueue, getGracePeriodExpiryScannerQueue, getMarginReviewQueue, getPeriodCostAggregatorQueue, getEscalationScannerQueue, getComplianceEvalQueue, getHumanEscalationQueue, getDriftDetectionQueue, getPlanAdvisorQueue, getRetentionMonthlyQueue, getRoleRenameCompatFlipQueue } from './index.js';
 import { D_002_PROMOTION_CRON, D_003_RETENTION_CRON, D_004_GRACE_PERIOD_SCANNER_CRON, D_005_MARGIN_REVIEW_CRON, D_006_PERIOD_COST_AGGREGATOR_CRON, D_007_ESCALATION_SCANNER_CRON, D_008_COMPLIANCE_EVAL_CRON, D_009_HUMAN_ESCALATION_CRON, D_010_DRIFT_DETECTION_CRON, D_011_PLAN_ADVISOR_CRON } from '../config/decisions.js';
+import { getSetting } from '../services/adminSettings.js';
 import logger from '../lib/logger.js';
+
+const ROLE_RENAME_COMPAT_FLIP_CRON = '*/5 * * * *';
 
 interface CronDefinition {
   queueFactory: () => Queue;
@@ -103,6 +109,12 @@ const CRON_DEFINITIONS: CronDefinition[] = [
     cron: '0 3 1 * *',
     payload: { triggered: 'scheduled' },
   },
+  {
+    queueFactory: getRoleRenameCompatFlipQueue,
+    name: 'role-rename-compat-flip',
+    cron: ROLE_RENAME_COMPAT_FLIP_CRON,
+    payload: { triggered: 'scheduled' },
+  },
 ];
 
 export async function registerAllCronJobs(): Promise<void> {
@@ -113,7 +125,20 @@ export async function registerAllCronJobs(): Promise<void> {
 
   let registered = 0;
 
+  // HUB-1707: skip re-registering the compat-flip job once the flag has already flipped
+  // to false. Cheaper than the alternative (job fires every 5 min forever, exits early
+  // on flag=false) and matches the ticket's "does not re-arm a stale job" requirement.
+  const roleRenameCompatFlagEnabled = await getSetting('role_rename_compat_window_enabled').catch(() => true);
+
   for (const def of CRON_DEFINITIONS) {
+    if (def.name === 'role-rename-compat-flip' && roleRenameCompatFlagEnabled !== true) {
+      logger.info(
+        { job: def.name },
+        'role_rename_compat_window_enabled=false — skipping compat-flip CRON registration',
+      );
+      continue;
+    }
+
     try {
       const queue = def.queueFactory();
 

@@ -9,10 +9,15 @@
 //   consulted params + body. No existing admin GET is currently used by product_admin with
 //   query-based tenant scoping; this unblocks HUB-1697's RBAC ACs without behavioral change
 //   to existing callers.
+// Authorized by HUB-1707 — increment Redis telemetry counter alongside the existing
+//   pino log line each time a legacy tenant_admin claim is accepted. Fire-and-forget: any
+//   Redis failure is swallowed by incrementLegacyClaimCounter() so the RBAC path
+//   never fails on telemetry storage. // tenant-admin-rename:historical
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { AppError } from '../errors/AppError.js';
 import { getSetting } from '../services/adminSettings.js';
+import { incrementLegacyClaimCounter } from '../services/roleRenameCompatService.js';
 import logger from '../lib/logger.js';
 
 declare module 'fastify' {
@@ -96,6 +101,7 @@ export async function operatorRbacHook(
       },
       'legacy tenant_admin JWT claim accepted during compat window', // tenant-admin-rename:historical
     );
+    await incrementLegacyClaimCounter();
     normalizedRole = 'product_admin';
   } else {
     // Unknown role string — never happened pre-rename either, but defensively reject.

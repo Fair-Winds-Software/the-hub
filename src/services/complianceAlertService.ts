@@ -4,12 +4,19 @@
 // Authorized by HUB-1353 — fireControlFailureAlert(): same engine, duplicate story resolved
 // Authorized by HUB-1354 — runHumanEscalationScheduler(): T-7/T-1/T-0/overdue reminder cron
 // Authorized by HUB-1355 — runDriftDetectionEngine(): 7-day posture score drop detection
+// Authorized by HUB-1707 — 'residual_legacy_claim_after_window' alert type +
+//   email renderer case; emitted by roleRenameCompatService when the compat
+//   window has exceeded 24 h with residual accepted legacy claims.
 import { createHash } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { getPool } from '../db/pool.js';
 import logger from '../lib/logger.js';
 
-type AlertType = 'control_failure' | 'human_overdue_reminder' | 'drift_detected';
+type AlertType =
+  | 'control_failure'
+  | 'human_overdue_reminder'
+  | 'drift_detected'
+  | 'residual_legacy_claim_after_window';
 type Severity = 'low' | 'medium' | 'high' | 'critical';
 
 interface AlertInput {
@@ -46,6 +53,12 @@ function renderEmailBody(alertType: AlertType, payload: Record<string, unknown>)
       return `Compliance Reminder: Human Control Due\n\nControl: ${payload.control_key ?? 'unknown'}\nProduct: ${payload.product_id ?? 'unknown'}\nDays until due: ${payload.days_until_due ?? 'unknown'}\n\nPlease complete attestation before the due date.`;
     case 'drift_detected':
       return `Compliance Alert: Posture Score Drift\n\nProduct: ${payload.product_id ?? 'platform-wide'}\nCurrent score: ${payload.current_score ?? 'unknown'}%\nScore 7 days ago: ${payload.previous_score ?? 'unknown'}%\nDrop: ${payload.drop ?? 'unknown'}%\n\nInvestigate recent changes that may have degraded compliance posture.`;
+    case 'residual_legacy_claim_after_window':
+      return `Compliance Alert: Residual Legacy Role Claims\n\n${payload.counter ?? 'unknown'} legacy tenant_admin JWT claim(s) were accepted during the compat window and the window has exceeded ${payload.age_hours ?? 'unknown'} hours since it opened at ${payload.started_at ?? 'unknown'}.\n\nLast legacy claim accepted at: ${payload.last_legacy_claim_at ?? 'never'}.\n\nThe automated flip was suppressed to avoid closing the compat window while legacy JWTs are still in circulation. Investigate outstanding tokens and, once safe, manually flip settings.role_rename_compat_window_enabled to false via the HUB Settings editor.`;
+    default: {
+      const _exhaustive: never = alertType;
+      return `Compliance Alert: ${String(_exhaustive)}`;
+    }
   }
 }
 

@@ -24,6 +24,8 @@
 // Authorized by HUB-1355 — drift-detection queue; daily CRON posture score drift detector
 // Authorized by HUB-1145 — plan-advisor queue; weekly CRON advisor engine for all active product/tenant pairs
 // Authorized by HUB-1489 — billing-jobs queue; grandfather-subscribers + confirm-plan-change processors
+// Authorized by HUB-1707 — role-rename-compat-flip queue; 5-min CRON tick that closes the
+//   compat window automatically per D-HUB-SCOPE role-rename automation deferral
 // Authorized by HUB-1712 — BullMQ 5.x rejects `:` in queue names and rejects ioredis
 //   clients with keyPrefix set. All queue names below are colon-free; getOrCreateQueue
 //   uses the dedicated Redis client from getRedisClientForBullMQ() and passes
@@ -503,6 +505,25 @@ export function getBillingJobsQueue(connection?: ConnectionOptions): Queue {
   return getOrCreateQueue(BILLING_JOBS_DEF.name, connection);
 }
 
+// HUB-1707 role-rename compat window auto-flip: 5-min CRON tick that closes the compat
+// window when either (a) no legacy claim in the past 30 min, or (b) 24h have elapsed
+// since the compat window started. Removes itself from the schedule after a successful flip.
+const ROLE_RENAME_COMPAT_FLIP_DEF: QueueDefinition = {
+  name: 'role-rename-compat-flip',
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 5000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (_job: Job) => {
+    const { runRoleRenameCompatFlip } = await import('../services/roleRenameCompatService.js');
+    await runRoleRenameCompatFlip();
+  },
+};
+
+export function getRoleRenameCompatFlipQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(ROLE_RENAME_COMPAT_FLIP_DEF.name, connection);
+}
+
 // Monthly data retention CRON job: audit_log (36-month floor) + cost_ledger (RETAIN_MONTHS)
 const RETENTION_MONTHLY_DEF: QueueDefinition = {
   name: 'retention.monthly',
@@ -566,5 +587,7 @@ registerQueue(PLAN_ADVISOR_DEF);
 registerQueue(BILLING_JOBS_DEF);
 // HUB-1524 monthly data retention (audit_log 36-month + cost_ledger RETAIN_MONTHS pruning)
 registerQueue(RETENTION_MONTHLY_DEF);
+// HUB-1707 role-rename compat window auto-flip (5-min tick, self-removing on flip)
+registerQueue(ROLE_RENAME_COMPAT_FLIP_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);

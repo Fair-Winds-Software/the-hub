@@ -95,11 +95,33 @@ UPDATE settings SET value = 'true'::jsonb WHERE key = 'role_rename_compat_window
 Full migration rollback (un-rename) is **not recommended** post-deploy and is documented
 in the per-file headers of migrations 048/049/050 only as a last resort.
 
-## Follow-up (HUB-1707, v0.2)
+## Automated flip (HUB-1707, v0.2+)
 
-The R1 amendments to HUB-1588 specified automated flip via BullMQ + 24h alert. Deferred
-to HUB-1707 under the HUB-1705 v0.2 Tech Debt Epic. v0.1 single-operator scale uses this
-manual procedure.
+HUB-1707 landed the BullMQ automation the R1 amendments to HUB-1588 specified. From
+v0.2 onwards this runbook's SQL-flip step is optional — the CRON job `role-rename-compat-flip`
+fires every 5 minutes and closes the window automatically when either:
+
+- **No legacy claim accepted for 30 min:** the flip trigger is recorded in `audit_log`
+  as `new_values.trigger = 'no_legacy_claims_30m'`, actor
+  `system:role-rename-window-closed`.
+- **24 h have elapsed since the compat window started:** if the counter has stayed at
+  0 through the window, the flip trigger is `24h_elapsed`. If residual claims were
+  accepted, the CRON does NOT flip — instead it emits a compliance alert of type
+  `residual_legacy_claim_after_window`. The operator resolves the residual and then
+  flips the flag manually via the HUB Settings editor (the manual procedure above still
+  applies as the operator override path).
+
+The 24 h clock starts at the first CRON tick that observes the flag in an enabled state
+(recorded to Redis at `hub:metrics:role_rename_compat_window:started_at`), so this
+automation works whether the flag was seeded by migration 047 or flipped back to `true`
+by an operator override at some later time.
+
+After a successful flip the CRON tick calls `removeRepeatable(...)` on its own queue, and
+`registerAllCronJobs` at the next worker restart observes the flag=false and skips
+re-arming — so a re-deploy does not resurrect a stale schedule.
+
+Manual SQL flip below remains valid as an override path when the operator decides to
+close the window before the automation would (e.g., mid-day security drill).
 
 ---
-*Last updated: 2026-06-25 by HUB-1588.*
+*Last updated: 2026-07-05 by HUB-1707.*
