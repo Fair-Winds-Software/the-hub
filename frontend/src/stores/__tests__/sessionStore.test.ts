@@ -1,4 +1,6 @@
 // Authorized by HUB-1572 — unit tests for operator session store (AC#1-#7 + R1 isHydrating contract)
+// Authorized by HUB-1706 — vitest 4 upgrade required pinning cookieSetterSpy generic (Mock<Procedure|Constructable>
+//   no longer widens to a setter signature)
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   useSessionStore,
@@ -70,12 +72,14 @@ describe('sessionStore (HUB-1572)', () => {
 
   describe('AC#6: no persistent storage writes', () => {
     let localStorageSpy: ReturnType<typeof vi.spyOn>;
-    let cookieSetterSpy: ReturnType<typeof vi.fn>;
+    // vitest 4 narrowed the default vi.fn() return so it no longer widens to
+    // an assignable setter type — pin the signature to match Object.defineProperty's `set`.
+    let cookieSetterSpy: ReturnType<typeof vi.fn<(v: string) => void>>;
     let originalCookieDescriptor: PropertyDescriptor | undefined;
 
     beforeEach(() => {
       localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
-      cookieSetterSpy = vi.fn();
+      cookieSetterSpy = vi.fn<(v: string) => void>();
       originalCookieDescriptor = Object.getOwnPropertyDescriptor(
         Document.prototype,
         'cookie',
