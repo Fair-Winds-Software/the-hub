@@ -20,3 +20,18 @@ export const GRC_WAVE4_SIGNAL_TYPES = [
 ] as const;
 
 export type GrcWave4SignalType = (typeof GRC_WAVE4_SIGNAL_TYPES)[number];
+
+// HUB-1422 (E-CMP-WAVE4b S1, HUB-871) — GRC-Lite Wave 4b signal types for the
+// vendor/cloud/policy register triad. Same registry pattern as Wave 4 above;
+// separated only to keep the "which epic added this" traceability clean.
+export const SIGNAL_VENDOR_RISK_ASSESSED = 'vendor_risk_assessed' as const;
+export const SIGNAL_CLOUD_SECURITY_ATTESTED = 'cloud_security_attested' as const;
+export const SIGNAL_POLICY_ACKNOWLEDGED = 'policy_acknowledged' as const;
+
+export const GRC_WAVE4B_SIGNAL_TYPES = [
+  SIGNAL_VENDOR_RISK_ASSESSED,
+  SIGNAL_CLOUD_SECURITY_ATTESTED,
+  SIGNAL_POLICY_ACKNOWLEDGED,
+] as const;
+
+export type GrcWave4bSignalType = (typeof GRC_WAVE4B_SIGNAL_TYPES)[number];
