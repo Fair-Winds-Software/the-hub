@@ -155,6 +155,10 @@ const PricingScenario = lazy(() => import('./routes/PricingScenario'));
 const FailedPayments = lazy(() => import('./routes/FailedPayments'));
 // HUB-1396 (E-CMP-WAVE4 S3) — GRC-Lite Device Compliance Register UI.
 const DeviceRegister = lazy(() => import('./routes/DeviceRegister'));
+// HUB-1397 (E-CMP-WAVE4 S4) — GRC-Lite HR Onboarding Register UI.
+const OnboardingRegister = lazy(() => import('./routes/OnboardingRegister'));
+// HUB-1398 (E-CMP-WAVE4 S5) — GRC-Lite HR Offboarding Register UI.
+const OffboardingRegister = lazy(() => import('./routes/OffboardingRegister'));
 
 export function App() {
   useEffect(() => {
@@ -270,6 +274,24 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <DeviceRegister />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1397 (E-CMP-WAVE4 S4) — GRC-Lite HR Onboarding Register. */}
+            <Route
+              path="/console/compliance/grc/onboarding"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <OnboardingRegister />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1398 (E-CMP-WAVE4 S5) — GRC-Lite HR Offboarding Register. */}
+            <Route
+              path="/console/compliance/grc/offboarding"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <OffboardingRegister />
                 </GuardedRoute>
               }
             />
