@@ -55,6 +55,8 @@ import adminCustomerHealthRoutes from '../routes/admin/customerHealth.js';
 import adminFailedPaymentsRoutes from '../routes/admin/failedPayments.js';
 import adminGrcRoutes from '../routes/admin/grc.js';
 import adminGrcVendorCloudPolicyRoutes from '../routes/admin/grcVendorCloudPolicy.js';
+// HUB-1733/1734 (E-V2-PP-2 S4/S5, HUB-1726, HUB-1701) — custom-quote CRUD + approval routes
+import adminCustomQuotesRoutes from '../routes/admin/customQuotes.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -93,6 +95,8 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminGrcRoutes);
     // HUB-1423 (E-CMP-WAVE4b S2): GRC-Lite Wave 4b register CRUD (13 endpoints)
     await scope.register(adminGrcVendorCloudPolicyRoutes);
+    // HUB-1733/1734 (E-V2-PP-2 S4/S5): custom-quote CRUD + approval
+    await scope.register(adminCustomQuotesRoutes);
   });
 };
 
