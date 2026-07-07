@@ -7,7 +7,8 @@
 // Endpoints (all sit inside adminRoutesPlugin's RBAC scope):
 //   GET    /api/v1/admin/plans?productId=<uuid>&includeArchived=false
 //   POST   /api/v1/admin/plans           { productId, key, name, billing_type, billing_interval, unit_amount_cents, billing_mode? }
-//   PUT    /api/v1/admin/plans/:planId   { name?, description?, unit_amount_cents?, billing_mode? }
+//   PUT    /api/v1/admin/plans/:planId   { name?, description?, unit_amount_cents?, billing_mode?,
+//                                           volume_ladder?, first_n_free_quantity?, quantity_metered_dimension? }
 //   DELETE /api/v1/admin/plans/:planId   → soft archive (422 if active subscribers)
 //
 // Spec deviations (documented per ironclad-engineer):
@@ -219,15 +220,53 @@ const adminPlansRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── PUT update ────────────────────────────────────────────────────────
+  //
+  // HUB-1718/1715/1716 (E-V2-PP-1) supplement: accepts LaunchKit pricing primitive
+  // fields on the PUT payload:
+  //   volume_ladder: JSONB (see plans.volume_ladder in migration 071)
+  //   first_n_free_quantity: integer >= 0
+  //   quantity_metered_dimension: snake_case string | null
   fastify.put('/api/v1/admin/plans/:planId', async (request, reply) => {
     const { planId } = request.params as { planId: string };
     await assertPlanAccess(request, planId);
     const body = (request.body as Record<string, unknown> | null) ?? {};
 
+    // Cross-field validation for first-N-free / dimension (defense-in-depth over DB).
+    const firstNFree = readOptionalNumber(body, 'first_n_free_quantity');
+    const meteredDim = 'quantity_metered_dimension' in body
+      ? (body['quantity_metered_dimension'] as string | null)
+      : undefined;
+    if (firstNFree !== undefined) {
+      if (!Number.isInteger(firstNFree) || firstNFree < 0) {
+        throw new AppError(400, 'first_n_free_quantity must be a non-negative integer');
+      }
+      if (firstNFree > 0 && meteredDim === null) {
+        throw new AppError(
+          400,
+          'first_n_free_quantity > 0 requires quantity_metered_dimension to be set',
+        );
+      }
+    }
+    if (meteredDim !== undefined && meteredDim !== null) {
+      if (typeof meteredDim !== 'string' || !/^[a-z][a-z0-9_]{2,63}$/.test(meteredDim)) {
+        throw new AppError(
+          400,
+          'quantity_metered_dimension must be a snake_case string (3–64 chars)',
+        );
+      }
+    }
+    const volumeLadder = 'volume_ladder' in body ? body['volume_ladder'] : undefined;
+    if (volumeLadder !== undefined && volumeLadder !== null && !Array.isArray(volumeLadder)) {
+      throw new AppError(400, 'volume_ladder must be an array or null');
+    }
+
     const patch = {
       name: readString(body, 'name'),
       description: readString(body, 'description'),
       unit_amount_cents: readOptionalNumber(body, 'unit_amount_cents'),
+      volume_ladder: volumeLadder,
+      first_n_free_quantity: firstNFree,
+      quantity_metered_dimension: meteredDim,
     };
     const billingModeRaw = readString(body, 'billing_mode');
 

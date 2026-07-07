@@ -369,6 +369,11 @@ export interface UpdatePlanPatch {
   name?: string;
   description?: string | null;
   unit_amount_cents?: number | null;
+  // HUB-1718/1715/1716 (E-V2-PP-1) LaunchKit pricing primitives fields.
+  // volume_ladder is a JSONB shape [{min_quantity, max_quantity, unit_amount_cents, sort_order}].
+  volume_ladder?: unknown;
+  first_n_free_quantity?: number;
+  quantity_metered_dimension?: string | null;
 }
 
 /**
@@ -401,6 +406,19 @@ export async function updatePlan(
   if (patch.unit_amount_cents !== undefined) {
     setFragments.push(`unit_amount_cents = $${idx++}`);
     params.push(patch.unit_amount_cents);
+  }
+  // HUB-1718 (E-V2-PP-1 S5 supplement) — accept LaunchKit pricing primitives on PUT.
+  if (patch.volume_ladder !== undefined) {
+    setFragments.push(`volume_ladder = $${idx++}::jsonb`);
+    params.push(JSON.stringify(patch.volume_ladder));
+  }
+  if (patch.first_n_free_quantity !== undefined) {
+    setFragments.push(`first_n_free_quantity = $${idx++}`);
+    params.push(patch.first_n_free_quantity);
+  }
+  if (patch.quantity_metered_dimension !== undefined) {
+    setFragments.push(`quantity_metered_dimension = $${idx++}`);
+    params.push(patch.quantity_metered_dimension);
   }
 
   const { rows: before } = await pool.query<PlanRow>(
