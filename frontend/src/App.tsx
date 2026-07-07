@@ -102,6 +102,18 @@ const PlansManager = lazy(
 const BundleDesigner = lazy(
   () => import('./routes/productDetail/BundleDesigner'),
 );
+// HUB-1737/1738/1739 (E-V2-PP-2 S8/S9/S10, HUB-1726, HUB-1701) — Custom-quote routes.
+// Tenant + product come via URL search params (?tenant_id=...&product_id=...) so operators
+// can bookmark quote surfaces per-tenant. Detail view reads :id from path.
+const CustomQuotesList = lazy(
+  () => import('./routes/customQuoteRoutes').then((m) => ({ default: m.CustomQuotesListRoute })),
+);
+const NewCustomQuoteRoute = lazy(
+  () => import('./routes/customQuoteRoutes').then((m) => ({ default: m.NewCustomQuoteRoute })),
+);
+const CustomQuoteDetailRoute = lazy(
+  () => import('./routes/customQuoteRoutes').then((m) => ({ default: m.CustomQuoteDetailRoute })),
+);
 const AddOnsManager = lazy(
   () => import('./routes/productDetail/AddOnsManager'),
 );
@@ -243,6 +255,31 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="super_admin">
                   <BundleDesigner />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1737/1738/1739 (E-V2-PP-2 S8/S9/S10) — Custom-quote workflow routes. */}
+            <Route
+              path="/console/billing/quotes"
+              element={
+                <GuardedRoute requiredRole="super_admin">
+                  <CustomQuotesList />
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/billing/quotes/new"
+              element={
+                <GuardedRoute requiredRole="super_admin">
+                  <NewCustomQuoteRoute />
+                </GuardedRoute>
+              }
+            />
+            <Route
+              path="/console/billing/quotes/:id"
+              element={
+                <GuardedRoute requiredRole="super_admin">
+                  <CustomQuoteDetailRoute />
                 </GuardedRoute>
               }
             />
