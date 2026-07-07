@@ -159,6 +159,12 @@ const DeviceRegister = lazy(() => import('./routes/DeviceRegister'));
 const OnboardingRegister = lazy(() => import('./routes/OnboardingRegister'));
 // HUB-1398 (E-CMP-WAVE4 S5) — GRC-Lite HR Offboarding Register UI.
 const OffboardingRegister = lazy(() => import('./routes/OffboardingRegister'));
+// HUB-1436 (E-CMP-WAVE4b S3) — GRC-Lite Vendor Register UI.
+const VendorRegister = lazy(() => import('./routes/VendorRegister'));
+// HUB-1437 (E-CMP-WAVE4b S4) — GRC-Lite Cloud Infrastructure Register UI.
+const CloudRegister = lazy(() => import('./routes/CloudRegister'));
+// HUB-1438 (E-CMP-WAVE4b S5) — GRC-Lite Policy Register UI.
+const PolicyRegister = lazy(() => import('./routes/PolicyRegister'));
 
 export function App() {
   useEffect(() => {
@@ -292,6 +298,33 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <OffboardingRegister />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1436 (E-CMP-WAVE4b S3) — GRC-Lite Vendor Register. */}
+            <Route
+              path="/console/compliance/grc/vendors"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <VendorRegister />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1437 (E-CMP-WAVE4b S4) — GRC-Lite Cloud Infrastructure Register. */}
+            <Route
+              path="/console/compliance/grc/cloud"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <CloudRegister />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1438 (E-CMP-WAVE4b S5) — GRC-Lite Policy Register. */}
+            <Route
+              path="/console/compliance/grc/policies"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <PolicyRegister />
                 </GuardedRoute>
               }
             />
