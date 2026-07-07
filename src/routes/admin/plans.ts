@@ -138,10 +138,32 @@ const adminPlansRoutes: FastifyPluginAsync = async (fastify) => {
     await assertProductAccess(request, productId);
     const includeArchived = q.includeArchived === 'true';
     const plans = await getPlans(productId, { includeArchived });
-    // Post-filter by archived_at when includeArchived is false. The service
-    // already filters by active=true which mirrors archived_at IS NULL, so
-    // this is defense-in-depth for post-migration consistency.
-    return reply.send({ data: plans, total: plans.length });
+    // HUB-1745 (E-V2-PP-3 S5) — attach `dimensions[]` per plan so consumers can
+    // author the Synapz multi-dimension shape via the same GET/PUT contract.
+    const pool = getPool();
+    const planIds = plans.map((p) => p.id);
+    let dimensionsByPlan = new Map<string, Array<{ dimension_key: string; dimension_label: string; sort_order: number }>>();
+    if (planIds.length > 0) {
+      const { rows } = await pool.query<{
+        plan_id: string; dimension_key: string; dimension_label: string; sort_order: number;
+      }>(
+        `SELECT plan_id, dimension_key, dimension_label, sort_order
+           FROM plan_metered_dimensions
+          WHERE plan_id = ANY($1::uuid[])
+          ORDER BY sort_order ASC, dimension_key ASC`,
+        [planIds],
+      );
+      for (const r of rows) {
+        if (!dimensionsByPlan.has(r.plan_id)) dimensionsByPlan.set(r.plan_id, []);
+        dimensionsByPlan.get(r.plan_id)!.push({
+          dimension_key: r.dimension_key,
+          dimension_label: r.dimension_label,
+          sort_order: r.sort_order,
+        });
+      }
+    }
+    const enriched = plans.map((p) => ({ ...p, dimensions: dimensionsByPlan.get(p.id) ?? [] }));
+    return reply.send({ data: enriched, total: enriched.length });
   });
 
   // ── POST create ───────────────────────────────────────────────────────
@@ -260,6 +282,74 @@ const adminPlansRoutes: FastifyPluginAsync = async (fastify) => {
       throw new AppError(400, 'volume_ladder must be an array or null');
     }
 
+    // HUB-1745 (E-V2-PP-3 S5) — dimensions[] + tiers with overage_rates.
+    const tiers = 'tiers' in body ? body['tiers'] : undefined;
+    if (tiers !== undefined && tiers !== null && !Array.isArray(tiers)) {
+      throw new AppError(400, 'tiers must be an array or null');
+    }
+    if (Array.isArray(tiers)) {
+      // Validate each tier's overage_rates shape (dimension_key snake_case,
+      // included_quantity >= 0, rate_per_unit_cents >= 0).
+      for (let ti = 0; ti < tiers.length; ti++) {
+        const t = tiers[ti] as { overage_rates?: unknown };
+        if (t?.overage_rates !== undefined && t.overage_rates !== null) {
+          if (!Array.isArray(t.overage_rates)) {
+            throw new AppError(400, `tiers[${ti}].overage_rates must be an array`);
+          }
+          for (let ri = 0; ri < t.overage_rates.length; ri++) {
+            const r = t.overage_rates[ri] as {
+              dimension_key?: string;
+              included_quantity?: number;
+              rate_per_unit_cents?: number;
+            };
+            if (typeof r?.dimension_key !== 'string' || !/^[a-z][a-z0-9_]{2,63}$/.test(r.dimension_key)) {
+              throw new AppError(
+                400,
+                `tiers[${ti}].overage_rates[${ri}].dimension_key must be snake_case`,
+              );
+            }
+            if (typeof r.included_quantity !== 'number' || r.included_quantity < 0) {
+              throw new AppError(
+                400,
+                `tiers[${ti}].overage_rates[${ri}].included_quantity must be >= 0`,
+              );
+            }
+            if (typeof r.rate_per_unit_cents !== 'number' || r.rate_per_unit_cents < 0) {
+              throw new AppError(
+                400,
+                `tiers[${ti}].overage_rates[${ri}].rate_per_unit_cents must be >= 0`,
+              );
+            }
+          }
+        }
+      }
+    }
+    const dimensionsRaw = 'dimensions' in body ? body['dimensions'] : undefined;
+    let dimensions: Array<{ dimension_key: string; dimension_label: string; sort_order: number }> | undefined;
+    if (dimensionsRaw !== undefined) {
+      if (!Array.isArray(dimensionsRaw)) {
+        throw new AppError(400, 'dimensions must be an array');
+      }
+      dimensions = [];
+      for (let di = 0; di < dimensionsRaw.length; di++) {
+        const d = dimensionsRaw[di] as { dimension_key?: string; dimension_label?: string; sort_order?: number };
+        if (typeof d?.dimension_key !== 'string' || !/^[a-z][a-z0-9_]{2,63}$/.test(d.dimension_key)) {
+          throw new AppError(400, `dimensions[${di}].dimension_key must be snake_case`);
+        }
+        if (typeof d.dimension_label !== 'string' || d.dimension_label.length === 0) {
+          throw new AppError(400, `dimensions[${di}].dimension_label is required`);
+        }
+        if (typeof d.sort_order !== 'number' || !Number.isInteger(d.sort_order)) {
+          throw new AppError(400, `dimensions[${di}].sort_order must be an integer`);
+        }
+        dimensions.push({
+          dimension_key: d.dimension_key,
+          dimension_label: d.dimension_label,
+          sort_order: d.sort_order,
+        });
+      }
+    }
+
     const patch = {
       name: readString(body, 'name'),
       description: readString(body, 'description'),
@@ -267,6 +357,8 @@ const adminPlansRoutes: FastifyPluginAsync = async (fastify) => {
       volume_ladder: volumeLadder,
       first_n_free_quantity: firstNFree,
       quantity_metered_dimension: meteredDim,
+      tiers,
+      dimensions,
     };
     const billingModeRaw = readString(body, 'billing_mode');
 

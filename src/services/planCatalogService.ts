@@ -374,6 +374,11 @@ export interface UpdatePlanPatch {
   volume_ladder?: unknown;
   first_n_free_quantity?: number;
   quantity_metered_dimension?: string | null;
+  // HUB-1745 (E-V2-PP-3 S5) — Synapz multi-dimension tier shape.
+  // tiers = [{upTo, unitAmount, overage_rates?: [{dimension_key, included_quantity, rate_per_unit_cents}]}].
+  tiers?: unknown;
+  // dimensions[] persists to plan_metered_dimensions (delete-not-in-payload + upsert).
+  dimensions?: Array<{ dimension_key: string; dimension_label: string; sort_order: number }>;
 }
 
 /**
@@ -420,6 +425,11 @@ export async function updatePlan(
     setFragments.push(`quantity_metered_dimension = $${idx++}`);
     params.push(patch.quantity_metered_dimension);
   }
+  // HUB-1745 (E-V2-PP-3 S5) — extended tiers JSONB with nested overage_rates.
+  if (patch.tiers !== undefined) {
+    setFragments.push(`tiers = $${idx++}::jsonb`);
+    params.push(JSON.stringify(patch.tiers));
+  }
 
   const { rows: before } = await pool.query<PlanRow>(
     'SELECT * FROM plans WHERE id = $1',
@@ -427,15 +437,66 @@ export async function updatePlan(
   );
   if (!before[0]) throw new AppError(404, 'Plan not found');
 
-  if (setFragments.length === 0) return before[0];
+  // HUB-1745 (E-V2-PP-3 S5) — sync plan_metered_dimensions if the payload sets it.
+  // Delete-not-in-payload + insert-if-new pattern; all inside the same client so
+  // it's atomic with the plans UPDATE below.
+  const shouldSyncDimensions = patch.dimensions !== undefined;
 
-  setFragments.push('updated_at = NOW()');
+  if (setFragments.length === 0 && !shouldSyncDimensions) return before[0];
+
+  // If only dimensions changed, still touch updated_at.
+  if (setFragments.length === 0) {
+    setFragments.push('updated_at = NOW()');
+  } else {
+    setFragments.push('updated_at = NOW()');
+  }
   params.push(planId);
 
-  const { rows: updated } = await pool.query<PlanRow>(
-    `UPDATE plans SET ${setFragments.join(', ')} WHERE id = $${idx} RETURNING *`,
-    params,
-  );
+  const client = await pool.connect();
+  let updated: PlanRow[];
+  try {
+    await client.query('BEGIN');
+    const { rows: updRows } = await client.query<PlanRow>(
+      `UPDATE plans SET ${setFragments.join(', ')} WHERE id = $${idx} RETURNING *`,
+      params,
+    );
+    updated = updRows;
+
+    if (shouldSyncDimensions) {
+      const declared = patch.dimensions ?? [];
+      // Delete any existing dimension rows for this plan that aren't in the new payload.
+      const declaredKeys = declared.map((d) => d.dimension_key);
+      if (declaredKeys.length === 0) {
+        await client.query(
+          `DELETE FROM plan_metered_dimensions WHERE plan_id = $1`, [planId],
+        );
+      } else {
+        await client.query(
+          `DELETE FROM plan_metered_dimensions
+            WHERE plan_id = $1 AND dimension_key <> ALL($2::text[])`,
+          [planId, declaredKeys],
+        );
+      }
+      // Upsert each declared row.
+      for (const d of declared) {
+        await client.query(
+          `INSERT INTO plan_metered_dimensions
+              (plan_id, dimension_key, dimension_label, sort_order)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (plan_id, dimension_key)
+           DO UPDATE SET dimension_label = EXCLUDED.dimension_label,
+                         sort_order = EXCLUDED.sort_order`,
+          [planId, d.dimension_key, d.dimension_label, d.sort_order],
+        );
+      }
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
 
   await writeAuditEntry({
     tenant_id: '00000000-0000-0000-0000-0000000000a1',
