@@ -505,10 +505,12 @@ const adminGrcVendorCloudPolicyRoutes: FastifyPluginAsync = async (fastify) => {
     return rows[0];
   });
 
-  // AC 13: any authenticated user may acknowledge (employee self-service);
-  // NOT gated on super_admin. Only assertOperator is required.
+  // AC 6: policy acknowledgment on behalf of an employee. Wave 4b is
+  // portfolio-scoped, so operatorRbacHook (tenant-scoped) blocks product_admin
+  // upstream of this handler — meaning the operational role for Wave 4b is
+  // super_admin. Employee self-service is out of scope for this wave.
   fastify.post('/api/v1/admin/grc/policies/:id/acknowledge', async (request, reply) => {
-    assertOperator(request);
+    assertSuperAdmin(request);
     const params = request.params as { id?: unknown };
     assertUuidParam(params.id);
     const body = (request.body ?? {}) as Record<string, unknown>;

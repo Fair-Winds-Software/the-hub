@@ -374,15 +374,15 @@ describe('POST /policies/:id/acknowledge (AC 13)', () => {
     );
   });
 
-  it('AC 13: product_admin can also acknowledge (NOT gated on super_admin)', async () => {
+  it('product_admin cannot acknowledge — Wave 4b is super_admin-only', async () => {
     mockAckFlow();
     const res = await appProductAdmin.inject({
       method: 'POST',
       url: `/api/v1/admin/grc/policies/${POLICY_ID}/acknowledge`,
       payload: { employee_id: 'emp-2', employee_name: 'Bob', policy_version: 'v1.0' },
     });
-    expect(res.statusCode).toBe(201);
-    expect(mockEmitGrcSignal).toHaveBeenCalled();
+    expect(res.statusCode).toBe(403);
+    expect(mockEmitGrcSignal).not.toHaveBeenCalled();
   });
 
   it('returns 404 when policy does not exist', async () => {

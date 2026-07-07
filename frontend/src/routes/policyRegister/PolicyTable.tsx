@@ -21,7 +21,7 @@ function StatusPill({ status }: { status: PolicyRow['status'] }): React.ReactEle
   );
 }
 
-export function PolicyTable({ rows, isAdmin: _isAdmin, onAcknowledge }: PolicyTableProps): React.ReactElement {
+export function PolicyTable({ rows, isAdmin, onAcknowledge }: PolicyTableProps): React.ReactElement {
   if (rows.length === 0) {
     return (
       <p data-testid="policy-table-empty" role="status"
@@ -60,7 +60,7 @@ export function PolicyTable({ rows, isAdmin: _isAdmin, onAcknowledge }: PolicyTa
               <td className="px-3 py-2 font-body text-deep-charcoal">{row.review_due_date ?? '—'}</td>
               <td className="px-3 py-2"><StatusPill status={row.status} /></td>
               <td className="px-3 py-2 text-right">
-                {row.status === 'active' ? (
+                {isAdmin && row.status === 'active' ? (
                   <button type="button" onClick={() => onAcknowledge(row)}
                     aria-label={`Acknowledge ${row.policy_name}`}
                     data-testid={`policy-ack-btn-${row.id}`}

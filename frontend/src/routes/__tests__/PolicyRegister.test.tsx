@@ -1,6 +1,7 @@
 // Authorized by HUB-1438 (E-CMP-WAVE4b S5) — page-level tests for Policy Register.
-// Special AC: acknowledge is accessible to BOTH super_admin and product_admin (per
-// HUB-1423 AC 13 — employee self-service).
+// Wave 4b runtime scoping: portfolio-scoped resources go through the tenant-scoped
+// operatorRbacHook, which denies product_admin. Acknowledge is therefore super_admin-only
+// in Wave 4b; employee self-service is out of scope for this wave.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -84,7 +85,7 @@ describe('PolicyRegister — filter + role gating', () => {
     expect((apiGetMock.mock.calls[0]![0] as string)).toContain('policy_type=security');
   });
 
-  it('AC 13: acknowledge button visible for BOTH super_admin and product_admin', async () => {
+  it('acknowledge button visible for super_admin, hidden for product_admin (Wave 4b portfolio scope)', async () => {
     setSuperAdmin();
     renderPage();
     await screen.findByText('Acceptable Use');
@@ -94,10 +95,10 @@ describe('PolicyRegister — filter + role gating', () => {
     setProductAdmin();
     renderPage();
     await screen.findByText('Acceptable Use');
-    expect(screen.getByTestId(`policy-ack-btn-${ROW.id}`)).toBeInTheDocument();
+    expect(screen.queryByTestId(`policy-ack-btn-${ROW.id}`)).toBeNull();
   });
 
-  it('AC 13: Add Policy button visible only for super_admin', async () => {
+  it('Add Policy button visible only for super_admin', async () => {
     setSuperAdmin();
     renderPage();
     await screen.findByText('Acceptable Use');
@@ -111,7 +112,7 @@ describe('PolicyRegister — filter + role gating', () => {
   });
 
   it('acknowledge submit posts payload + success toast', async () => {
-    setProductAdmin();
+    setSuperAdmin();
     renderPage();
     await screen.findByText('Acceptable Use');
     apiPostMock.mockResolvedValueOnce({ id: 'ack-1' });

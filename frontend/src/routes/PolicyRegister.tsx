@@ -62,8 +62,8 @@ export function PolicyRegister(): React.ReactElement {
         <div>
           <h1 className="font-heading text-2xl text-primary-navy">Policy Register</h1>
           <p className="text-sm font-body text-deep-charcoal/70">
-            Policy library + employee acknowledgment tracker. Any authenticated operator may
-            acknowledge on behalf of an employee. GRC-Lite Wave 4b.
+            Policy library + employee acknowledgment tracker. Super admins acknowledge on
+            behalf of employees. GRC-Lite Wave 4b.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
