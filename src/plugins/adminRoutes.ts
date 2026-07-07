@@ -57,6 +57,8 @@ import adminGrcRoutes from '../routes/admin/grc.js';
 import adminGrcVendorCloudPolicyRoutes from '../routes/admin/grcVendorCloudPolicy.js';
 // HUB-1733/1734 (E-V2-PP-2 S4/S5, HUB-1726, HUB-1701) — custom-quote CRUD + approval routes
 import adminCustomQuotesRoutes from '../routes/admin/customQuotes.js';
+// HUB-1747 (E-V2-PP-3 S7, HUB-1727, HUB-1701) — pricing simulation preview endpoint
+import adminPricingSimulateRoutes from '../routes/admin/pricingSimulate.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -97,6 +99,8 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminGrcVendorCloudPolicyRoutes);
     // HUB-1733/1734 (E-V2-PP-2 S4/S5): custom-quote CRUD + approval
     await scope.register(adminCustomQuotesRoutes);
+    // HUB-1747 (E-V2-PP-3 S7): pricing simulation preview
+    await scope.register(adminPricingSimulateRoutes);
   });
 };
 
