@@ -98,6 +98,10 @@ const PricingModelEditor = lazy(
 const PlansManager = lazy(
   () => import('./routes/productDetail/PlansManager'),
 );
+// HUB-1723 (E-V2-PP-1 S10, HUB-1713, HUB-1701) — Bundle Designer route.
+const BundleDesigner = lazy(
+  () => import('./routes/productDetail/BundleDesigner'),
+);
 const AddOnsManager = lazy(
   () => import('./routes/productDetail/AddOnsManager'),
 );
@@ -230,6 +234,15 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="super_admin">
                   <PlansManager />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1723 (E-V2-PP-1 S10) — Bundle Designer for LaunchKit-style bundle discounts. */}
+            <Route
+              path="/console/products/:productId/pricing/bundles"
+              element={
+                <GuardedRoute requiredRole="super_admin">
+                  <BundleDesigner />
                 </GuardedRoute>
               }
             />

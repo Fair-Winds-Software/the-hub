@@ -38,6 +38,12 @@ import { apiClient } from '../../lib/api';
 import { PermissionDeniedError } from '../../lib/errors';
 import { AccessDeniedPage } from '../../components/AccessDeniedPage';
 import { formatCurrency } from './pricing-formatters';
+import {
+  VolumeLadderEditor,
+  QuantityMeteredFields,
+  validateLadder,
+  validateQuantityMetered,
+} from './LaunchKitPricingFields';
 
 const PLANS_PATH = '/api/v1/admin/plans';
 const PORTFOLIO_PATH = '/api/v1/admin/portfolio/products';
@@ -66,11 +72,25 @@ interface PlanRow {
   billing_interval: BillingInterval | null;
   unit_amount_cents: number | null;
   billing_mode?: BillingMode;
+  // HUB-1722/1724 (E-V2-PP-1 S9/S11) — LaunchKit primitives on plan rows
+  volume_ladder?: VolumeLadderTier[] | null;
+  first_n_free_quantity?: number;
+  quantity_metered_dimension?: string | null;
   active: boolean;
   archived_at?: string | null;
   created_at: string;
   updated_at: string;
 }
+
+/** HUB-1722 (E-V2-PP-1 S9) — LaunchKit volume-ladder tier shape (mirrors backend). */
+export interface VolumeLadderTier {
+  min_quantity: number;
+  /** null = "and above" (unbounded upper). */
+  max_quantity: number | null;
+  unit_amount_cents: number;
+  sort_order: number;
+}
+
 
 interface PlansListResponse {
   data: PlanRow[];
@@ -409,11 +429,29 @@ function EditPlanModal({ plan, onCancel, onSaved }: EditPlanModalProps): React.R
   const [name, setName] = useState(plan.name);
   const [description, setDescription] = useState(plan.description ?? '');
   const [unitAmount, setUnitAmount] = useState(String(plan.unit_amount_cents ?? ''));
+  // HUB-1722 (E-V2-PP-1 S9) — volume-ladder editor state (hidden unless billing_type='one_time').
+  const [ladder, setLadder] = useState<VolumeLadderTier[]>(plan.volume_ladder ?? []);
+  // HUB-1724 (E-V2-PP-1 S11) — first-N-free + metered-dimension state.
+  const [dimension, setDimension] = useState<string | null>(plan.quantity_metered_dimension ?? null);
+  const [firstNFree, setFirstNFree] = useState<number>(plan.first_n_free_quantity ?? 0);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const isCredit = plan.billing_mode === 'credit';
+  const isOneTime = plan.billing_type === 'one_time';
 
   const handleSave = async (): Promise<void> => {
+    // Client-side validation blocks submit if the ladder or quantity-metered state is broken
+    // (HUB-1722 AC 3, HUB-1724 AC 3/4).
+    const ladderErrors = validateLadder(ladder);
+    if (ladderErrors.some((e) => e !== null)) {
+      setServerError('Fix ladder row errors before saving.');
+      return;
+    }
+    const qmError = validateQuantityMetered(dimension, firstNFree);
+    if (qmError !== null) {
+      setServerError(qmError);
+      return;
+    }
     setSubmitting(true);
     setServerError(null);
     try {
@@ -424,6 +462,15 @@ function EditPlanModal({ plan, onCancel, onSaved }: EditPlanModalProps): React.R
       if (unitAmount.trim().length > 0) {
         payload.unit_amount_cents = parseInt(unitAmount, 10);
       }
+      // HUB-1722 (E-V2-PP-1 S9 AC 4/5) — volume_ladder only for one_time plans; empty array
+      // sends `null` (per HUB-1719 flat-pricing fallback semantics).
+      if (isOneTime) {
+        payload.volume_ladder = ladder.length === 0 ? null : ladder;
+      }
+      // HUB-1724 (E-V2-PP-1 S11 AC 1/2/5) — always send both fields so the backend cross-field
+      // guard receives a coherent pair (defense-in-depth).
+      payload.first_n_free_quantity = firstNFree;
+      payload.quantity_metered_dimension = dimension;
       const updated = await apiClient.put<PlanRow>(`${PLANS_PATH}/${plan.id}`, payload);
       onSaved(updated);
     } catch (err) {
@@ -483,6 +530,28 @@ function EditPlanModal({ plan, onCancel, onSaved }: EditPlanModalProps): React.R
               </span>
             )}
           </label>
+          {/* HUB-1722 (E-V2-PP-1 S9) — volume ladder visible only for one_time plans. */}
+          {isOneTime && (
+            <div
+              data-testid="edit-plan-volume-ladder-section"
+              className="flex flex-col gap-2 rounded border border-deep-charcoal/15 p-3"
+            >
+              <span className="text-sm font-body text-deep-charcoal/80">
+                Volume-discount ladder
+              </span>
+              <VolumeLadderEditor readOnly={false} ladder={ladder} onChange={setLadder} />
+            </div>
+          )}
+          {/* HUB-1724 (E-V2-PP-1 S11) — quantity-metered fields for LaunchKit-style per-app metering. */}
+          <QuantityMeteredFields
+            readOnly={false}
+            dimension={dimension}
+            firstNFree={firstNFree}
+            onChange={(patch) => {
+              setDimension(patch.dimension);
+              setFirstNFree(patch.firstNFree);
+            }}
+          />
           <div className="flex flex-col gap-2 rounded border border-deep-charcoal/15 p-3">
             <span className="text-sm font-body text-deep-charcoal/80">
               Billing mode
