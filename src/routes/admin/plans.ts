@@ -1,4 +1,6 @@
 // Authorized by HUB-1651 (E-FE-5 S1) — admin plans CRUD.
+// Authorized by HUB-1766 (E-V2-PP-5 S7, HUB-1729, HUB-1701) — accept
+// quota_sub_unlocks[] on PUT; enrich GET with quota_sub_unlocks per plan.
 //
 // Wires the existing planCatalogService.ts primitives + the new
 // updatePlan / softArchivePlan extensions from HUB-1651 into 4 REST
@@ -162,7 +164,31 @@ const adminPlansRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
     }
-    const enriched = plans.map((p) => ({ ...p, dimensions: dimensionsByPlan.get(p.id) ?? [] }));
+    // HUB-1766 (E-V2-PP-5 S7) — attach quota_sub_unlocks[] per plan.
+    let subUnlocksByPlan = new Map<string, Array<{ dimension_key: string; per_month_quantity: number }>>();
+    if (planIds.length > 0) {
+      const { rows: suRows } = await pool.query<{
+        plan_id: string; dimension_key: string; per_month_quantity: number;
+      }>(
+        `SELECT plan_id, dimension_key, per_month_quantity
+           FROM plan_quota_sub_unlocks
+          WHERE plan_id = ANY($1::uuid[])
+          ORDER BY dimension_key ASC`,
+        [planIds],
+      );
+      for (const r of suRows) {
+        if (!subUnlocksByPlan.has(r.plan_id)) subUnlocksByPlan.set(r.plan_id, []);
+        subUnlocksByPlan.get(r.plan_id)!.push({
+          dimension_key: r.dimension_key,
+          per_month_quantity: r.per_month_quantity,
+        });
+      }
+    }
+    const enriched = plans.map((p) => ({
+      ...p,
+      dimensions: dimensionsByPlan.get(p.id) ?? [],
+      quota_sub_unlocks: subUnlocksByPlan.get(p.id) ?? [],
+    }));
     return reply.send({ data: enriched, total: enriched.length });
   });
 
@@ -350,6 +376,34 @@ const adminPlansRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
+    // HUB-1766 (E-V2-PP-5 S7) — quota_sub_unlocks[] parse + validate.
+    const subUnlocksRaw = 'quota_sub_unlocks' in body ? body['quota_sub_unlocks'] : undefined;
+    let quotaSubUnlocks: Array<{ dimension_key: string; per_month_quantity: number }> | undefined;
+    if (subUnlocksRaw !== undefined) {
+      if (!Array.isArray(subUnlocksRaw)) {
+        throw new AppError(400, 'quota_sub_unlocks must be an array');
+      }
+      quotaSubUnlocks = [];
+      const seen = new Set<string>();
+      for (let i = 0; i < subUnlocksRaw.length; i++) {
+        const r = subUnlocksRaw[i] as { dimension_key?: string; per_month_quantity?: number };
+        if (typeof r?.dimension_key !== 'string' || !/^[a-z][a-z0-9_]{2,63}$/.test(r.dimension_key)) {
+          throw new AppError(400, `quota_sub_unlocks[${i}].dimension_key must be snake_case`);
+        }
+        if (seen.has(r.dimension_key)) {
+          throw new AppError(400, `quota_sub_unlocks: duplicate dimension_key '${r.dimension_key}'`);
+        }
+        seen.add(r.dimension_key);
+        if (typeof r.per_month_quantity !== 'number' || !Number.isInteger(r.per_month_quantity) || r.per_month_quantity < 1) {
+          throw new AppError(400, `quota_sub_unlocks[${i}].per_month_quantity must be a positive integer`);
+        }
+        quotaSubUnlocks.push({
+          dimension_key: r.dimension_key,
+          per_month_quantity: r.per_month_quantity,
+        });
+      }
+    }
+
     const patch = {
       name: readString(body, 'name'),
       description: readString(body, 'description'),
@@ -363,6 +417,29 @@ const adminPlansRoutes: FastifyPluginAsync = async (fastify) => {
     const billingModeRaw = readString(body, 'billing_mode');
 
     let plan = await updatePlan(planId, patch, actorId(request));
+
+    if (quotaSubUnlocks !== undefined) {
+      // Replace-in-place: delete existing, insert new (transactional).
+      const pool = getPool();
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`DELETE FROM plan_quota_sub_unlocks WHERE plan_id = $1`, [planId]);
+        for (const su of quotaSubUnlocks) {
+          await client.query(
+            `INSERT INTO plan_quota_sub_unlocks (plan_id, dimension_key, per_month_quantity)
+             VALUES ($1, $2, $3)`,
+            [planId, su.dimension_key, su.per_month_quantity],
+          );
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    }
 
     if (billingModeRaw !== undefined) {
       if (!VALID_BILLING_MODES.includes(billingModeRaw as BillingMode)) {

@@ -321,7 +321,10 @@ function NewPlanModal({ productId, onCancel, onCreated }: NewPlanModalProps): Re
               >
                 {BILLING_INTERVALS.map((i) => (
                   <option key={i} value={i}>
-                    {i}
+                    {i === 'quarter' ? 'Quarterly (3 months)'
+                      : i === 'year' ? 'Annual'
+                      : i === 'month' ? 'Monthly'
+                      : 'One-time'}
                   </option>
                 ))}
               </select>
