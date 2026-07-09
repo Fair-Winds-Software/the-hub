@@ -197,12 +197,14 @@ async function projectCosts(
 ): Promise<PlanProjection[]> {
   const pool = getPool();
 
+  // HUB-1771 Phase 4: pricing_models column is `id`, not `model_id`. Alias
+  // so the projected typing / mapping code below keeps its existing name.
   const { rows } = await pool.query<{
     model_id: string;
     model_type: string;
     config: Record<string, unknown>;
   }>(
-    `SELECT model_id, model_type, config
+    `SELECT id AS model_id, model_type, config
      FROM pricing_models
      WHERE product_id = $1
      ORDER BY activated_at DESC`,
