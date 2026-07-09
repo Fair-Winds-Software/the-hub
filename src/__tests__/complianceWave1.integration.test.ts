@@ -1,10 +1,14 @@
 // Authorized by HUB-1028 — E865 Wave 1 integration tests; control CRUD, product registration, burn-in, signal ingestion, dedup, rejection log; gated behind RUN_INTEGRATION=1
 
+// Authorized by HUB-1771 Phase 1.7 — RUN_TAG suffix on fixture names to avoid
+// UNIQUE(slug) / UNIQUE(tenant_id, name) collisions from prior aborted runs.
+
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createHmac } from 'node:crypto';
 
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
+const RUN_TAG = Date.now().toString();
 
 (RUN_INTEGRATION ? describe : describe.skip)(
   'E865 Wave 1 Compliance Integration Tests (RUN_INTEGRATION=1)',
@@ -29,16 +33,17 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       // Seed a tenant + product
       const { rows: tRows } = await pool.query<{ id: string }>(
         `INSERT INTO tenants (name, tenant_type, active)
-         VALUES ('Compliance Wave1 Tenant', 'external', true)
+         VALUES ($1, 'external', true)
          RETURNING id`,
+        [`Compliance Wave1 Tenant ${RUN_TAG}`],
       );
       tenantId = tRows[0]!.id;
 
       const { rows: pRows } = await pool.query<{ id: string }>(
         `INSERT INTO products (tenant_id, name, slug, active)
-         VALUES ($1, 'Wave1 Product', 'wave1-product', true)
+         VALUES ($1, $2, $3, true)
          RETURNING id`,
-        [tenantId],
+        [tenantId, `Wave1 Product ${RUN_TAG}`, `wave1-product-${RUN_TAG}`],
       );
       productId = pRows[0]!.id;
 

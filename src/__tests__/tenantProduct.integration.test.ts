@@ -1,4 +1,8 @@
 // Authorized by HUB-1128 — E26 integration tests; gated behind RUN_INTEGRATION=1
+// Authorized by HUB-1771 Phase 1.6 — RUN_TAG suffix on fixture names to avoid
+// UNIQUE-name collisions from prior aborted runs. Applies to seed operator email
+// AND every inline payload name (create endpoints don't hard-delete on soft-delete
+// so prior-run rows persist and block re-inserts).
 
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -6,6 +10,8 @@ import bcrypt from 'bcryptjs';
 import { cleanupProduct, cleanupTenant } from './_testCleanup.js';
 
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
+const RUN_TAG = Date.now().toString();
+const SUPER_EMAIL = `test-e26-super-${RUN_TAG}@integration.test`;
 
 (RUN_INTEGRATION ? describe : describe.skip)(
   'E26 Tenant + Product Integration Tests (RUN_INTEGRATION=1)',
@@ -23,15 +29,15 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       const hash = await bcrypt.hash('IntPass!99', 12);
       await getPool().query(
         `INSERT INTO operator_accounts (email, password_hash, role)
-         VALUES ('test-e26-super@integration.test', $1, 'super_admin')
+         VALUES ($1, $2, 'super_admin')
          ON CONFLICT DO NOTHING`,
-        [hash],
+        [SUPER_EMAIL, hash],
       );
 
       const loginRes = await app.inject({
         method: 'POST',
         url: '/api/v1/admin/auth/login',
-        payload: { email: 'test-e26-super@integration.test', password: 'IntPass!99' },
+        payload: { email: SUPER_EMAIL, password: 'IntPass!99' },
       });
       const { accessToken } = JSON.parse(loginRes.body) as { accessToken: string };
       superAdminToken = accessToken;
@@ -74,7 +80,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
           method: 'POST',
           url: '/api/v1/admin/tenants',
           headers,
-          payload: { name: 'IntTest Tenant E26', tenant_type: 'external' },
+          payload: { name: `IntTest Tenant E26 ${RUN_TAG}`, tenant_type: 'external' },
         });
         expect(createRes.statusCode).toBe(201);
         const created = JSON.parse(createRes.body) as { id: string; name: string; active: boolean };
@@ -101,7 +107,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
           method: 'PUT',
           url: `/api/v1/admin/tenants/${created.id}`,
           headers,
-          payload: { name: 'IntTest Tenant E26 Updated' },
+          payload: { name: `IntTest Tenant E26 Updated ${RUN_TAG}` },
         });
         expect(putRes.statusCode).toBe(200);
         expect(JSON.parse(putRes.body)).toMatchObject({ name: 'IntTest Tenant E26 Updated' });
@@ -153,7 +159,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
           method: 'POST',
           url: '/api/v1/admin/tenants',
           headers,
-          payload: { name: 'E26 Product Tenant', tenant_type: 'external' },
+          payload: { name: `E26 Product Tenant ${RUN_TAG}`, tenant_type: 'external' },
         });
         const tenant = JSON.parse(tenantRes.body) as { id: string };
 
@@ -162,7 +168,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
           method: 'POST',
           url: `/api/v1/admin/tenants/${tenant.id}/products`,
           headers,
-          payload: { name: 'My SDK Product' },
+          payload: { name: `My SDK Product ${RUN_TAG}` },
         });
         expect(prodRes.statusCode).toBe(201);
         const prod = JSON.parse(prodRes.body) as {
@@ -215,7 +221,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
           method: 'POST',
           url: '/api/v1/admin/tenants',
           headers,
-          payload: { name: 'E26 Rotation Tenant', tenant_type: 'external' },
+          payload: { name: `E26 Rotation Tenant ${RUN_TAG}`, tenant_type: 'external' },
         });
         const tenant = JSON.parse(tenantRes.body) as { id: string };
 
@@ -223,7 +229,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
           method: 'POST',
           url: `/api/v1/admin/tenants/${tenant.id}/products`,
           headers,
-          payload: { name: 'Rotation Product' },
+          payload: { name: `Rotation Product ${RUN_TAG}` },
         });
         const prod = JSON.parse(prodRes.body) as { product_id: string; client_secret: string };
         const oldSecret = prod.client_secret;
@@ -266,7 +272,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
           method: 'POST',
           url: '/api/v1/admin/tenants',
           headers,
-          payload: { name: 'E26 Cascade Tenant', tenant_type: 'external' },
+          payload: { name: `E26 Cascade Tenant ${RUN_TAG}`, tenant_type: 'external' },
         });
         const tenant = JSON.parse(tenantRes.body) as { id: string };
 
@@ -274,7 +280,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
           method: 'POST',
           url: `/api/v1/admin/tenants/${tenant.id}/products`,
           headers,
-          payload: { name: 'Cascade Product 1' },
+          payload: { name: `Cascade Product 1 ${RUN_TAG}` },
         });
         const p1 = JSON.parse(p1Res.body) as { product_id: string };
 

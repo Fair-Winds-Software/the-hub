@@ -14,6 +14,12 @@ import {
 
 const CONNECTION_STRING = process.env.DATABASE_URL ?? 'postgresql://hub:hub@localhost:5432/hub_dev';
 
+// Authorized by HUB-1771 Phase 1.1 — RUN_TAG prefix to avoid UNIQUE(vendor_name)
+// collisions on re-runs. Immutable-evidence triggers block cleanup from removing
+// parents whose children exist, so identical prior-run parents live on forever
+// and blow up the next run's INSERT. Per-invocation RUN_TAG makes each run unique.
+const RUN_TAG = `HUB1422-${Date.now()}`;
+
 let client: Client;
 
 // Immutable evidence rows survive across runs (trigger blocks DELETE). Cleanup deletes
@@ -21,17 +27,17 @@ let client: Client;
 async function cleanupTestRows(c: Client): Promise<void> {
   await c.query(
     `DELETE FROM vendor_register
-      WHERE vendor_name LIKE 'HUB1422 %'
+      WHERE vendor_name LIKE 'HUB1422%'
         AND id NOT IN (SELECT vendor_id FROM vendor_risk_assessments)`,
   );
   await c.query(
     `DELETE FROM cloud_infrastructure
-      WHERE account_name LIKE 'HUB1422 %'
+      WHERE account_name LIKE 'HUB1422%'
         AND id NOT IN (SELECT account_id FROM cloud_security_attestations)`,
   );
   await c.query(
     `DELETE FROM policy_register
-      WHERE policy_name LIKE 'HUB1422 %'
+      WHERE policy_name LIKE 'HUB1422%'
         AND id NOT IN (SELECT policy_id FROM policy_acknowledgments)`,
   );
 }
@@ -77,7 +83,7 @@ describe('vendor_risk_assessments (AC 2)', () => {
   it('content_hash trigger populates 64-char hex on INSERT', async () => {
     const v = await client.query<{ id: string }>(
       `INSERT INTO vendor_register (vendor_name, vendor_type)
-       VALUES ('HUB1422 vendor A', 'saas') RETURNING id`,
+       VALUES ('${RUN_TAG} vendor A', 'saas') RETURNING id`,
     );
     const vendorId = v.rows[0]!.id;
     const { rows } = await client.query<{ content_hash: string }>(
@@ -92,7 +98,7 @@ describe('vendor_risk_assessments (AC 2)', () => {
   it('immutability trigger rejects UPDATE and DELETE with SQLSTATE 23514', async () => {
     const v = await client.query<{ id: string }>(
       `INSERT INTO vendor_register (vendor_name, vendor_type)
-       VALUES ('HUB1422 vendor B', 'saas') RETURNING id`,
+       VALUES ('${RUN_TAG} vendor B', 'saas') RETURNING id`,
     );
     const vendorId = v.rows[0]!.id;
     const rec = await client.query<{ id: string }>(
@@ -117,7 +123,7 @@ describe('vendor_risk_assessments (AC 2)', () => {
   it('duplicate content_hash raises UNIQUE (23505)', async () => {
     const v = await client.query<{ id: string }>(
       `INSERT INTO vendor_register (vendor_name, vendor_type)
-       VALUES ('HUB1422 vendor C', 'saas') RETURNING id`,
+       VALUES ('${RUN_TAG} vendor C', 'saas') RETURNING id`,
     );
     const vendorId = v.rows[0]!.id;
     await client.query(
@@ -142,7 +148,7 @@ describe('cloud_security_attestations (AC 3)', () => {
   it('content_hash + immutability + UNIQUE all enforce', async () => {
     const c = await client.query<{ id: string }>(
       `INSERT INTO cloud_infrastructure (account_name, provider)
-       VALUES ('HUB1422 acct 1', 'aws') RETURNING id`,
+       VALUES ('${RUN_TAG} acct 1', 'aws') RETURNING id`,
     );
     const acctId = c.rows[0]!.id;
 
@@ -178,7 +184,7 @@ describe('policy_acknowledgments (AC 4)', () => {
   it('content_hash + immutability enforce', async () => {
     const p = await client.query<{ id: string }>(
       `INSERT INTO policy_register (policy_name, policy_type, version)
-       VALUES ('HUB1422 policy X', 'security', 'v1.0') RETURNING id`,
+       VALUES ('${RUN_TAG} policy X', 'security', 'v1.0') RETURNING id`,
     );
     const policyId = p.rows[0]!.id;
 

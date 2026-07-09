@@ -3,10 +3,14 @@
 // Authorized by HUB-1148 — integration tests: billing-summary, audit-note, recommendation history
 // Authorized by HUB-1149 — integration tests: enhanced portfolio summary shape + CSV export
 
+// Authorized by HUB-1771 Phase 1.4 — RUN_TAG suffix on fixture names to avoid
+// UNIQUE(slug) / UNIQUE(tenant_id, name) collisions from prior aborted runs.
+
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
+const RUN_TAG = Date.now().toString();
 
 (RUN_INTEGRATION ? describe : describe.skip)(
   'Operator Console E19 Integration Tests (RUN_INTEGRATION=1)',
@@ -30,16 +34,17 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
       const { rows: tRows } = await pool.query<{ id: string }>(
         `INSERT INTO tenants (name, tenant_type, active)
-         VALUES ('E19 Console Test Tenant', 'external', true)
+         VALUES ($1, 'external', true)
          RETURNING id`,
+        [`E19 Console Test Tenant ${RUN_TAG}`],
       );
       tenantId = tRows[0]!.id;
 
       const { rows: pRows } = await pool.query<{ id: string }>(
         `INSERT INTO products (tenant_id, name, slug, active)
-         VALUES ($1, 'E19 Console Test Product', 'e19-console-test-product', true)
+         VALUES ($1, $2, $3, true)
          RETURNING id`,
-        [tenantId],
+        [tenantId, `E19 Console Test Product ${RUN_TAG}`, `e19-console-test-product-${RUN_TAG}`],
       );
       productId = pRows[0]!.id;
 

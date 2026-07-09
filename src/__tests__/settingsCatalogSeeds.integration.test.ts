@@ -54,9 +54,15 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       expect(rows).toHaveLength(1);
     });
 
-    it('re-running INSERT does NOT overwrite operator-tuned values (ON CONFLICT DO NOTHING)', async () => {
+    // HUB-1771 Phase 1.8: extended timeout to 15s. Sequential pool.query calls
+    // on plain SQL are sub-second, but when this test runs after other files
+    // in the full suite the shared pg pool may be in a partial-close state
+    // and the first query blocks longer than default 5s waiting for a connection.
+    it('re-running INSERT does NOT overwrite operator-tuned values (ON CONFLICT DO NOTHING)', { timeout: 15000 }, async () => {
       const { getPool } = await import('../db/pool.js');
       const pool = getPool();
+      // Warm-up ping to force a fresh connection if the singleton was closed by a prior file.
+      await pool.query('SELECT 1');
       // Tune the margin threshold to a non-default value, then re-run the seed SQL
       // verbatim. The ON CONFLICT (key) DO NOTHING means the tuned value survives.
       await pool.query(

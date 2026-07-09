@@ -1,10 +1,16 @@
 // Authorized by HUB-1505 — E28 integration tests; gated behind RUN_INTEGRATION=1
+// Authorized by HUB-1771 Phase 1.2 — RUN_TAG suffix on fixture names to avoid
+// UNIQUE(slug) / UNIQUE(tenant_id, name) collisions from prior aborted runs.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
 
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
+const RUN_TAG = Date.now().toString();
+const SUPER_EMAIL = `test-e28-super-${RUN_TAG}@integration.test`;
+const ADMIN_EMAIL = `test-e28-admin-${RUN_TAG}@integration.test`;
+const FOREIGN_EMAIL = `test-e28-foreign-${RUN_TAG}@integration.test`;
 
 (RUN_INTEGRATION ? describe : describe.skip)(
   'E28 Notifications, Alerts & Hooks Admin Integration Tests (RUN_INTEGRATION=1)',
@@ -29,56 +35,58 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       // Seed main tenant + product
       const { rows: tRows } = await pool.query<{ id: string }>(
         `INSERT INTO tenants (name, tenant_type, active)
-         VALUES ('E28 Test Tenant', 'external', true)
+         VALUES ($1, 'external', true)
          RETURNING id`,
+        [`E28 Test Tenant ${RUN_TAG}`],
       );
       tenantId = tRows[0]!.id;
 
       const { rows: pRows } = await pool.query<{ id: string }>(
         `INSERT INTO products (tenant_id, name, slug, active)
-         VALUES ($1, 'E28 Product', 'e28-product-test', true)
+         VALUES ($1, $2, $3, true)
          RETURNING id`,
-        [tenantId],
+        [tenantId, `E28 Product ${RUN_TAG}`, `e28-product-test-${RUN_TAG}`],
       );
       productId = pRows[0]!.id;
 
       // Seed foreign tenant (for RBAC isolation tests)
       const { rows: ftRows } = await pool.query<{ id: string }>(
         `INSERT INTO tenants (name, tenant_type, active)
-         VALUES ('E28 Foreign Tenant', 'external', true)
+         VALUES ($1, 'external', true)
          RETURNING id`,
+        [`E28 Foreign Tenant ${RUN_TAG}`],
       );
       foreignTenantId = ftRows[0]!.id;
 
       // Seed super_admin
       await pool.query(
         `INSERT INTO operator_accounts (email, password_hash, role)
-         VALUES ('test-e28-super@integration.test', $1, 'super_admin')
+         VALUES ($1, $2, 'super_admin')
          ON CONFLICT DO NOTHING`,
-        [hash],
+        [SUPER_EMAIL, hash],
       );
 
       // Seed product_admin scoped to main tenant
       await pool.query(
         `INSERT INTO operator_accounts (email, password_hash, role, tenant_id)
-         VALUES ('test-e28-admin@integration.test', $1, 'product_admin', $2)
+         VALUES ($1, $2, 'product_admin', $3)
          ON CONFLICT DO NOTHING`,
-        [hash, tenantId],
+        [ADMIN_EMAIL, hash, tenantId],
       );
 
       // Seed product_admin scoped to foreign tenant
       await pool.query(
         `INSERT INTO operator_accounts (email, password_hash, role, tenant_id)
-         VALUES ('test-e28-foreign@integration.test', $1, 'product_admin', $2)
+         VALUES ($1, $2, 'product_admin', $3)
          ON CONFLICT DO NOTHING`,
-        [hash, foreignTenantId],
+        [FOREIGN_EMAIL, hash, foreignTenantId],
       );
 
       // Login super_admin
       const superRes = await app.inject({
         method: 'POST',
         url: '/api/v1/admin/auth/login',
-        payload: { email: 'test-e28-super@integration.test', password: 'IntPass!99' },
+        payload: { email: SUPER_EMAIL, password: 'IntPass!99' },
       });
       superAdminToken = (JSON.parse(superRes.body) as { accessToken: string }).accessToken;
 
@@ -86,7 +94,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       const taRes = await app.inject({
         method: 'POST',
         url: '/api/v1/admin/auth/login',
-        payload: { email: 'test-e28-admin@integration.test', password: 'IntPass!99' },
+        payload: { email: ADMIN_EMAIL, password: 'IntPass!99' },
       });
       tenantAdminToken = (JSON.parse(taRes.body) as { accessToken: string }).accessToken;
 
@@ -94,7 +102,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       const ftaRes = await app.inject({
         method: 'POST',
         url: '/api/v1/admin/auth/login',
-        payload: { email: 'test-e28-foreign@integration.test', password: 'IntPass!99' },
+        payload: { email: FOREIGN_EMAIL, password: 'IntPass!99' },
       });
       foreignAdminToken = (JSON.parse(ftaRes.body) as { accessToken: string }).accessToken;
     });

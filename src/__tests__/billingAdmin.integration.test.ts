@@ -1,10 +1,16 @@
 // Authorized by HUB-1498 — E27 integration tests; gated behind RUN_INTEGRATION=1
+// Authorized by HUB-1771 Phase 1.3 — RUN_TAG suffix on fixture names to avoid
+// UNIQUE(slug) / UNIQUE(tenant_id, name) collisions from prior aborted runs.
+// Emails preserve the `test-e27-…@integration.test` shape so cleanup LIKE still matches.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
 
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
+const RUN_TAG = Date.now().toString();
+const SUPER_EMAIL = `test-e27-super-${RUN_TAG}@integration.test`;
+const ADMIN_EMAIL = `test-e27-admin-${RUN_TAG}@integration.test`;
 
 (RUN_INTEGRATION ? describe : describe.skip)(
   'E27 Billing & Pricing Admin Integration Tests (RUN_INTEGRATION=1)',
@@ -27,40 +33,41 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       // Seed super_admin
       await pool.query(
         `INSERT INTO operator_accounts (email, password_hash, role)
-         VALUES ('test-e27-super@integration.test', $1, 'super_admin')
+         VALUES ($1, $2, 'super_admin')
          ON CONFLICT DO NOTHING`,
-        [hash],
+        [SUPER_EMAIL, hash],
       );
 
       // Create tenant + product for tests
       const { rows: tRows } = await pool.query<{ id: string }>(
         `INSERT INTO tenants (name, tenant_type, active)
-         VALUES ('E27 Test Tenant', 'external', true)
+         VALUES ($1, 'external', true)
          RETURNING id`,
+        [`E27 Test Tenant ${RUN_TAG}`],
       );
       tenantId = tRows[0]!.id;
 
       const { rows: pRows } = await pool.query<{ id: string }>(
         `INSERT INTO products (tenant_id, name, slug, active)
-         VALUES ($1, 'E27 Product', 'e27-product-test', true)
+         VALUES ($1, $2, $3, true)
          RETURNING id`,
-        [tenantId],
+        [tenantId, `E27 Product ${RUN_TAG}`, `e27-product-test-${RUN_TAG}`],
       );
       productId = pRows[0]!.id;
 
       // Seed product_admin scoped to this tenant
       await pool.query(
         `INSERT INTO operator_accounts (email, password_hash, role, tenant_id)
-         VALUES ('test-e27-admin@integration.test', $1, 'product_admin', $2)
+         VALUES ($1, $2, 'product_admin', $3)
          ON CONFLICT DO NOTHING`,
-        [hash, tenantId],
+        [ADMIN_EMAIL, hash, tenantId],
       );
 
       // Login super_admin
       const superRes = await app.inject({
         method: 'POST',
         url: '/api/v1/admin/auth/login',
-        payload: { email: 'test-e27-super@integration.test', password: 'IntPass!99' },
+        payload: { email: SUPER_EMAIL, password: 'IntPass!99' },
       });
       superAdminToken = (JSON.parse(superRes.body) as { accessToken: string }).accessToken;
 
@@ -68,7 +75,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       const taRes = await app.inject({
         method: 'POST',
         url: '/api/v1/admin/auth/login',
-        payload: { email: 'test-e27-admin@integration.test', password: 'IntPass!99' },
+        payload: { email: ADMIN_EMAIL, password: 'IntPass!99' },
       });
       tenantAdminToken = (JSON.parse(taRes.body) as { accessToken: string }).accessToken;
     });

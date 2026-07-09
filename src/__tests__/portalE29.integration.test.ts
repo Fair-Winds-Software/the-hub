@@ -1,4 +1,6 @@
 // Authorized by HUB-1513 — E29 portal integration tests; gated behind RUN_INTEGRATION=1
+// Authorized by HUB-1771 Phase 1.5 — RUN_TAG suffix on fixture names + email to
+// avoid UNIQUE(slug) / UNIQUE(tenant_id, name) collisions from prior aborted runs.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -7,6 +9,9 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
+const RUN_TAG = Date.now().toString();
+const TENANT_NAME = `E29 Portal Tenant ${RUN_TAG}`;
+const PORTAL_EMAIL = `test-portal-${RUN_TAG}@e29.test`;
 
 (RUN_INTEGRATION ? describe : describe.skip)(
   'E29 Customer Self-Serve Portal Integration Tests (RUN_INTEGRATION=1)',
@@ -29,25 +34,26 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       // Seed tenant + product
       const { rows: tRows } = await pool.query<{ id: string }>(
         `INSERT INTO tenants (name, tenant_type, active)
-         VALUES ('E29 Portal Tenant', 'external', true)
+         VALUES ($1, 'external', true)
          RETURNING id`,
+        [TENANT_NAME],
       );
       tenantId = tRows[0]!.id;
 
       const { rows: pRows } = await pool.query<{ id: string }>(
         `INSERT INTO products (tenant_id, name, slug, active)
-         VALUES ($1, 'E29 Portal Product', 'e29-portal-product', true)
+         VALUES ($1, $2, $3, true)
          RETURNING id`,
-        [tenantId],
+        [tenantId, `E29 Portal Product ${RUN_TAG}`, `e29-portal-product-${RUN_TAG}`],
       );
       productId = pRows[0]!.id;
 
       // Seed tenant_user
       const { rows: uRows } = await pool.query<{ id: string }>(
         `INSERT INTO tenant_users (tenant_id, email, password_hash, active)
-         VALUES ($1, 'test-portal@e29.test', $2, true)
+         VALUES ($1, $2, $3, true)
          RETURNING id`,
-        [tenantId, hash],
+        [tenantId, PORTAL_EMAIL, hash],
       );
       tenantUserId = uRows[0]!.id;
 
@@ -55,7 +61,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       const loginRes = await app.inject({
         method: 'POST',
         url: '/api/v1/portal/auth/login',
-        payload: { email: 'test-portal@e29.test', password: 'PortalPass!77', tenant_id: tenantId },
+        payload: { email: PORTAL_EMAIL, password: 'PortalPass!77', tenant_id: tenantId },
       });
       portalToken = (JSON.parse(loginRes.body) as { accessToken: string }).accessToken;
     });
@@ -86,7 +92,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         const res = await app.inject({
           method: 'POST',
           url: '/api/v1/portal/auth/login',
-          payload: { email: 'test-portal@e29.test', password: 'PortalPass!77', tenant_id: tenantId },
+          payload: { email: PORTAL_EMAIL, password: 'PortalPass!77', tenant_id: tenantId },
         });
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body) as { accessToken: string; expiresIn: number };
@@ -98,7 +104,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         const res = await app.inject({
           method: 'POST',
           url: '/api/v1/portal/auth/login',
-          payload: { email: 'test-portal@e29.test', password: 'WRONG', tenant_id: tenantId },
+          payload: { email: PORTAL_EMAIL, password: 'WRONG', tenant_id: tenantId },
         });
         expect(res.statusCode).toBe(401);
       });
@@ -108,7 +114,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         const res = await app.inject({
           method: 'POST',
           url: '/api/v1/portal/auth/login',
-          payload: { email: 'test-portal@e29.test', password: 'PortalPass!77', tenant_id: fakeId },
+          payload: { email: PORTAL_EMAIL, password: 'PortalPass!77', tenant_id: fakeId },
         });
         expect(res.statusCode).toBe(401);
       });
@@ -147,7 +153,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
           products: Array<{ id: string; name: string; slug: string }>;
         };
         expect(body.tenant.id).toBe(tenantId);
-        expect(body.tenant.name).toBe('E29 Portal Tenant');
+        expect(body.tenant.name).toBe(TENANT_NAME);
         expect(Array.isArray(body.products)).toBe(true);
         expect(body.products.some((p) => p.id === productId)).toBe(true);
       });
