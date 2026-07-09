@@ -836,10 +836,14 @@ export async function addAuditNote(
   }
   const rec = recRows[0]!;
 
+  // HUB-1771 Phase 4: reusing $2 for both entity_id and recommendation_id makes pg
+  // fail type deduction ("inconsistent types deduced for parameter $2") when the two
+  // columns have different underlying types (entity_id is UUID, recommendation_id is
+  // UUID with NULL allowed). Cast the second usage explicitly.
   const { rows } = await pool.query<{ id: string; created_at: Date }>(
     `INSERT INTO operator_audit_log
        (operator_id, entity_type, entity_id, action, notes, tenant_id, product_id, recommendation_id)
-     VALUES ($1, 'advisor_recommendation', $2, 'audit_note', $3, $4, $5, $2)
+     VALUES ($1, 'advisor_recommendation', $2::uuid, 'audit_note', $3, $4, $5, $2::uuid)
      RETURNING id, created_at`,
     [operatorId ?? null, recommendationId, note, rec.tenant_id, rec.product_id],
   );

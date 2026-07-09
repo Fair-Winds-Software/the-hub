@@ -112,9 +112,15 @@ const adminAdvisorRoutes: FastifyPluginAsync = async (fastify) => {
     const summary = await getPortfolioSummary();
 
     const header = 'product_id,tenant_id,tenant_name,recommendation_type,confidence,suggested_plan_id,week_start,status\n';
+    // HUB-1771 Phase 4: `escape` used to type-narrow to `string | null | undefined`,
+    // but summary rows contain Date/number columns from pg (e.g., week_start). Coerce
+    // to string first so `.replace` doesn't throw "v.replace is not a function".
     const csvRows = summary.rows.map((r) => {
-      const escape = (v: string | null | undefined): string =>
-        v == null ? '' : `"${v.replace(/"/g, '""')}"`;
+      const escape = (v: unknown): string => {
+        if (v == null) return '';
+        const s = typeof v === 'string' ? v : String(v);
+        return `"${s.replace(/"/g, '""')}"`;
+      };
       return [
         escape(r.product_id),
         escape(r.tenant_id),

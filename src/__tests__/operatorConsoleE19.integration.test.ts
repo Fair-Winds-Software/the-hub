@@ -68,10 +68,22 @@ const RUN_TAG = Date.now().toString();
       );
       recommendationId = recRows[0]!.id;
 
+      // HUB-1771 Phase 4: seed operator_accounts row so FKs from tenant_discounts.applied_by,
+      // tenant_pricing_overrides.applied_by, advisor_outcomes.recorded_by etc. resolve. Prior
+      // to this the test minted a JWT for operator_id ...002 with no matching operator row
+      // and every POST that stamped applied_by failed 500 on FK 23503.
+      const E19_OPERATOR_ID = '00000000-0000-0000-0000-0000000e1902';
+      await pool.query(
+        `INSERT INTO operator_accounts (id, email, password_hash, role, active)
+         VALUES ($1, $2, 'unused-hash', 'super_admin', true)
+         ON CONFLICT (id) DO NOTHING`,
+        [E19_OPERATOR_ID, `e19-op-${RUN_TAG}@integration.test`],
+      );
+
       const jwt = await import('jsonwebtoken');
       const secret = process.env.OPERATOR_JWT_SECRET ?? 'test-operator-secret';
       operatorToken = jwt.default.sign(
-        { operator_id: '00000000-0000-0000-0000-000000000002', role: 'super_admin', tenant_id: null },
+        { operator_id: E19_OPERATOR_ID, role: 'super_admin', tenant_id: null },
         secret,
         { expiresIn: '1h' },
       );
