@@ -56,6 +56,7 @@ import adminSystemHealthRoutes, {
 } from '../systemHealth.js';
 import { AppError } from '../../../errors/AppError.js';
 
+import { closeAppResources } from '../../../__tests__/_testCleanup.js';
 const TENANT_A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const PRODUCT_A = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 const PRODUCT_B = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
@@ -91,7 +92,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
 });
 
 beforeEach(() => {

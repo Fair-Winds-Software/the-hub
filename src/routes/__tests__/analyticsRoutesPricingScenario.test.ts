@@ -40,6 +40,7 @@ vi.mock('../../lib/logger.js', () => ({
 import analyticsRoutes from '../analyticsRoutes.js';
 import { AppError } from '../../errors/AppError.js';
 
+import { closeAppResources } from '../../__tests__/_testCleanup.js';
 const PRODUCT_ID = '11111111-1111-1111-1111-111111111111';
 
 const BASELINE_FIXTURE = {
@@ -84,7 +85,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
 });
 
 beforeEach(() => {

@@ -25,6 +25,7 @@ vi.mock('../../lib/logger.js', () => ({
 import adminAuthRoutes from '../admin/auth.js';
 import { AppError } from '../../errors/AppError.js';
 
+import { closeAppResources } from '../../__tests__/_testCleanup.js';
 const SESSION_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaffff'; // tail = "ffff"
 
 async function buildApp(opts: { rateLimitMax?: number } = {}) {
@@ -51,7 +52,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
 });
 
 beforeEach(() => {

@@ -5,6 +5,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { FastifyInstance } from "fastify";
 import jwt from "jsonwebtoken";
 
+import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env["RUN_INTEGRATION"] === "1";
 
 (RUN_INTEGRATION ? describe : describe.skip)(
@@ -101,7 +102,7 @@ const RUN_INTEGRATION = process.env["RUN_INTEGRATION"] === "1";
         tenantBId,
       ]);
 
-      await app.close();
+      await closeAppResources(app);
       await closePool();
       await closeRedis();
     });

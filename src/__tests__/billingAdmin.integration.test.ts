@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
+import { closeAppResources } from './_testCleanup.js';
 
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 const RUN_TAG = Date.now().toString();
@@ -88,7 +89,7 @@ const ADMIN_EMAIL = `test-e27-admin-${RUN_TAG}@integration.test`;
       await pool.query(
         `DELETE FROM operator_accounts WHERE email LIKE 'test-e27-%@integration.test'`,
       );
-      await app.close();
+      await closeAppResources(app);
     });
 
     // ── Pricing model GET (no model) ─────────────────────────────────────────

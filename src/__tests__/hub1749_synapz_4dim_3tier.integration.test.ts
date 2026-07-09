@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import { Client } from 'pg';
 import { computeTenantOverage } from '../services/overageAggregationService.js';
 
+import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 const CONNECTION_STRING = process.env['DATABASE_URL'] ?? 'postgresql://hub:hub@localhost:5432/hub_dev';
 const RUN_TAG = `HUB1749-${Date.now()}`;
@@ -114,7 +115,7 @@ const SYNAPZ_TIERS = [
       await client.query(`DELETE FROM products WHERE id = $1`, [productId]);
       await client.query(`DELETE FROM tenants WHERE id = $1`, [tenantId]);
       await client.end();
-      await app.close();
+      await closeAppResources(app);
     });
 
     async function seed(dimension: string, unitCount: number, when: Date): Promise<void> {

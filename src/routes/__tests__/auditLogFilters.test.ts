@@ -38,6 +38,7 @@ import adminOperatorConsoleRoutes from '../admin/operatorConsole.js';
 import { operatorRbacHook } from '../../hooks/operatorRbac.js';
 import { AppError } from '../../errors/AppError.js';
 
+import { closeAppResources } from '../../__tests__/_testCleanup.js';
 const SECRET = 'test-secret-hub-1697';
 const TENANT_A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const TENANT_B = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -64,7 +65,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
 });
 
 beforeEach(() => {

@@ -15,6 +15,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { AppError } from '../../errors/AppError.js';
 import rateLimitPlugin from '../rateLimit.js';
 
+import { closeAppResources } from '../../__tests__/_testCleanup.js';
 async function makeApp(): Promise<FastifyInstance> {
   const app = Fastify();
   // Same canonical error handler shape as buildApp() so 429 emits the
@@ -45,7 +46,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await app.close();
+  await closeAppResources(app);
   delete process.env.RATE_LIMIT_MAX;
   delete process.env.RATE_LIMIT_WINDOW_MS;
 });

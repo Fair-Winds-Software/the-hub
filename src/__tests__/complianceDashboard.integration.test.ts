@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 
+import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
 (RUN_INTEGRATION ? describe : describe.skip)(
@@ -123,7 +124,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       );
       await pool.query(`DELETE FROM products WHERE id IN ($1, $2)`, [productId, otherProductId]);
       await pool.query(`DELETE FROM tenants WHERE id IN ($1, $2)`, [tenantId, otherTenantId]);
-      await app.close();
+      await closeAppResources(app);
     });
 
     // ── 1. Overview endpoint — unauthenticated ─────────────────────────────────

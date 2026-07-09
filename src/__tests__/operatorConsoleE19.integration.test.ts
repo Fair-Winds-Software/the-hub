@@ -8,6 +8,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { closeAppResources } from './_testCleanup.js';
 
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 const RUN_TAG = Date.now().toString();
@@ -90,7 +91,7 @@ const RUN_TAG = Date.now().toString();
       await pool.query(`DELETE FROM pricing_models WHERE product_id = $1`, [productId]);
       await pool.query(`DELETE FROM products WHERE id = $1`, [productId]);
       await pool.query(`DELETE FROM tenants WHERE id = $1`, [tenantId]);
-      await app.close();
+      await closeAppResources(app);
     });
 
     // ── 1. Pricing overview (HUB-1146) ────────────────────────────────────────

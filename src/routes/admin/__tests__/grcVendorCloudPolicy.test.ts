@@ -33,6 +33,7 @@ vi.mock('../../../lib/logger.js', () => ({
 import adminGrcVendorCloudPolicyRoutes from '../grcVendorCloudPolicy.js';
 import { AppError } from '../../../errors/AppError.js';
 
+import { closeAppResources } from '../../../__tests__/_testCleanup.js';
 const VENDOR_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const CLOUD_ID  = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 const POLICY_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
@@ -65,7 +66,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
   await appProductAdmin.close();
 });
 

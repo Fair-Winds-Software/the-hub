@@ -3,6 +3,12 @@
 // deleted parent rows (products, tenants) before child rows
 // (product_registrations), which PostgreSQL rejects with:
 //
+// Authorized by HUB-1771 Phase 2 — added closeAppResources(app) helper.
+// Each integration test file's afterAll should call this instead of
+// bespoke pool/redis/app close sequences. Ensures every module-level
+// singleton is torn down before the next test file's beforeAll runs,
+// eliminating cross-file pollution from leaked connections/subscribers.
+//
 //   error: update or delete on table "products" violates foreign key
 //     constraint "product_registrations_product_id_fkey" on table
 //     "product_registrations"
@@ -65,4 +71,57 @@ export async function cleanupTenant(
   tenantId: string,
 ): Promise<void> {
   await pool.query(`DELETE FROM tenants WHERE id = $1`, [tenantId]);
+}
+
+// A minimal Fastify-like shape — importing the real type creates a circular
+// devDep for tests that don't otherwise import Fastify.
+interface HasClose {
+  close(): Promise<void> | void;
+}
+
+/**
+ * HUB-1771 Phase 2: idempotent test-file teardown that closes EVERY
+ * module-level singleton the app touches. Call from afterAll(). Safe to
+ * pass `undefined` if the test didn't build an app (some pure-service
+ * tests only use the pg pool).
+ *
+ * The order is deliberate:
+ *   1) Fastify (may still hold connections for in-flight requests)
+ *   2) Settings pub/sub subscriber (a dedicated Redis client not tracked
+ *      by closeRedis())
+ *   3) pg Pool
+ *   4) Main + BullMQ Redis clients (they share `redis/client.ts`)
+ *   5) Stripe SDK singleton reset (so a next file can re-mock)
+ *
+ * Every step is guarded with try/catch — a partial failure MUST NOT
+ * prevent the subsequent steps from running, or the next test file's
+ * beforeAll may inherit a half-closed pool + a live subscriber. Any
+ * errors are logged to stderr so a bug in one helper doesn't hide.
+ */
+export async function closeAppResources(app?: HasClose): Promise<void> {
+  const step = async (name: string, fn: () => Promise<void> | void): Promise<void> => {
+    try {
+      await fn();
+    } catch (err) {
+      process.stderr.write(`closeAppResources: ${name} failed: ${(err as Error).message}\n`);
+    }
+  };
+
+  if (app) await step('app.close', () => app.close());
+  await step('stopSettingsSubscriber', async () => {
+    const mod = await import('../settings/index.js');
+    await mod.stopSettingsSubscriber();
+  });
+  await step('closePool', async () => {
+    const { closePool } = await import('../db/pool.js');
+    await closePool();
+  });
+  await step('closeRedis', async () => {
+    const { closeRedis } = await import('../redis/client.js');
+    await closeRedis();
+  });
+  await step('_resetStripeClient', async () => {
+    const { _resetStripeClient } = await import('../stripe/client.js');
+    _resetStripeClient();
+  });
 }

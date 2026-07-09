@@ -23,6 +23,7 @@ vi.mock('../../lib/logger.js', () => ({
 import analyticsRoutes from '../analyticsRoutes.js';
 import { AppError } from '../../errors/AppError.js';
 
+import { closeAppResources } from '../../__tests__/_testCleanup.js';
 const RESULT_FIXTURE = {
   from: '2026-05-01T00:00:00.000Z',
   to: '2026-05-31T23:59:59.000Z',
@@ -55,7 +56,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
 });
 
 beforeEach(() => {

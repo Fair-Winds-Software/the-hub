@@ -15,6 +15,7 @@ vi.mock('../../lib/logger.js', () => ({
 
 import marginRoutes from '../marginRoutes.js';
 
+import { closeAppResources } from '../../__tests__/_testCleanup.js';
 // ── Test app ──────────────────────────────────────────────────────────────────
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
@@ -34,7 +35,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
 });
 
 beforeEach(() => {

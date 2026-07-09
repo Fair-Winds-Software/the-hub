@@ -32,6 +32,7 @@ import adminAdvisorRoutes from '../admin/advisor.js';
 import { operatorRbacHook } from '../../hooks/operatorRbac.js';
 import { AppError } from '../../errors/AppError.js';
 
+import { closeAppResources } from '../../__tests__/_testCleanup.js';
 const SECRET = 'test-secret-hub-1699';
 const TENANT_A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const PRODUCT_A = 'cccccccc-cccc-cccc-cccc-cccccccccccc'; // belongs to TENANT_A
@@ -55,7 +56,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
 });
 
 beforeEach(() => {

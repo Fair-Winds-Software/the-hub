@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { Client } from 'pg';
+import { closeAppResources } from './_testCleanup.js';
 import {
   chargeOneTime,
   calculateVolumeLadderTotal,
@@ -94,7 +95,7 @@ const RUN_TAG = `HUB1725-${Date.now()}`;
       await client.query(`DELETE FROM plans WHERE key LIKE $1`, [`${RUN_TAG}-%`]);
       await client.query(`DELETE FROM products WHERE slug LIKE $1`, [`${RUN_TAG.toLowerCase()}-%`]);
       await client.end();
-      await app.close();
+      await closeAppResources(app);
     });
 
     const auth = () => ({ Authorization: `Bearer ${superAdminToken}` });

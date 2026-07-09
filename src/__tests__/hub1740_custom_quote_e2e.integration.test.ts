@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { Client } from 'pg';
 import { runQuoteToInvoicePipeline } from '../queues/customQuoteJobs.js';
 
+import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 const CONNECTION_STRING = process.env['DATABASE_URL'] ?? 'postgresql://hub:hub@localhost:5432/hub_dev';
 const RUN_TAG = `HUB1740-${Date.now()}`;
@@ -76,7 +77,7 @@ const RUN_TAG = `HUB1740-${Date.now()}`;
         [tenantId],
       );
       await client.end();
-      await app.close();
+      await closeAppResources(app);
     });
 
     const creatorAuth = () => ({ Authorization: `Bearer ${creatorToken}` });

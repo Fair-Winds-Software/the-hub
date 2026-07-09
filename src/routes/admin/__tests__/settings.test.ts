@@ -15,6 +15,7 @@ vi.mock('../../../services/adminSettings.js', () => ({
 import adminSettingsRoutes from '../settings.js';
 import { AppError } from '../../../errors/AppError.js';
 
+import { closeAppResources } from '../../../__tests__/_testCleanup.js';
 let app: FastifyInstance;
 
 function build(role: 'super_admin' | 'product_admin' = 'super_admin') {
@@ -43,7 +44,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
 });
 
 beforeEach(() => {

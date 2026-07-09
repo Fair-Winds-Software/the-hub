@@ -39,6 +39,7 @@ import adminFailedPaymentsRoutes, {
 } from '../failedPayments.js';
 import { AppError } from '../../../errors/AppError.js';
 
+import { closeAppResources } from '../../../__tests__/_testCleanup.js';
 const TENANT_A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const TENANT_B = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 const PRODUCT_A = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
@@ -75,7 +76,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
 });
 
 const FAILED_ROW = {

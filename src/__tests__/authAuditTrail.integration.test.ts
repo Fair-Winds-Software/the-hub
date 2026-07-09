@@ -8,6 +8,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
 
+import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 const HUB_INTERNAL_TENANT_ID = '00000000-0000-0000-0000-0000000000a1';
 
@@ -116,7 +117,7 @@ async function getAuthAuditRows(): Promise<AuditRow[]> {
 
       const { closePool } = await import('../db/pool.js');
       const { closeRedis } = await import('../redis/client.js');
-      await app.close();
+      await closeAppResources(app);
       await closePool();
       await closeRedis();
     });

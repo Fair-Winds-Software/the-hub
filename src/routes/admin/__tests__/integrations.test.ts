@@ -15,6 +15,7 @@ vi.mock('../../../services/jiraIntegrationService.js', () => ({
 import adminIntegrationRoutes from '../integrations.js';
 import { AppError } from '../../../errors/AppError.js';
 
+import { closeAppResources } from '../../../__tests__/_testCleanup.js';
 let app: FastifyInstance;
 
 interface Role {
@@ -47,7 +48,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
 });
 
 beforeEach(() => {

@@ -10,6 +10,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
 (RUN_INTEGRATION ? describe : describe.skip)(
@@ -102,7 +103,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       if (controlId) await pool.query(`DELETE FROM compliance_controls WHERE id = $1`, [controlId]);
       await pool.query(`DELETE FROM products WHERE id = $1`, [productId]);
       await pool.query(`DELETE FROM tenants WHERE id = $1`, [tenantId]);
-      await app.close();
+      await closeAppResources(app);
     });
 
     // ── 1. Evidence query endpoint ─────────────────────────────────────────────

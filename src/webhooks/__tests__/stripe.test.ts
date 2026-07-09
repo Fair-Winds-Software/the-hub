@@ -3,6 +3,7 @@
 // Authorized by HUB-202 — event-type fan-out routing; DLQ fallback for null product_id / unknown types
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+import { closeAppResources } from '../../__tests__/_testCleanup.js';
 // ── Stripe mock ───────────────────────────────────────────────────────────────
 const mockConstructEvent = vi.fn();
 vi.mock('stripe', () => ({
@@ -108,7 +109,7 @@ describe('POST /webhooks/stripe — signature verification', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json<{ error: { message: string } }>().error.message).toBe('Invalid signature');
-    await app.close();
+    await closeAppResources(app);
   });
 
   it('returns 400 when signature verification fails (tampered body)', async () => {
@@ -130,7 +131,7 @@ describe('POST /webhooks/stripe — signature verification', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json<{ error: { message: string } }>().error.message).toBe('Invalid signature');
-    await app.close();
+    await closeAppResources(app);
   });
 
   it('does not expose secrets or stack traces on signature failure', async () => {
@@ -151,7 +152,7 @@ describe('POST /webhooks/stripe — signature verification', () => {
     expect(text).not.toContain('whsec_');
     expect(text).not.toContain('stack');
     expect(res.json<{ error: { message: string } }>().error.message).toBe('Invalid signature');
-    await app.close();
+    await closeAppResources(app);
   });
 
   it('passes rawBody Buffer (not parsed JSON) to constructEvent', async () => {
@@ -171,7 +172,7 @@ describe('POST /webhooks/stripe — signature verification', () => {
       expect.any(String),
       'whsec_test_hub188',
     );
-    await app.close();
+    await closeAppResources(app);
   });
 });
 
@@ -201,7 +202,7 @@ describe('POST /webhooks/stripe — idempotency', () => {
       'process-stripe-event',
       expect.objectContaining({ event_id: 'evt_new_1', event_type: 'customer.subscription.created' }),
     );
-    await app.close();
+    await closeAppResources(app);
   });
 
   it('returns 200 immediately on duplicate event_id without dispatching a job', async () => {
@@ -224,7 +225,7 @@ describe('POST /webhooks/stripe — idempotency', () => {
 
     expect(res.statusCode).toBe(200);
     expect(mockQueueAdd).not.toHaveBeenCalled();
-    await app.close();
+    await closeAppResources(app);
   });
 
   it('sets status=failed and processed_at when enqueue throws', async () => {
@@ -252,7 +253,7 @@ describe('POST /webhooks/stripe — idempotency', () => {
       (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes("status = 'failed'"),
     );
     expect(updateCall).toBeDefined();
-    await app.close();
+    await closeAppResources(app);
   });
 
   it('extracts product_id from event.data.object.metadata', async () => {
@@ -277,7 +278,7 @@ describe('POST /webhooks/stripe — idempotency', () => {
     );
     expect(insertCall).toBeDefined();
     expect(insertCall![1]).toContain('prod-xyz');
-    await app.close();
+    await closeAppResources(app);
   });
 
   it('stores product_id=null when metadata is absent', async () => {
@@ -301,7 +302,7 @@ describe('POST /webhooks/stripe — idempotency', () => {
     );
     expect(insertCall).toBeDefined();
     expect(insertCall![1][2]).toBeNull();
-    await app.close();
+    await closeAppResources(app);
   });
 });
 
@@ -336,7 +337,7 @@ describe('POST /webhooks/stripe — event routing (HUB-202)', () => {
       expect.objectContaining({ event_id: 'evt_dlq_null' }),
       expect.stringContaining('product_id absent'),
     );
-    await app.close();
+    await closeAppResources(app);
   });
 
   it('routes recognized type with null product_id to DLQ (unrecognized types handled by HUB-203)', async () => {
@@ -367,7 +368,7 @@ describe('POST /webhooks/stripe — event routing (HUB-202)', () => {
       expect.objectContaining({ event_id: 'evt_dlq_null_recognized' }),
       expect.stringContaining('product_id absent'),
     );
-    await app.close();
+    await closeAppResources(app);
   });
 
   it('routes to specific queue when hasQueueForEventType returns true', async () => {
@@ -390,7 +391,7 @@ describe('POST /webhooks/stripe — event routing (HUB-202)', () => {
     });
 
     expect(getQueueForEventType).toHaveBeenCalledWith('invoice.payment_succeeded');
-    await app.close();
+    await closeAppResources(app);
   });
 
   it('job payload is snake_case, includes received_at, excludes raw_event', async () => {
@@ -421,7 +422,7 @@ describe('POST /webhooks/stripe — event routing (HUB-202)', () => {
     // raw_event must NOT be in the payload
     const payload = mockQueueAdd.mock.calls[0][1] as Record<string, unknown>;
     expect(payload).not.toHaveProperty('raw_event');
-    await app.close();
+    await closeAppResources(app);
   });
 });
 
@@ -455,7 +456,7 @@ describe('POST /webhooks/stripe — recognized-type gate (HUB-203)', () => {
     expect(insertCall).toBeUndefined();
     // No queue job dispatched
     expect(mockQueueAdd).not.toHaveBeenCalled();
-    await app.close();
+    await closeAppResources(app);
   });
 
   it('emits info log (not warn) for unrecognized event type', async () => {
@@ -484,7 +485,7 @@ describe('POST /webhooks/stripe — recognized-type gate (HUB-203)', () => {
       expect.objectContaining({ event_id: 'evt_unknown_log', event_type: 'radar.early_fraud_warning.created' }),
       expect.stringContaining('unrecognized event type'),
     );
-    await app.close();
+    await closeAppResources(app);
   });
 
   it('proceeds to INSERT when event type is recognized', async () => {
@@ -508,7 +509,7 @@ describe('POST /webhooks/stripe — recognized-type gate (HUB-203)', () => {
       (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('ON CONFLICT'),
     );
     expect(insertCall).toBeDefined();
-    await app.close();
+    await closeAppResources(app);
   });
 });
 

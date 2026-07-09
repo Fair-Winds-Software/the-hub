@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 
+import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
 (RUN_INTEGRATION ? describe : describe.skip)(
@@ -66,7 +67,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       await pool.query(`DELETE FROM pricing_models WHERE product_id = $1`, [productId]);
       await pool.query(`DELETE FROM products WHERE id = $1`, [productId]);
       await pool.query(`DELETE FROM tenants WHERE id = $1`, [tenantId]);
-      await app.close();
+      await closeAppResources(app);
     });
 
     // ── 1. Run advisor ─────────────────────────────────────────────────────────

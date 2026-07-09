@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 
+import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
 (RUN_INTEGRATION ? describe : describe.skip)(
@@ -117,7 +118,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       if (controlId) await pool.query(`DELETE FROM compliance_controls WHERE id = $1`, [controlId]);
       await pool.query(`DELETE FROM products WHERE id = $1`, [productId]);
       await pool.query(`DELETE FROM tenants WHERE name = 'Alert Test Tenant'`);
-      await app.close();
+      await closeAppResources(app);
     });
 
     // ── 1. Alert rules — GET list ──────────────────────────────────────────────

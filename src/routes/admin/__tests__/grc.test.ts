@@ -33,6 +33,7 @@ vi.mock('../../../lib/logger.js', () => ({
 import adminGrcRoutes from '../grc.js';
 import { AppError } from '../../../errors/AppError.js';
 
+import { closeAppResources } from '../../../__tests__/_testCleanup.js';
 const DEVICE_ID = '11111111-1111-1111-1111-111111111111';
 const ONB_ID    = '22222222-2222-2222-2222-222222222222';
 const OFF_ID    = '33333333-3333-3333-3333-333333333333';
@@ -68,7 +69,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
   await appProductAdmin.close();
 });
 

@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { closeAppResources } from './_testCleanup.js';
 
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 const RUN_TAG = Date.now().toString();
@@ -72,7 +73,7 @@ const PORTAL_EMAIL = `test-portal-${RUN_TAG}@e29.test`;
       await pool.query(`DELETE FROM tenant_users WHERE id = $1`, [tenantUserId]);
       await pool.query(`DELETE FROM products WHERE id = $1`, [productId]);
       await pool.query(`DELETE FROM tenants WHERE id = $1`, [tenantId]);
-      await app.close();
+      await closeAppResources(app);
     });
 
     // ── TODO-D-DEF-007 comment presence ──────────────────────────────────────

@@ -3,6 +3,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 
+import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
 // All tests in this file require a live PostgreSQL DB and Redis.
@@ -19,7 +20,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
     });
 
     afterAll(async () => {
-      await app.close();
+      await closeAppResources(app);
     });
 
     afterEach(async () => {

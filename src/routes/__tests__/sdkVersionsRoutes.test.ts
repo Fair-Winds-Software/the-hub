@@ -25,6 +25,7 @@ import adminSdkVersionsRoutes from '../admin/sdkVersions.js';
 import { operatorRbacHook } from '../../hooks/operatorRbac.js';
 import { AppError } from '../../errors/AppError.js';
 
+import { closeAppResources } from '../../__tests__/_testCleanup.js';
 const SECRET = 'test-secret-hub-1698';
 
 let app: FastifyInstance;
@@ -44,7 +45,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeAppResources(app);
 });
 
 beforeEach(() => {

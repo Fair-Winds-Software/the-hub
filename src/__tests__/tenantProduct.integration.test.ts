@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
-import { cleanupProduct, cleanupTenant } from './_testCleanup.js';
+import { cleanupProduct, cleanupTenant, closeAppResources } from './_testCleanup.js';
 
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 const RUN_TAG = Date.now().toString();
@@ -44,7 +44,7 @@ const SUPER_EMAIL = `test-e26-super-${RUN_TAG}@integration.test`;
     });
 
     afterAll(async () => {
-      await app.close();
+      await closeAppResources(app);
     });
 
     afterEach(async () => {

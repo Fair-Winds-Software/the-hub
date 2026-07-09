@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { Client } from 'pg';
 
+import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 const CONNECTION_STRING = process.env['DATABASE_URL'] ?? 'postgresql://hub:hub@localhost:5432/hub_dev';
 const RUN_TAG = `HUB1745-${Date.now()}`;
@@ -68,7 +69,7 @@ const RUN_TAG = `HUB1745-${Date.now()}`;
       await client.query(`DELETE FROM products WHERE id = $1`, [productId]);
       await client.query(`DELETE FROM tenants WHERE name = $1`, [RUN_TAG]);
       await client.end();
-      await app.close();
+      await closeAppResources(app);
     });
 
     const auth = () => ({ Authorization: `Bearer ${superAdminToken}` });

@@ -18,6 +18,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 
+import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
 const PORTFOLIO_SLUG = 'hub-portfolio';
@@ -80,7 +81,7 @@ const RUN_TAG = `HUB1454 ${Date.now()}`;
           WHERE policy_name LIKE 'HUB1454 %'
             AND id NOT IN (SELECT policy_id FROM policy_acknowledgments)`,
       );
-      await app.close();
+      await closeAppResources(app);
     });
 
     const adminHeaders = () => ({ Authorization: `Bearer ${superAdminToken}` });
