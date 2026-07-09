@@ -115,10 +115,12 @@ const FOREIGN_EMAIL = `test-e28-foreign-${RUN_TAG}@integration.test`;
       await pool.query(`DELETE FROM escalation_rules WHERE tenant_id = $1`, [tenantId]);
       await pool.query(`DELETE FROM workflow_hooks WHERE tenant_id IN ($1, $2)`, [tenantId, foreignTenantId]);
       await pool.query(`DELETE FROM products WHERE id = $1`, [productId]);
-      await pool.query(`DELETE FROM tenants WHERE id IN ($1, $2)`, [tenantId, foreignTenantId]);
+      // HUB-1771 Phase 4: operator_accounts.tenant_id → tenants.id FK requires
+      // operators be deleted BEFORE their tenant.
       await pool.query(
         `DELETE FROM operator_accounts WHERE email LIKE 'test-e28-%@integration.test'`,
       );
+      await pool.query(`DELETE FROM tenants WHERE id IN ($1, $2)`, [tenantId, foreignTenantId]);
       await closeAppResources(app);
     });
 
