@@ -2,6 +2,10 @@
 // Authorized by HUB-525 — setupFiles for LEASE_ENCRYPTION_KEY global env setup
 // Authorized by HUB-4.1 L2 /test-consolidate — coverage thresholds as starting floor; see ADR-002
 // Authorized by HUB-1570 — exclude frontend/ from backend Vitest run (frontend has its own Vitest config under frontend/vitest.config.ts; was introduced by HUB-1569)
+// Authorized by HUB-1771 Phase 3 — `pool: 'forks'` runs each test file in its own child
+// process so module-level singletons (pg pool, Redis client, Fastify plugins, Stripe SDK)
+// cannot leak across files. Trade-off: ~50-100ms fork startup per file; total suite runtime
+// grows from ~26s → ~40s. Acceptable for the elimination of an entire pollution class.
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -9,6 +13,7 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./vitest.setup.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', 'frontend/**'],
+    pool: 'forks',
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
