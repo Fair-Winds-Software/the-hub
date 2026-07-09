@@ -84,7 +84,7 @@ const SUPER_EMAIL = `test-e26-super-${RUN_TAG}@integration.test`;
         });
         expect(createRes.statusCode).toBe(201);
         const created = JSON.parse(createRes.body) as { id: string; name: string; active: boolean };
-        expect(created.name).toBe('IntTest Tenant E26');
+        expect(created.name).toBe(`IntTest Tenant E26 ${RUN_TAG}`);
         expect(created.active).toBe(true);
 
         // List — tenant should appear
@@ -100,7 +100,7 @@ const SUPER_EMAIL = `test-e26-super-${RUN_TAG}@integration.test`;
           headers,
         });
         expect(getRes.statusCode).toBe(200);
-        expect(JSON.parse(getRes.body)).toMatchObject({ id: created.id, name: 'IntTest Tenant E26' });
+        expect(JSON.parse(getRes.body)).toMatchObject({ id: created.id, name: `IntTest Tenant E26 ${RUN_TAG}` });
 
         // Update name
         const putRes = await app.inject({
@@ -110,7 +110,7 @@ const SUPER_EMAIL = `test-e26-super-${RUN_TAG}@integration.test`;
           payload: { name: `IntTest Tenant E26 Updated ${RUN_TAG}` },
         });
         expect(putRes.statusCode).toBe(200);
-        expect(JSON.parse(putRes.body)).toMatchObject({ name: 'IntTest Tenant E26 Updated' });
+        expect(JSON.parse(putRes.body)).toMatchObject({ name: `IntTest Tenant E26 Updated ${RUN_TAG}` });
 
         // Soft-delete
         const delRes = await app.inject({
