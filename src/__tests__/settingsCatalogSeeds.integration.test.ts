@@ -39,8 +39,10 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         const entry = SETTINGS_CATALOG.find((e) => e.key === row.key);
         expect(entry, `unknown key surfaced: ${row.key}`).toBeDefined();
         expect(assertValueType(row.key, row.value)).toBe(true);
-        // Sanity-check the default actually matches the catalog default.
-        expect(row.value).toBe(entry!.default);
+        // Sanity-check the default actually matches the catalog default. Use
+        // toStrictEqual so JSON-object defaults (e.g. jira_project_key_by_product)
+        // compare structurally, not by reference.
+        expect(row.value).toStrictEqual(entry!.default);
       }
     });
 
