@@ -128,8 +128,20 @@ export async function queryAuditLog(params: AuditQueryParams): Promise<{
   const hasMore = rows.length > limit;
   const data = hasMore ? rows.slice(0, limit) : rows;
   const last = data[data.length - 1];
+  // HUB-1771 Phase 4: `last.created_at` is a Date; `String(Date)` produces a
+  // locale-formatted string like "Wed Jul 09 2026 19:35:12 GMT-0400 (EDT)".
+  // Decoding + passing that to pg $::timestamptz throws
+  // 'time zone "gmt-0400" not recognized'. Use ISO 8601 instead so pg parses
+  // the timezone cleanly.
   const next_cursor =
-    hasMore && last ? encodeCursor(String(last.created_at), last.id) : null;
+    hasMore && last
+      ? encodeCursor(
+          last.created_at instanceof Date
+            ? last.created_at.toISOString()
+            : String(last.created_at),
+          last.id,
+        )
+      : null;
 
   return {
     from: params.from.toISOString(),
