@@ -10,6 +10,10 @@ import { closeAppResources } from './_testCleanup.js';
 
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 const RUN_TAG = Date.now().toString();
+// HUB-1771 Phase 4: control_id must be unique per run — compliance_signal_evidence's
+// immutability trigger blocks cleanup of the parent compliance_controls row when
+// evidence rows exist, so prior-run 'CC-WAVE1-001' rows outlive tests and collide.
+const WAVE1_CONTROL_ID = `CC-WAVE1-${RUN_TAG}`;
 
 (RUN_INTEGRATION ? describe : describe.skip)(
   'E865 Wave 1 Compliance Integration Tests (RUN_INTEGRATION=1)',
@@ -109,7 +113,7 @@ const RUN_TAG = Date.now().toString();
           url: '/api/v1/admin/compliance/controls',
           headers: { Authorization: `Bearer ${operatorToken}` },
           payload: {
-            control_id: 'CC-WAVE1-001',
+            control_id: WAVE1_CONTROL_ID,
             name: 'Automated Access Review',
             description: 'Verifies access review is automated',
             tsc_category: 'CC6',
@@ -144,7 +148,7 @@ const RUN_TAG = Date.now().toString();
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body) as Array<{ control_id: string }>;
         expect(Array.isArray(body)).toBe(true);
-        expect(body.some((c) => c.control_id === 'CC-WAVE1-001')).toBe(true);
+        expect(body.some((c) => c.control_id === WAVE1_CONTROL_ID)).toBe(true);
       });
     });
 
@@ -251,7 +255,7 @@ const RUN_TAG = Date.now().toString();
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body) as Array<{ control_key: string; control_name: string }>;
         expect(Array.isArray(body)).toBe(true);
-        expect(body.some((b) => b.control_key === 'CC-WAVE1-001')).toBe(true);
+        expect(body.some((b) => b.control_key === WAVE1_CONTROL_ID)).toBe(true);
       });
     });
 
@@ -270,7 +274,7 @@ const RUN_TAG = Date.now().toString();
       const baseSignal = () => ({
         product_id: productId,
         signal_id: `sig-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        control_id: 'CC-WAVE1-001',
+        control_id: WAVE1_CONTROL_ID,
         signal_type: 'automated_check',
         observed_at: new Date().toISOString(),
         payload: { result: 'pass' },
