@@ -14,6 +14,11 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', 'frontend/**'],
     pool: 'forks',
+    // HUB-1771 Phase 4: explicit isolation options so each test file runs in a
+    // fresh child process. Default `isolate: true` was expected but observed to
+    // leak module state (OPERATOR_JWT_SECRET among others) between billingAdmin
+    // and other files under full-suite. Explicit + singleFork:false eliminates it.
+    poolOptions: { forks: { isolate: true, singleFork: false } },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
