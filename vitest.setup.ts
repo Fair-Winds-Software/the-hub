@@ -20,3 +20,6 @@ process.env.JIRA_WORKSPACE_URL = process.env.JIRA_WORKSPACE_URL ?? 'https://vite
 // without an explicit beforeAll to fail validateEnv() locally.
 process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-jwt-secret-vitest-fallback';
 process.env.OPERATOR_JWT_SECRET = process.env.OPERATOR_JWT_SECRET ?? 'test-operator-jwt-secret-vitest-fallback';
+// Authorized by HUB-1771 Phase 4 — PORTAL_JWT_SECRET is not in config/env.ts REQUIRED
+// (used only by portal/auth.ts) but the route throws 500 without it. Fallback here.
+process.env.PORTAL_JWT_SECRET = process.env.PORTAL_JWT_SECRET ?? 'test-portal-jwt-secret-vitest-fallback';
