@@ -6,6 +6,9 @@ import type { FastifyInstance } from 'fastify';
 
 import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
+// HUB-1771 Phase 4: RUN_TAG suffix on fixture names to avoid UNIQUE collisions
+const RUN_TAG = Date.now().toString();
+const DASH_CONTROL_KEY = `CC-DASH-${RUN_TAG}`;
 
 (RUN_INTEGRATION ? describe : describe.skip)(
   'Compliance Dashboard Integration Tests (RUN_INTEGRATION=1)',
@@ -30,32 +33,34 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
       // Tenant + product for primary operator
       const { rows: tRows } = await pool.query<{ id: string }>(
         `INSERT INTO tenants (name, tenant_type, active)
-         VALUES ('Dashboard Test Tenant', 'external', true)
+         VALUES ($1, 'external', true)
          RETURNING id`,
+        [`Dashboard Test Tenant ${RUN_TAG}`],
       );
       tenantId = tRows[0]!.id;
 
       const { rows: pRows } = await pool.query<{ id: string }>(
         `INSERT INTO products (tenant_id, name, slug, active)
-         VALUES ($1, 'Dashboard Product', 'dash-product', true)
+         VALUES ($1, $2, $3, true)
          RETURNING id`,
-        [tenantId],
+        [tenantId, `Dashboard Product ${RUN_TAG}`, `dash-product-${RUN_TAG}`],
       );
       productId = pRows[0]!.id;
 
       // Second tenant + product (for access control tests)
       const { rows: t2Rows } = await pool.query<{ id: string }>(
         `INSERT INTO tenants (name, tenant_type, active)
-         VALUES ('Dashboard Other Tenant', 'external', true)
+         VALUES ($1, 'external', true)
          RETURNING id`,
+        [`Dashboard Other Tenant ${RUN_TAG}`],
       );
       otherTenantId = t2Rows[0]!.id;
 
       const { rows: p2Rows } = await pool.query<{ id: string }>(
         `INSERT INTO products (tenant_id, name, slug, active)
-         VALUES ($1, 'Other Product', 'other-dash-product', true)
+         VALUES ($1, $2, $3, true)
          RETURNING id`,
-        [otherTenantId],
+        [otherTenantId, `Other Product ${RUN_TAG}`, `other-dash-product-${RUN_TAG}`],
       );
       otherProductId = p2Rows[0]!.id;
 
@@ -79,7 +84,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         url: '/api/v1/admin/compliance/controls',
         headers: { Authorization: `Bearer ${operatorToken}` },
         payload: {
-          control_id: 'CC-DASH-001',
+          control_id: DASH_CONTROL_KEY,
           name: 'Dashboard Test Control',
           tsc_category: 'CC6',
           control_class: 'automated',
@@ -233,7 +238,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         const cc6 = body.categories.find((c) => c.tsc_category === 'CC6');
         expect(cc6).toBeDefined();
         expect(Array.isArray(cc6?.controls)).toBe(true);
-        const ctrl = cc6?.controls.find((c) => c.control_key === 'CC-DASH-001');
+        const ctrl = cc6?.controls.find((c) => c.control_key === DASH_CONTROL_KEY);
         expect(ctrl).toBeDefined();
       });
 
@@ -379,7 +384,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         };
         const cc6 = body.categories.find((c) => c.tsc_category === 'CC6');
         expect(cc6).toBeDefined();
-        expect(cc6!.controls.some((c) => c.control_key === 'CC-DASH-001')).toBe(true);
+        expect(cc6!.controls.some((c) => c.control_key === DASH_CONTROL_KEY)).toBe(true);
       });
 
       it('product detail controls field is always an array (never undefined)', async () => {

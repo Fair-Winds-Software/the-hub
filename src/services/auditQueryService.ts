@@ -133,15 +133,16 @@ export async function queryAuditLog(params: AuditQueryParams): Promise<{
   // Decoding + passing that to pg $::timestamptz throws
   // 'time zone "gmt-0400" not recognized'. Use ISO 8601 instead so pg parses
   // the timezone cleanly.
+  // At runtime pg returns Date for timestamptz columns even though our AuditRow
+  // interface types it as string; probe via typeof-object + `toISOString` presence.
+  function toIsoString(v: unknown): string {
+    if (v && typeof v === 'object' && typeof (v as { toISOString?: unknown }).toISOString === 'function') {
+      return (v as Date).toISOString();
+    }
+    return String(v);
+  }
   const next_cursor =
-    hasMore && last
-      ? encodeCursor(
-          last.created_at instanceof Date
-            ? last.created_at.toISOString()
-            : String(last.created_at),
-          last.id,
-        )
-      : null;
+    hasMore && last ? encodeCursor(toIsoString(last.created_at), last.id) : null;
 
   return {
     from: params.from.toISOString(),

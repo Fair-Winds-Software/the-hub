@@ -19,6 +19,8 @@ const RUN_INTEGRATION = process.env["RUN_INTEGRATION"] === "1";
     let tenantAdminAToken: string;
 
     const OPERATOR_JWT_SECRET = "test-operator-jwt-secret-analytics";
+    // HUB-1771 Phase 4: RUN_TAG suffix on fixture names to avoid UNIQUE collisions
+    const RUN_TAG = Date.now().toString();
 
     beforeAll(async () => {
       process.env["DATABASE_URL"] ??=
@@ -40,8 +42,9 @@ const RUN_INTEGRATION = process.env["RUN_INTEGRATION"] === "1";
       // Create two test tenants
       const { rows: tenantRows } = await pool.query<{ id: string }>(
         `INSERT INTO tenants (name, tenant_type)
-         VALUES ('analytics-tenant-A', 'external'), ('analytics-tenant-B', 'external')
+         VALUES ($1, 'external'), ($2, 'external')
          RETURNING id`,
+        [`analytics-tenant-A-${RUN_TAG}`, `analytics-tenant-B-${RUN_TAG}`],
       );
       tenantAId = tenantRows[0]!.id;
       tenantBId = tenantRows[1]!.id;
@@ -49,9 +52,9 @@ const RUN_INTEGRATION = process.env["RUN_INTEGRATION"] === "1";
       // Create a test product (needs tenant_id and slug)
       const { rows: productRows } = await pool.query<{ id: string }>(
         `INSERT INTO products (tenant_id, name, slug)
-         VALUES ($1, 'analytics-test-product', 'analytics-test-product-slug')
+         VALUES ($1, $2, $3)
          RETURNING id`,
-        [tenantAId],
+        [tenantAId, `analytics-test-product-${RUN_TAG}`, `analytics-test-product-slug-${RUN_TAG}`],
       );
       productId = productRows[0]!.id;
 

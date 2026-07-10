@@ -18,7 +18,7 @@ export default defineConfig({
     // fresh child process. Default `isolate: true` was expected but observed to
     // leak module state (OPERATOR_JWT_SECRET among others) between billingAdmin
     // and other files under full-suite. Explicit + singleFork:false eliminates it.
-    poolOptions: { forks: { isolate: true, singleFork: false } },
+    poolOptions: { forks: { isolate: true, singleFork: false, maxForks: 2, minForks: 1 } },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

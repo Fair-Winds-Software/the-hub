@@ -11,6 +11,10 @@ import type { FastifyInstance } from 'fastify';
 
 import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
+// HUB-1771 Phase 4: RUN_TAG suffix on hardcoded fixture names + control_id
+// (compliance_signal_evidence immutability trigger prevents cleanup)
+const RUN_TAG = Date.now().toString();
+const ALERT_CONTROL_KEY = `CC-ALERT-${RUN_TAG}`;
 
 (RUN_INTEGRATION ? describe : describe.skip)(
   'Compliance Alerting Integration Tests (RUN_INTEGRATION=1)',
@@ -32,16 +36,17 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
       const { rows: tRows } = await pool.query<{ id: string }>(
         `INSERT INTO tenants (name, tenant_type, active)
-         VALUES ('Alert Test Tenant', 'external', true)
+         VALUES ($1, 'external', true)
          RETURNING id`,
+        [`Alert Test Tenant ${RUN_TAG}`],
       );
       const tenantId = tRows[0]!.id;
 
       const { rows: pRows } = await pool.query<{ id: string }>(
         `INSERT INTO products (tenant_id, name, slug, active)
-         VALUES ($1, 'Alert Test Product', 'alert-test-product', true)
+         VALUES ($1, $2, $3, true)
          RETURNING id`,
-        [tenantId],
+        [tenantId, `Alert Test Product ${RUN_TAG}`, `alert-test-product-${RUN_TAG}`],
       );
       productId = pRows[0]!.id;
 
@@ -59,7 +64,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         url: '/api/v1/admin/compliance/controls',
         headers: { Authorization: `Bearer ${operatorToken}` },
         payload: {
-          control_id: 'CC-ALERT-001',
+          control_id: ALERT_CONTROL_KEY,
           name: 'Alert Test Control',
           tsc_category: 'CC6',
           control_class: 'automated',
@@ -87,7 +92,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         severity: 'high',
         productId,
         controlId,
-        payload: { product_id: productId, control_id: controlId, control_key: 'CC-ALERT-001', previous_verdict: 'pass' },
+        payload: { product_id: productId, control_id: controlId, control_key: ALERT_CONTROL_KEY, previous_verdict: 'pass' },
         channels: ['IN_APP', 'EMAIL'],
         contentHashSeed: `control_failure:${controlId}:${productId}:test-seed-${Date.now()}`,
       });

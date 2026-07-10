@@ -12,6 +12,9 @@ import { tmpdir } from 'node:os';
 
 import { closeAppResources } from './_testCleanup.js';
 const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
+// HUB-1771 Phase 4: RUN_TAG suffix on fixture names + control_id
+const RUN_TAG = Date.now().toString();
+const EXPORT_CONTROL_KEY = `CC-EXPORT-${RUN_TAG}`;
 
 (RUN_INTEGRATION ? describe : describe.skip)(
   'Evidence Export Integration Tests (RUN_INTEGRATION=1)',
@@ -32,16 +35,17 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
 
       const { rows: tRows } = await pool.query<{ id: string }>(
         `INSERT INTO tenants (name, tenant_type, active)
-         VALUES ('Export Test Tenant', 'external', true)
+         VALUES ($1, 'external', true)
          RETURNING id`,
+        [`Export Test Tenant ${RUN_TAG}`],
       );
       tenantId = tRows[0]!.id;
 
       const { rows: pRows } = await pool.query<{ id: string }>(
         `INSERT INTO products (tenant_id, name, slug, active)
-         VALUES ($1, 'Export Test Product', 'export-test-product', true)
+         VALUES ($1, $2, $3, true)
          RETURNING id`,
-        [tenantId],
+        [tenantId, `Export Test Product ${RUN_TAG}`, `export-test-product-${RUN_TAG}`],
       );
       productId = pRows[0]!.id;
 
@@ -59,7 +63,7 @@ const RUN_INTEGRATION = process.env['RUN_INTEGRATION'] === '1';
         url: '/api/v1/admin/compliance/controls',
         headers: { Authorization: `Bearer ${operatorToken}` },
         payload: {
-          control_id: 'CC-EXPORT-001',
+          control_id: EXPORT_CONTROL_KEY,
           name: 'Export Test Control',
           tsc_category: 'CC6',
           control_class: 'automated',
