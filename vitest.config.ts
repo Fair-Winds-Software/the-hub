@@ -18,7 +18,11 @@ export default defineConfig({
     // fresh child process. Default `isolate: true` was expected but observed to
     // leak module state (OPERATOR_JWT_SECRET among others) between billingAdmin
     // and other files under full-suite. Explicit + singleFork:false eliminates it.
-    poolOptions: { forks: { isolate: true, singleFork: false, maxForks: 2, minForks: 1 } },
+    // HUB-1771 Phase 4: maxForks=1 serializes test files. Higher parallelism
+    // triggered ioredis MaxRetriesPerRequestError under stress + parallel-fork
+    // races on the shared hub_dev DB. Cost: full suite goes ~30s → ~100s.
+    // Trade-off is worth it for zero-flake determinism.
+    poolOptions: { forks: { isolate: true, singleFork: false, maxForks: 1, minForks: 1 } },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

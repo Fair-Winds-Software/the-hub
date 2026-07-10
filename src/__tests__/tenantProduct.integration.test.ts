@@ -49,8 +49,15 @@ const SUPER_EMAIL = `test-e26-super-${RUN_TAG}@integration.test`;
 
     afterEach(async () => {
       const { getPool } = await import('../db/pool.js');
+      // HUB-1771 Phase 4: EXCLUDE our own seed super so it survives across tests.
+      // Under `pool: 'forks'` with maxForks:2 the file's tests run sequentially in
+      // one process; if we delete the seed we lose superAdminToken's underlying
+      // operator row → 401 cascade.
       await getPool().query(
-        `DELETE FROM operator_accounts WHERE email LIKE 'test-e26-%@integration.test'`,
+        `DELETE FROM operator_accounts
+          WHERE email LIKE 'test-e26-%@integration.test'
+            AND email <> $1`,
+        [SUPER_EMAIL],
       );
     });
 
