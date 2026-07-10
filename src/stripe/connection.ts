@@ -23,13 +23,28 @@ import type {
   BalanceTransaction,
   Coupon,
   Customer,
-  HubStripeEvent,
   Invoice,
   Price,
   Product,
   Subscription,
   SubscriptionSchedule,
 } from './schemas.js';
+
+// Signature-verified webhook envelope. constructEvent returns this minimal shape so
+// unrecognized event types (charge.succeeded, etc.) still pass through the boundary —
+// the webhook receiver's isRecognizedEventType gate + downstream HubStripeEventSchema.parse
+// on the stored raw_event handle typed narrowing at their own layer.
+export interface VerifiedStripeEvent {
+  id: string;
+  type: string;
+  api_version: string;
+  created: number;
+  livemode: boolean;
+  data: {
+    object: unknown;
+    previous_attributes?: Record<string, unknown>;
+  };
+}
 
 // ── Shared options ──────────────────────────────────────────────────────────────
 
@@ -183,14 +198,16 @@ export interface StripeWebhooksFacet {
    * Mock: returns a synthetic event only if the caller supplied a matching signature
    * from the mock signer (used by contract tests); otherwise throws.
    *
-   * The return type is HubStripeEvent (the 6-type discriminated union); any other event
-   * type is dropped at the boundary — HUB does not handle it.
+   * Returns a signature-verified envelope; typed narrowing via HubStripeEventSchema.parse
+   * happens downstream (queue processors read raw_event JSON and validate against the
+   * discriminated union then). This keeps the boundary honest about what verify actually
+   * does — verify signature and decode JSON.
    */
   constructEvent(
     payload: string | Buffer,
     signatureHeader: string,
     secret: string,
-  ): HubStripeEvent;
+  ): VerifiedStripeEvent;
 }
 
 // ── Top-level interface ─────────────────────────────────────────────────────────

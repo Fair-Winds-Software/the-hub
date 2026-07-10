@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Authorized by HUB-1589 (E-BE-1 S6, CR-2 R1 FIX#2) — Stripe SDK boundary CI gate.
+// Authorized by HUB-1776 (S3 of HUB-1773) — extend allowed-boundary set to include
+// src/stripe/liveAdapter.ts (the LiveStripeAdapter needs to import the SDK at runtime).
 //
 // Scans src/ for any `import ... from 'stripe'` or `require('stripe')` that is NOT a
-// type-only import. Asserts that every runtime hit resolves to exactly one file:
-// src/stripe/client.ts. Exits 1 on any violation; CI fails.
+// type-only import. Asserts that every runtime hit resolves to one of the whitelisted
+// boundary files. Exits 1 on any violation; CI fails.
 //
 // Type-only imports (`import type Stripe from 'stripe'`) are intentionally allowed
 // everywhere — they erase at runtime and cannot make Stripe SDK calls. The ESLint
@@ -11,13 +13,16 @@
 // this script is a belt-and-suspenders gate that runs even if a developer disables the
 // ESLint rule locally.
 import { readFileSync } from 'node:fs';
-import { resolve, dirname, relative } from 'node:path';
+import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
-const ALLOWED_BOUNDARY = 'src/stripe/client.ts';
+const ALLOWED_BOUNDARY_SET = new Set([
+  'src/stripe/client.ts',
+  'src/stripe/liveAdapter.ts',
+]);
 
 // Use git ls-files to enumerate tracked TypeScript files under src/ — fast + respects
 // .gitignore. Falls back to a static enumeration if git is unavailable.
@@ -46,7 +51,7 @@ const RUNTIME_IMPORT_RE = /^\s*import\s+(?!type\b)[^'"]*?from\s+['"]stripe['"]|^
 const violations = [];
 for (const relPath of files) {
   const normalized = relPath.replace(/\\/g, '/');
-  if (normalized === ALLOWED_BOUNDARY) continue;
+  if (ALLOWED_BOUNDARY_SET.has(normalized)) continue;
 
   let content;
   try {
@@ -64,14 +69,15 @@ for (const relPath of files) {
   }
 }
 
+const allowedList = [...ALLOWED_BOUNDARY_SET].join(', ');
 if (violations.length > 0) {
-  console.error(`lint-stripe-boundary ✗ ${violations.length} runtime Stripe SDK import(s) outside ${ALLOWED_BOUNDARY}:`);
+  console.error(`lint-stripe-boundary ✗ ${violations.length} runtime Stripe SDK import(s) outside allowed boundary (${allowedList}):`);
   for (const v of violations) {
     console.error(`  ${v.file}:${v.line}  ${v.text}`);
   }
   console.error('');
-  console.error('Move the import to src/stripe/client.ts and expose a typed helper, or use `import type` if only the types are needed.');
+  console.error('Route the call through the StripeConnection interface (src/stripe/connection.ts) via the registry, or use `import type` if only the types are needed.');
   process.exit(1);
 }
 
-console.log(`lint-stripe-boundary ✓ all runtime Stripe imports resolve to ${ALLOWED_BOUNDARY}`);
+console.log(`lint-stripe-boundary ✓ all runtime Stripe imports resolve to allowed boundary (${allowedList})`);

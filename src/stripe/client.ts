@@ -1,6 +1,9 @@
 // Authorized by HUB-174 — Stripe SDK singleton; shared client with fail-fast startup validation
 // Authorized by HUB-188 — validateStripeEnv() extended to check STRIPE_WEBHOOK_SIGNING_SECRET
 // Authorized by HUB-413 — getStripe() throws AppError(500); stripeIdempotencyKey(); mapStripeError()
+// Authorized by HUB-1776 (S3 of HUB-1773) — export withStripeTimeout as a shared helper so
+// LiveStripeAdapter consolidates it and the 5 local copies in service files can be removed
+// during the S8 call-site migration.
 import Stripe from 'stripe';
 import logger from '../lib/logger.js';
 import { AppError } from '../errors/AppError.js';
@@ -54,6 +57,16 @@ export function getStripe(): Stripe {
 // Stripe accepts keys up to 255 chars; sliced for safety.
 export function stripeIdempotencyKey(...parts: string[]): string {
   return parts.join(':').slice(0, 255);
+}
+
+// HUB-1776 (S3): shared 5s timeout wrapper. Consolidates the 5 identical local copies in
+// addOnService, creditService, planCatalogService, discountService, and planChangeService.
+// Rejects with a plain Error (not AppError) — mapStripeError classifies it downstream.
+export async function withStripeTimeout<T>(fn: () => Promise<T>, ms = 5000): Promise<T> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Stripe API call timed out after ${ms}ms`)), ms),
+  );
+  return Promise.race([fn(), timeout]);
 }
 
 // Maps a Stripe SDK error to an AppError with appropriate HTTP status code.
