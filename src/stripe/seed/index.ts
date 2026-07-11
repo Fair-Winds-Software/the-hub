@@ -210,6 +210,7 @@ const customersFacet = {
     return inTransaction(async (client) => {
       const results: Array<{ id: string }> = [];
       for (const c of parsed) {
+        assertMockMode();
         const id = c.id ?? seedMockId('cus');
         const created = c.created ?? nowSec();
         await client.query(
@@ -234,6 +235,7 @@ const productsFacet = {
     return inTransaction(async (client) => {
       const results: Array<{ id: string }> = [];
       for (const p of parsed) {
+        assertMockMode();
         const id = p.id ?? seedMockId('prod');
         const created = p.created ?? nowSec();
         await client.query(
@@ -259,6 +261,7 @@ const pricesFacet = {
       await assertRefsExist(client, 'products', parsed.map((p) => p.product), 'product');
       const results: Array<{ id: string }> = [];
       for (const p of parsed) {
+        assertMockMode();
         const id = p.id ?? seedMockId('price');
         const created = p.created ?? nowSec();
         await client.query(
@@ -289,6 +292,7 @@ const couponsFacet = {
     return inTransaction(async (client) => {
       const results: Array<{ id: string }> = [];
       for (const c of parsed) {
+        assertMockMode();
         const id = c.id ?? seedMockId('coup');
         const created = c.created ?? nowSec();
         await client.query(
@@ -340,6 +344,7 @@ const subscriptionsFacet = {
 
       const results: Array<{ id: string }> = [];
       for (const s of parsed) {
+        assertMockMode();
         const id = s.id ?? seedMockId('sub');
         const created = s.created ?? nowSec();
         const cpStart = s.current_period_start ?? created;
@@ -404,6 +409,7 @@ const invoicesFacet = {
 
       const results: Array<{ id: string }> = [];
       for (const inv of parsed) {
+        assertMockMode();
         const id = inv.id ?? seedMockId('in');
         const created = inv.created ?? nowSec();
         const parent = inv.subscription
@@ -444,6 +450,7 @@ const discountsFacet = {
 
       const results: Array<{ id: string }> = [];
       for (const d of parsed) {
+        assertMockMode();
         const id = d.id ?? seedMockId('di');
         const start = d.start ?? nowSec();
         await client.query(
@@ -469,6 +476,7 @@ const balanceTransactionsFacet = {
       await assertRefsExist(client, 'customers', parsed.map((b) => b.customer), 'customer');
       const results: Array<{ id: string }> = [];
       for (const b of parsed) {
+        assertMockMode();
         const id = b.id ?? seedMockId('cbtxn');
         const created = b.created ?? nowSec();
         await client.query(
