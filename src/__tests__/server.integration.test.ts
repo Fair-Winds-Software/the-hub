@@ -75,6 +75,26 @@ describe("GET /health", () => {
     if (!redisAvailable) ctx.skip();
     const fastify = await buildApp();
     try {
+      // HUB-1773 close-out: warm every dependency /health probes before hitting the
+      // endpoint. Probes in src/health/probes.ts use a 500ms per-probe timeout.
+      // `afterEach` closes all clients, so every test starts cold; the first TCP
+      // handshake + auth on any of them can exceed 500ms on a Windows dev box, races
+      // to 'degraded', and /health returns 503. BullMQ opens its OWN Redis socket
+      // via getRedisClientForBullMQ() — warming getRedisClient() alone is not enough,
+      // so we invoke DLQ.getJobCounts() which is exactly what the queue probe calls.
+      const { getPool } = await import("../db/pool.js");
+      const { getRedisClient } = await import("../redis/client.js");
+      const { getDlqQueue, _resetQueueInstancesForTest } = await import("../queues/index.js");
+      // Clear cached Queue instances first — afterEach's closeRedis() invalidated
+      // whichever ones the previous test built, and reusing them throws
+      // "Connection is closed" on the first command.
+      _resetQueueInstancesForTest();
+      await Promise.all([
+        getPool().query("SELECT 1"),
+        getRedisClient().ping(),
+        getDlqQueue().getJobCounts(),
+      ]);
+
       const res = await fastify.inject({ method: "GET", url: "/health" });
       expect(res.statusCode).toBe(200);
       const body = res.json<{
@@ -109,6 +129,21 @@ describe("GET /health/ready", () => {
     if (!redisAvailable) ctx.skip();
     const fastify = await buildApp();
     try {
+      // See sibling /health test above for rationale — warm pg + Redis + queue Redis
+      // before probing so cold TCP handshake doesn't race the 500ms probe timeout.
+      const { getPool } = await import("../db/pool.js");
+      const { getRedisClient } = await import("../redis/client.js");
+      const { getDlqQueue, _resetQueueInstancesForTest } = await import("../queues/index.js");
+      // Clear cached Queue instances first — afterEach's closeRedis() invalidated
+      // whichever ones the previous test built, and reusing them throws
+      // "Connection is closed" on the first command.
+      _resetQueueInstancesForTest();
+      await Promise.all([
+        getPool().query("SELECT 1"),
+        getRedisClient().ping(),
+        getDlqQueue().getJobCounts(),
+      ]);
+
       const res = await fastify.inject({ method: "GET", url: "/health/ready" });
       expect(res.statusCode).toBe(200);
       expect(res.json<{ status: string }>().status).toBe("ok");

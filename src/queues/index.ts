@@ -52,6 +52,17 @@ export interface QueueDefinition {
 // Queue instance registry — prevents duplicate BullMQ connections per queue name
 const _queueInstances = new Map<string, Queue>();
 
+/**
+ * Test-only: clears the cached Queue instances so subsequent getOrCreateQueue() calls
+ * build fresh Queue objects with the current Redis client. Needed after closeRedis()
+ * in test afterEach hooks — closing Redis invalidates the connections held by cached
+ * Queues, and reusing a cached Queue with a dead connection throws "Connection is
+ * closed" on the next command.
+ */
+export function _resetQueueInstancesForTest(): void {
+  _queueInstances.clear();
+}
+
 // Queue definitions registry — consumed by worker scaffold (HUB-127)
 const _queues: QueueDefinition[] = [];
 
