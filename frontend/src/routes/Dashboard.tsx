@@ -32,6 +32,9 @@ import { PortfolioSummaryWidget } from './dashboard/PortfolioSummaryWidget';
 import { ProductGridWidget } from './dashboard/ProductGridWidget';
 import { DashboardSidebar } from './dashboard/DashboardSidebar';
 import { WidgetErrorBoundary } from './dashboard/WidgetErrorBoundary';
+// HUB-1782 (S9 of HUB-1773) — Stripe connection status indicator + mode toggle
+// mounted in the header so operators can see connection health at a glance.
+import { StripeConnectionStatus } from '../components/StripeConnectionStatus';
 
 const PAGE_TITLE = 'Dashboard | HUB Console';
 
@@ -49,15 +52,21 @@ export default function Dashboard(): React.ReactElement {
       className="flex flex-col gap-6"
     >
       <header className="flex flex-col gap-1">
-        <h1
-          data-testid="dashboard-heading"
-          className="font-heading text-2xl text-primary-navy"
-        >
-          Dashboard
-        </h1>
-        <p className="font-body text-sm text-deep-charcoal/70">
-          Portfolio overview — MRR, per-product status, and recent activity.
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1
+              data-testid="dashboard-heading"
+              className="font-heading text-2xl text-primary-navy"
+            >
+              Dashboard
+            </h1>
+            <p className="font-body text-sm text-deep-charcoal/70">
+              Portfolio overview — MRR, per-product status, and recent activity.
+            </p>
+          </div>
+          {/* HUB-1782 (S9 of HUB-1773): Stripe connection status + mode toggle. */}
+          <StripeConnectionStatus />
+        </div>
       </header>
 
       <section
