@@ -11,6 +11,12 @@
 // done in this story — deferred to S8's atomic cutover. The existing SDK path stays live.
 import type Stripe from 'stripe';
 import { getStripe, mapStripeError } from './client.js';
+// HUB-1794 (S5 of HUB-1783): connect to the multi-connection registry so mode() reflects
+// the operator's LIVE|MOCK toggle. Type-only import is not sufficient because mode() calls
+// the function at runtime — but the module cycle resolves cleanly at first invocation
+// (registry does not build the adapter at module-load time).
+import { getConnectionMode } from '../connections/registry.js';
+import type { ProbeResult } from '../connections/base.js';
 
 // Inlined here instead of importing withStripeTimeout from client.js so pre-adapter
 // legacy test files whose `vi.mock('../stripe/client.js')` don't export withStripeTimeout
@@ -284,6 +290,19 @@ class LiveWebhooksFacet implements StripeWebhooksFacet {
 // ── LiveStripeAdapter ───────────────────────────────────────────────────────────
 
 export class LiveStripeAdapter implements StripeConnection {
+  // HUB-1794 (S5 of HUB-1783): ExternalConnection surface. `name` identifies this
+  // adapter in the multi-connection registry. `mode()` reads the current registry mode
+  // for 'stripe' — the adapter itself doesn't own the mode state. `probe()` hits
+  // balance.retrieve; success = ok, exceptions get classified by the shared runProbe
+  // helper at the caller.
+  readonly name = 'stripe';
+  mode(): 'live' | 'mock' { return getConnectionMode('stripe'); }
+  async probe(): Promise<ProbeResult> {
+    const start = Date.now();
+    await this.balance.retrieve();
+    return { health: 'ok', latency_ms: Date.now() - start };
+  }
+
   readonly balance: StripeBalanceFacet;
   readonly customers: StripeCustomersFacet;
   readonly subscriptions: StripeSubscriptionsFacet;

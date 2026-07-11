@@ -48,7 +48,7 @@ afterEach(async () => {
 
 describe('initStripeRegistry — bootstrap', () => {
   it('loads persisted mode from settings when present', async () => {
-    settingsStore.set('stripe_connection_mode', { mode: 'mock' });
+    settingsStore.set('connection_mode.stripe', { mode: 'mock' });
     const { initStripeRegistry, getStripeMode } = await import('../registry.js');
     await initStripeRegistry();
     expect(getStripeMode()).toBe('mock');
@@ -60,14 +60,14 @@ describe('initStripeRegistry — bootstrap', () => {
     expect(getStripeMode()).toBe('mock');
     expect(poolQueryMock).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO settings'),
-      expect.arrayContaining(['stripe_connection_mode', JSON.stringify({ mode: 'mock' })]),
+      expect.arrayContaining(['connection_mode.stripe', JSON.stringify({ mode: 'mock' })]),
     );
   });
 
   it('accepts persisted LIVE mode when credentials are present', async () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_x';
     process.env.STRIPE_WEBHOOK_SIGNING_SECRET = 'whsec_x';
-    settingsStore.set('stripe_connection_mode', { mode: 'live' });
+    settingsStore.set('connection_mode.stripe', { mode: 'live' });
     const { initStripeRegistry, getStripeMode } = await import('../registry.js');
     await initStripeRegistry();
     expect(getStripeMode()).toBe('live');
@@ -93,7 +93,7 @@ describe('getStripeMode', () => {
 
 describe('getStripeConnection — adapter routing', () => {
   it('returns MockStripeAdapter when mode=mock', async () => {
-    settingsStore.set('stripe_connection_mode', { mode: 'mock' });
+    settingsStore.set('connection_mode.stripe', { mode: 'mock' });
     const { initStripeRegistry, getStripeConnection } = await import('../registry.js');
     const { MockStripeAdapter } = await import('../mockAdapter.js');
     await initStripeRegistry();
@@ -103,7 +103,7 @@ describe('getStripeConnection — adapter routing', () => {
   it('returns LiveStripeAdapter when mode=live', async () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_x';
     process.env.STRIPE_WEBHOOK_SIGNING_SECRET = 'whsec_x';
-    settingsStore.set('stripe_connection_mode', { mode: 'live' });
+    settingsStore.set('connection_mode.stripe', { mode: 'live' });
     const { initStripeRegistry, getStripeConnection } = await import('../registry.js');
     const { LiveStripeAdapter } = await import('../liveAdapter.js');
     await initStripeRegistry();
@@ -111,7 +111,7 @@ describe('getStripeConnection — adapter routing', () => {
   });
 
   it('returns the same adapter instance across calls (cached)', async () => {
-    settingsStore.set('stripe_connection_mode', { mode: 'mock' });
+    settingsStore.set('connection_mode.stripe', { mode: 'mock' });
     const { initStripeRegistry, getStripeConnection } = await import('../registry.js');
     await initStripeRegistry();
     const a = getStripeConnection();
@@ -122,7 +122,7 @@ describe('getStripeConnection — adapter routing', () => {
 
 describe('setStripeMode', () => {
   it('rejects LIVE flip when credentials missing (writes nothing)', async () => {
-    settingsStore.set('stripe_connection_mode', { mode: 'mock' });
+    settingsStore.set('connection_mode.stripe', { mode: 'mock' });
     const { initStripeRegistry, setStripeMode, getStripeMode } = await import('../registry.js');
     await initStripeRegistry();
     const writeCallsBefore = poolQueryMock.mock.calls.length;
@@ -141,7 +141,7 @@ describe('setStripeMode', () => {
   it('allows mock → live when credentials present; updates in-process mode', async () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_x';
     process.env.STRIPE_WEBHOOK_SIGNING_SECRET = 'whsec_x';
-    settingsStore.set('stripe_connection_mode', { mode: 'mock' });
+    settingsStore.set('connection_mode.stripe', { mode: 'mock' });
     const { initStripeRegistry, setStripeMode, getStripeMode } = await import('../registry.js');
     await initStripeRegistry();
     await setStripeMode('live', { operator_id: 'op-1' });
@@ -151,7 +151,7 @@ describe('setStripeMode', () => {
   it('allows live → mock unconditionally (credentials not required to drop LIVE)', async () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_x';
     process.env.STRIPE_WEBHOOK_SIGNING_SECRET = 'whsec_x';
-    settingsStore.set('stripe_connection_mode', { mode: 'live' });
+    settingsStore.set('connection_mode.stripe', { mode: 'live' });
     const { initStripeRegistry, setStripeMode, getStripeMode } = await import('../registry.js');
     await initStripeRegistry();
     // Simulate credentials being removed at runtime; drop to mock should still succeed.
@@ -163,7 +163,7 @@ describe('setStripeMode', () => {
   it('writes an audit_log entry on successful flip', async () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_x';
     process.env.STRIPE_WEBHOOK_SIGNING_SECRET = 'whsec_x';
-    settingsStore.set('stripe_connection_mode', { mode: 'mock' });
+    settingsStore.set('connection_mode.stripe', { mode: 'mock' });
     const { initStripeRegistry, setStripeMode } = await import('../registry.js');
     await initStripeRegistry();
     poolQueryMock.mockClear();

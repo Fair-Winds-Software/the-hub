@@ -216,8 +216,13 @@ export interface StripeWebhooksFacet {
 }
 
 // ── Top-level interface ─────────────────────────────────────────────────────────
+// HUB-1794 (S5 of HUB-1783): StripeConnection now extends ExternalConnection so the
+// LiveStripeAdapter / MockStripeAdapter implementations satisfy the generic base +
+// register with the multi-connection registry alongside future connections.
 
-export interface StripeConnection {
+import type { ExternalConnection } from '../connections/base.js';
+
+export interface StripeConnection extends ExternalConnection {
   readonly balance: StripeBalanceFacet;
   readonly customers: StripeCustomersFacet;
   readonly subscriptions: StripeSubscriptionsFacet;

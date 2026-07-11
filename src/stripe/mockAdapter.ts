@@ -853,6 +853,15 @@ class MockWebhooksFacet implements StripeWebhooksFacet {
 // ── MockStripeAdapter ───────────────────────────────────────────────────────────
 
 export class MockStripeAdapter implements StripeConnection {
+  // HUB-1794 (S5 of HUB-1783): ExternalConnection surface. Mock mode never probes anything
+  // external — health is synthetic 'ok' with zero latency, matching the semantics S9's
+  // `/api/v1/admin/connections/stripe/status` returns for mock mode.
+  readonly name = 'stripe';
+  mode(): 'live' | 'mock' { return 'mock'; }
+  async probe(): Promise<{ health: 'ok'; latency_ms: 0 }> {
+    return { health: 'ok', latency_ms: 0 };
+  }
+
   readonly balance: StripeBalanceFacet;
   readonly customers: StripeCustomersFacet;
   readonly subscriptions: StripeSubscriptionsFacet;
