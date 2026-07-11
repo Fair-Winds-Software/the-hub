@@ -244,8 +244,10 @@ async function computeList(
 
 const adminFailedPaymentsRoutes: FastifyPluginAsync = async (fastify) => {
   // ── List ─────────────────────────────────────────────────────────────
+  // HUB-1772: handler self-scopes via op.tenant_id; no URL/body/query tenant_id required.
   fastify.get(
     '/api/v1/admin/billing/failed-payments',
+    { config: { operatorSelfScoped: true } },
     async (request, reply) => {
       await assertOperator(request);
       const q = request.query as Record<string, string | undefined>;

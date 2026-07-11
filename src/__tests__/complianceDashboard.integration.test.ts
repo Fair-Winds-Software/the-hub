@@ -191,14 +191,11 @@ const DASH_CONTROL_KEY = `CC-DASH-${RUN_TAG}`;
 
     describe('GET /api/v1/admin/compliance/dashboard/overview — product_admin scope', () => {
       it('product_admin only receives products from own tenant', async () => {
-        // HUB-1772: operatorRbacHook currently requires an explicit tenant_id
-        // param for product_admin callers even though this route self-scopes
-        // via `op.tenant_id` inside the handler. Passing tenant_id here as a
-        // workaround; hook fix will let this route work without the redundant
-        // param and the query string can be removed.
+        // HUB-1772 fix: route is marked `operatorSelfScoped: true`, so no tenant_id
+        // query param is required — the handler scopes via op.tenant_id from the JWT.
         const res = await app.inject({
           method: 'GET',
-          url: `/api/v1/admin/compliance/dashboard/overview?tenant_id=${tenantId}`,
+          url: '/api/v1/admin/compliance/dashboard/overview',
           headers: { Authorization: `Bearer ${tenantAdminToken}` },
         });
         expect(res.statusCode).toBe(200);

@@ -184,15 +184,21 @@ describe('GET /api/v1/admin/portfolio/products (HUB-1700)', () => {
       expect(opts.operatorTenantId).toBe(TENANT_A);
     });
 
-    it('cross-tenant request is denied by operatorRbacHook (403)', async () => {
+    it('cross-tenant query.tenant_id is ignored — handler self-scopes to JWT (HUB-1772)', async () => {
+      // Pre-HUB-1772 the operatorRbacHook 403'd this because query.tenant_id !== claim.tenant_id.
+      // Now the route is marked `operatorSelfScoped: true` — the hook lets it through and
+      // the handler scopes strictly by op.tenant_id (the JWT claim). The rogue query param is
+      // effectively ignored: the caller cannot get TENANT_B data by lying in the URL.
       const res = await app.inject({
         method: 'GET',
-        // claim says A, query says B → hook 403s before handler
         url: `/api/v1/admin/portfolio/products?tenant_id=${TENANT_B}`,
         headers: authHeader('product_admin', TENANT_A),
       });
-      expect(res.statusCode).toBe(403);
-      expect(mockGetPortfolioProducts).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(200);
+      const [opts] = mockGetPortfolioProducts.mock.calls[0]!;
+      // Security invariant: service is scoped to the JWT tenant, not the query.
+      expect(opts.operatorTenantId).toBe(TENANT_A);
+      expect(opts.operatorTenantId).not.toBe(TENANT_B);
     });
 
     it('product_admin without tenant_id claim → hook 403s (defensive)', async () => {

@@ -57,8 +57,12 @@ const adminAdvisorRoutes: FastifyPluginAsync = async (fastify) => {
   //
   // RBAC: super_admin unrestricted; product_admin must specify productId AND the product
   // must belong to their tenant (handler-level check; mirrors HUB-1697 audit-log pattern).
-  // operatorRbacHook already enforced tenant_id query param matches claim.tenant_id.
-  fastify.get('/api/v1/admin/advisor/recommendations', async (request, reply) => {
+  // HUB-1772: handler self-scopes via op.tenant_id (product ownership check at line 78);
+  // no URL/query tenant_id required.
+  fastify.get(
+    '/api/v1/admin/advisor/recommendations',
+    { config: { operatorSelfScoped: true } },
+    async (request, reply) => {
     const q = request.query as Record<string, string | undefined>;
     const op = (request as { operatorUser?: { role: string; tenant_id: string | null } })
       .operatorUser;

@@ -274,7 +274,11 @@ const adminOperatorConsoleRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── HUB-1700: Portfolio-wide products (single-tenant RBAC model) ──────────────
 
-  fastify.get('/api/v1/admin/portfolio/products', async (request, reply) => {
+  // HUB-1772: handler self-scopes via op.tenant_id; no URL/body/query tenant_id required.
+  fastify.get(
+    '/api/v1/admin/portfolio/products',
+    { config: { operatorSelfScoped: true } },
+    async (request, reply) => {
     const op = request.operatorUser;
     const q = request.query as Record<string, string | undefined>;
 

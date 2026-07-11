@@ -357,8 +357,10 @@ const adminSystemHealthRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // ── Audit errors (product-filtered .failure events) ────────────────────
+  // HUB-1772: handler self-scopes via op.tenant_id; no URL/body/query tenant_id required.
   fastify.get(
     '/api/v1/admin/system-health/audit-errors',
+    { config: { operatorSelfScoped: true } },
     async (request, reply) => {
       await assertOperator(request);
       const op = request.operatorUser!;

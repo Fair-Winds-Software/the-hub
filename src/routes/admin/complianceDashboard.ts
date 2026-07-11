@@ -34,11 +34,17 @@ async function assertProductAccess(
 const adminComplianceDashboardRoutes: FastifyPluginAsync = async (fastify) => {
   const pool = getPool();
 
-  fastify.get('/api/v1/admin/compliance/dashboard/overview', async (request, reply) => {
-    const op = request.operatorUser!;
-    const tenantId = op.role === 'super_admin' ? null : op.tenant_id;
-    return reply.send(await getDashboardOverview(tenantId));
-  });
+  // HUB-1772: self-scoped — handler reads op.tenant_id and passes to the service; no URL
+  // tenant param needed. Flag opts out of operatorRbacHook's resource-tenant check.
+  fastify.get(
+    '/api/v1/admin/compliance/dashboard/overview',
+    { config: { operatorSelfScoped: true } },
+    async (request, reply) => {
+      const op = request.operatorUser!;
+      const tenantId = op.role === 'super_admin' ? null : op.tenant_id;
+      return reply.send(await getDashboardOverview(tenantId));
+    },
+  );
 
   fastify.get('/api/v1/admin/compliance/dashboard/products/:productId', async (request, reply) => {
     const { productId } = request.params as { productId: string };

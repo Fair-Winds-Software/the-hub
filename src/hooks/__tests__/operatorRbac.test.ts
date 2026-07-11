@@ -34,11 +34,17 @@ interface FakeRequest {
   };
 }
 
-function buildRequest(token: string, params: Record<string, unknown> = {}, body: Record<string, unknown> | null = null): FakeRequest {
+function buildRequest(
+  token: string,
+  params: Record<string, unknown> = {},
+  body: Record<string, unknown> | null = null,
+  routeConfig?: { operatorSelfScoped?: boolean },
+): FakeRequest & { routeOptions?: { config: unknown } } {
   return {
     headers: { authorization: `Bearer ${token}` },
     params,
     body,
+    ...(routeConfig ? { routeOptions: { config: routeConfig } } : {}),
   };
 }
 
@@ -221,5 +227,47 @@ describe('operatorRbacHook compat window (HUB-1588)', () => {
         statusCode: 401,
       });
     });
+  });
+});
+
+// ── HUB-1772: operatorSelfScoped route config flag ────────────────────────────
+describe('operatorRbacHook — operatorSelfScoped flag (HUB-1772)', () => {
+  it('bypasses the resource-tenant check for product_admin on flagged routes', async () => {
+    mockJwtVerify.mockReturnValueOnce({
+      operator_id: 'op-prod',
+      role: 'product_admin',
+      tenant_id: TENANT_A,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    // No params.tenantId, no body.tenant_id, no query.tenant_id — pre-fix this 403'd.
+    const req = buildRequest('any-token', {}, null, { operatorSelfScoped: true });
+    await expect(operatorRbacHook(req as never, FAKE_REPLY)).resolves.toBeUndefined();
+    expect(req.operatorUser?.role).toBe('product_admin');
+    expect(req.operatorUser?.tenant_id).toBe(TENANT_A);
+  });
+
+  it('still enforces resource-tenant when flag is false / absent', async () => {
+    mockJwtVerify.mockReturnValueOnce({
+      operator_id: 'op-prod',
+      role: 'product_admin',
+      tenant_id: TENANT_A,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const req = buildRequest('any-token'); // no flag
+    await expect(operatorRbacHook(req as never, FAKE_REPLY)).rejects.toMatchObject({
+      statusCode: 403,
+    });
+  });
+
+  it('super_admin passes the flagged route regardless (early-return before flag check)', async () => {
+    mockJwtVerify.mockReturnValueOnce({
+      operator_id: 'op-super',
+      role: 'super_admin',
+      tenant_id: null,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const req = buildRequest('any-token', {}, null, { operatorSelfScoped: true });
+    await expect(operatorRbacHook(req as never, FAKE_REPLY)).resolves.toBeUndefined();
+    expect(req.operatorUser?.role).toBe('super_admin');
   });
 });

@@ -9,6 +9,14 @@
 //   consulted params + body. No existing admin GET is currently used by product_admin with
 //   query-based tenant scoping; this unblocks HUB-1697's RBAC ACs without behavioral change
 //   to existing callers.
+// Authorized by HUB-1772 — add `operatorSelfScoped: true` route config opt-in. Some admin
+//   routes are self-scoped: their handlers read `op.tenant_id` from the JWT claim and use
+//   that as the tenant scope, rather than requiring the caller to send tenant_id in the URL/
+//   body/query. Before this flag the hook would 403 those requests before the handler ran,
+//   because there was no resourceTenantId to compare against claims.tenant_id. Routes opt in
+//   explicitly via `{ config: { operatorSelfScoped: true } }`; the hook skips the resource-
+//   tenant check for them, and downstream code scopes via claims.tenant_id as usual. See
+//   HUB-1772 for the audit of which routes carry this flag and the security rationale.
 // Authorized by HUB-1707 — increment Redis telemetry counter alongside the existing
 //   pino log line each time a legacy tenant_admin claim is accepted. Fire-and-forget: any
 //   Redis failure is swallowed by incrementLegacyClaimCounter() so the RBAC path
@@ -115,6 +123,13 @@ export async function operatorRbacHook(
   };
 
   if (normalizedRole === 'super_admin') return;
+
+  // HUB-1772: routes that self-scope via request.operatorUser.tenant_id opt out of the
+  // resource-tenant check by declaring `{ config: { operatorSelfScoped: true } }` on the
+  // route. The handler still gets the (now-normalized) operatorUser and scopes its query
+  // by claims.tenant_id; the hook only needs to confirm a product_admin token was valid.
+  const routeConfig = request.routeOptions?.config as { operatorSelfScoped?: boolean } | undefined;
+  if (routeConfig?.operatorSelfScoped === true) return;
 
   // product_admin: derive resource tenant_id from route — precedence: path param → body → query
   const params = request.params as Record<string, unknown>;
