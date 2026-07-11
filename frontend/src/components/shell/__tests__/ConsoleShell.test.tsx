@@ -180,19 +180,22 @@ describe('ConsoleShell (HUB-1577)', () => {
   });
 
   describe('HUB-1578 sidebar role filter (AC#1, AC#5)', () => {
-    it('AC#5: super_admin sees all 3 nav items (Dashboard, Audit, Settings)', () => {
+    it('AC#5: super_admin sees all nav items (Dashboard, Audit, Connections, Settings)', () => {
       setSession(SUPER);
       renderShellAt('/console/dashboard', <div>X</div>);
       expect(screen.getByTestId('nav-dashboard')).toBeInTheDocument();
       expect(screen.getByTestId('nav-audit')).toBeInTheDocument();
+      // HUB-1795 (S6 of HUB-1783) — Connections entry added.
+      expect(screen.getByTestId('nav-connections')).toBeInTheDocument();
       expect(screen.getByTestId('nav-settings')).toBeInTheDocument();
     });
 
-    it('AC#1: product_admin sees ONLY Dashboard (audit + settings filtered out)', () => {
+    it('AC#1: product_admin sees ONLY Dashboard (audit + connections + settings filtered out)', () => {
       setSession(PRODUCT);
       renderShellAt('/console/dashboard', <div>X</div>);
       expect(screen.getByTestId('nav-dashboard')).toBeInTheDocument();
       expect(screen.queryByTestId('nav-audit')).toBeNull();
+      expect(screen.queryByTestId('nav-connections')).toBeNull();
       expect(screen.queryByTestId('nav-settings')).toBeNull();
     });
   });

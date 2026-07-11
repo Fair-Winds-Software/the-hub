@@ -181,6 +181,9 @@ const VendorRegister = lazy(() => import('./routes/VendorRegister'));
 const CloudRegister = lazy(() => import('./routes/CloudRegister'));
 // HUB-1438 (E-CMP-WAVE4b S5) — GRC-Lite Policy Register UI.
 const PolicyRegister = lazy(() => import('./routes/PolicyRegister'));
+// HUB-1795 (S6 of HUB-1783) — Connections admin panel. super_admin only per S6 AC#2:
+// mode toggles mutate LIVE↔MOCK state and each flip is an audited billing-plane event.
+const Connections = lazy(() => import('./routes/Connections'));
 
 export function App() {
   useEffect(() => {
@@ -465,6 +468,15 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="product_admin">
                   <RecommendationResultView />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1795 (S6 of HUB-1783) — Connections admin panel. */}
+            <Route
+              path="/console/connections"
+              element={
+                <GuardedRoute requiredRole="super_admin">
+                  <Connections />
                 </GuardedRoute>
               }
             />

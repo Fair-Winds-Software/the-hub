@@ -1,24 +1,24 @@
-// Authorized by HUB-1782 (S9 of HUB-1773) — 3-state Stripe connection status indicator +
-// mode toggle. Distinguishes states by SHAPE (accessibility) not color alone:
+// Authorized by HUB-1782 (S9 of HUB-1773) — 3-state connection status indicator + mode
+// toggle. Distinguishes states by SHAPE (accessibility) not color alone:
 //   LIVE + ok       → solid filled dot        (green)
 //   MOCK            → dashed outlined dot     (gray)
 //   LIVE + degraded → warning triangle        (amber)
 //   LIVE + down     → warning triangle        (red)
-//
-// ARIA labels convey the full state to screen readers regardless of the visual channel.
-// Reason text (for degraded/down) shown on hover. Poll every 30s via a setInterval on
-// GET /api/v1/admin/connections/stripe/status. Mode toggle calls PUT ../mode and refetches.
+// Authorized by HUB-1795 (S6 of HUB-1783) — generalized from StripeConnectionStatus to
+// ConnectionStatus + `name` prop. Backend routes are the generic /connections/:name/*
+// endpoints from HUB-1793 (S4). Same 3 visual states, same ARIA labels (label prefix is
+// derived from `label` prop with a Title-Case fallback of `name`), same 30s poll, same
+// 2-consecutive-down banner.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../lib/api';
 
-const STATUS_PATH = '/api/v1/admin/connections/stripe/status';
-const MODE_PATH = '/api/v1/admin/connections/stripe/mode';
 const POLL_INTERVAL_MS = 30_000;
 
 export type Mode = 'live' | 'mock';
 export type Health = 'ok' | 'degraded' | 'down';
 
-export interface StripeStatus {
+export interface ConnectionStatusPayload {
+  name: string;
   mode: Mode;
   health: Health;
   reason?: string;
@@ -27,16 +27,19 @@ export interface StripeStatus {
 }
 
 interface Props {
+  /** Registered connection name (matches the backend route param, e.g. 'stripe', 'ga'). */
+  name: string;
+  /** Human-facing label. Defaults to Title-Case of `name`. */
+  label?: string;
   /** For test injection — production usage should omit and rely on the default fetcher. */
-  fetcher?: () => Promise<StripeStatus>;
+  fetcher?: () => Promise<ConnectionStatusPayload>;
   /** For test injection — production usage relies on the default apiClient PUT. */
   onFlip?: (mode: Mode) => Promise<void>;
 }
 
-const DEFAULT_FETCHER = (): Promise<StripeStatus> => apiClient.get<StripeStatus>(STATUS_PATH);
-const DEFAULT_FLIP = async (mode: Mode): Promise<void> => {
-  await apiClient.put<{ mode: Mode }>(MODE_PATH, { mode });
-};
+function titleCase(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 // ── Shape components ────────────────────────────────────────────────────────────
 // Rendered as inline SVG so shape is intrinsic to the DOM rather than color/background.
@@ -71,22 +74,22 @@ function WarningTriangle({ variant }: { variant: 'degraded' | 'down' }) {
 // ── Indicator ───────────────────────────────────────────────────────────────────
 
 interface IndicatorProps {
-  status: StripeStatus;
+  status: ConnectionStatusPayload;
+  label: string;
 }
-function StatusIndicator({ status }: IndicatorProps) {
+function StatusIndicator({ status, label }: IndicatorProps) {
   let shape: React.ReactNode;
   let aria: string;
   if (status.mode === 'mock') {
     shape = <DashedDot />;
-    aria = 'Stripe: mock';
+    aria = `${label}: mock`;
   } else if (status.health === 'ok') {
     shape = <SolidDot />;
-    aria = 'Stripe: live, healthy';
+    aria = `${label}: live, healthy`;
   } else {
     shape = <WarningTriangle variant={status.health} />;
-    aria = `Stripe: live, ${status.health}${status.reason ? ` — ${status.reason}` : ''}`;
+    aria = `${label}: live, ${status.health}${status.reason ? ` — ${status.reason}` : ''}`;
   }
-
   return (
     <span
       role="status"
@@ -101,7 +104,7 @@ function StatusIndicator({ status }: IndicatorProps) {
       }}
     >
       {shape}
-      <span>Stripe: {status.mode === 'mock' ? 'mock' : `live · ${status.health}`}</span>
+      <span>{label}: {status.mode === 'mock' ? 'mock' : `live · ${status.health}`}</span>
     </span>
   );
 }
@@ -109,15 +112,15 @@ function StatusIndicator({ status }: IndicatorProps) {
 // ── Mode toggle ─────────────────────────────────────────────────────────────────
 
 interface ToggleProps {
+  label: string;
   currentMode: Mode;
   onFlip: (mode: Mode) => Promise<void>;
   onSuccess: () => void;
   disabled?: boolean;
 }
-function ModeToggle({ currentMode, onFlip, onSuccess, disabled }: ToggleProps) {
+function ModeToggle({ label, currentMode, onFlip, onSuccess, disabled }: ToggleProps) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
   const flip = useCallback(
     async (target: Mode) => {
       if (target === currentMode || busy || disabled) return;
@@ -134,7 +137,6 @@ function ModeToggle({ currentMode, onFlip, onSuccess, disabled }: ToggleProps) {
     },
     [currentMode, busy, disabled, onFlip, onSuccess],
   );
-
   const buttonStyle = (active: boolean): React.CSSProperties => ({
     padding: '4px 10px',
     fontSize: '12px',
@@ -145,10 +147,9 @@ function ModeToggle({ currentMode, onFlip, onSuccess, disabled }: ToggleProps) {
     cursor: busy || disabled ? 'not-allowed' : 'pointer',
     opacity: busy || disabled ? 0.6 : 1,
   });
-
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-      <span role="group" aria-label="Stripe connection mode">
+      <span role="group" aria-label={`${label} connection mode`}>
         <button
           type="button"
           onClick={() => void flip('live')}
@@ -173,24 +174,41 @@ function ModeToggle({ currentMode, onFlip, onSuccess, disabled }: ToggleProps) {
   );
 }
 
-// ── StripeConnectionStatus ──────────────────────────────────────────────────────
+// ── ConnectionStatus ────────────────────────────────────────────────────────────
 
-export function StripeConnectionStatus({ fetcher = DEFAULT_FETCHER, onFlip = DEFAULT_FLIP }: Props = {}) {
-  const [status, setStatus] = useState<StripeStatus | null>(null);
+export function ConnectionStatus(props: Props) {
+  const { name, fetcher, onFlip } = props;
+  const label = props.label ?? titleCase(name);
+
+  const defaultFetcher = useCallback(
+    (): Promise<ConnectionStatusPayload> => apiClient.get<ConnectionStatusPayload>(`/api/v1/admin/connections/${name}/status`),
+    [name],
+  );
+  const defaultFlip = useCallback(
+    async (mode: Mode): Promise<void> => {
+      await apiClient.put<{ mode: Mode }>(`/api/v1/admin/connections/${name}/mode`, { mode });
+    },
+    [name],
+  );
+
+  const effectiveFetcher = fetcher ?? defaultFetcher;
+  const effectiveFlip = onFlip ?? defaultFlip;
+
+  const [status, setStatus] = useState<ConnectionStatusPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [downStreak, setDownStreak] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refetch = useCallback(async () => {
     try {
-      const next = await fetcher();
+      const next = await effectiveFetcher();
       setStatus(next);
       setError(null);
       setDownStreak((n) => (next.mode === 'live' && next.health === 'down' ? n + 1 : 0));
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [fetcher]);
+  }, [effectiveFetcher]);
 
   useEffect(() => {
     void refetch();
@@ -205,12 +223,12 @@ export function StripeConnectionStatus({ fetcher = DEFAULT_FETCHER, onFlip = DEF
   if (error && !status) {
     return (
       <span role="alert" style={{ color: '#ef4444', fontSize: '12px' }}>
-        Stripe status unavailable: {error}
+        {label} status unavailable: {error}
       </span>
     );
   }
   if (!status) {
-    return <span style={{ color: '#6b7280', fontSize: '12px' }}>Loading Stripe status…</span>;
+    return <span style={{ color: '#6b7280', fontSize: '12px' }}>Loading {label} status…</span>;
   }
 
   const banner = downStreak >= 2 && status.mode === 'live' && status.health === 'down' ? (
@@ -225,7 +243,7 @@ export function StripeConnectionStatus({ fetcher = DEFAULT_FETCHER, onFlip = DEF
         marginBottom: '8px',
       }}
     >
-      Stripe LIVE connection is down: {status.reason ?? 'unknown reason'}
+      {label} LIVE connection is down: {status.reason ?? 'unknown reason'}
     </div>
   ) : null;
 
@@ -233,8 +251,8 @@ export function StripeConnectionStatus({ fetcher = DEFAULT_FETCHER, onFlip = DEF
     <div style={{ display: 'inline-block' }}>
       {banner}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <StatusIndicator status={status} />
-        <ModeToggle currentMode={status.mode} onFlip={onFlip} onSuccess={() => void refetch()} />
+        <StatusIndicator status={status} label={label} />
+        <ModeToggle label={label} currentMode={status.mode} onFlip={effectiveFlip} onSuccess={() => void refetch()} />
       </div>
     </div>
   );

@@ -34,7 +34,9 @@ import { DashboardSidebar } from './dashboard/DashboardSidebar';
 import { WidgetErrorBoundary } from './dashboard/WidgetErrorBoundary';
 // HUB-1782 (S9 of HUB-1773) — Stripe connection status indicator + mode toggle
 // mounted in the header so operators can see connection health at a glance.
-import { StripeConnectionStatus } from '../components/StripeConnectionStatus';
+// HUB-1795 (S6 of HUB-1783) — generalized from StripeConnectionStatus to
+// <ConnectionStatus name="stripe" />; same visual + ARIA behavior.
+import { ConnectionStatus } from '../components/ConnectionStatus';
 
 const PAGE_TITLE = 'Dashboard | HUB Console';
 
@@ -64,8 +66,9 @@ export default function Dashboard(): React.ReactElement {
               Portfolio overview — MRR, per-product status, and recent activity.
             </p>
           </div>
-          {/* HUB-1782 (S9 of HUB-1773): Stripe connection status + mode toggle. */}
-          <StripeConnectionStatus />
+          {/* HUB-1782 (S9 of HUB-1773) + HUB-1795 (S6 of HUB-1783):
+              Stripe connection status + mode toggle via generalized indicator. */}
+          <ConnectionStatus name="stripe" />
         </div>
       </header>
 

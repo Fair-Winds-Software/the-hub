@@ -3,7 +3,10 @@
 // v0.1 list is intentionally minimal: dashboard is real (HUB-1644 Dashboard shell — replaced
 // the HUB-1577/1694 DashboardStub), audit/settings are placeholders the sidebar filter in
 // HUB-1578 will RBAC-gate.
-import { LayoutDashboard, ScrollText, Settings, type LucideIcon } from 'lucide-react';
+// HUB-1795 (S6 of HUB-1783) — Connections admin panel entry added; super_admin gated
+// because the mode toggle mutates HUB↔external state (Stripe mode = billing-plane
+// consequence). Icon is `Plug` from lucide.
+import { LayoutDashboard, Plug, ScrollText, Settings, type LucideIcon } from 'lucide-react';
 import type { OperatorRole } from '../stores/sessionStore';
 
 export interface NavItem {
@@ -32,6 +35,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     route: '/console/audit',
     requiredRole: 'super_admin',
     icon: ScrollText,
+  },
+  {
+    id: 'connections',
+    label: 'Connections',
+    route: '/console/connections',
+    requiredRole: 'super_admin',
+    icon: Plug,
   },
   {
     id: 'settings',
