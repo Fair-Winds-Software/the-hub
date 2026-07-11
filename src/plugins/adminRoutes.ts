@@ -63,6 +63,8 @@ import adminPricingSimulateRoutes from '../routes/admin/pricingSimulate.js';
 import adminGrandfatherRoutes from '../routes/admin/grandfathers.js';
 // HUB-1767 (E-V2-PP-5 S8, HUB-1729, HUB-1701) — quarterly cycle preview endpoint
 import quarterlyCycleRoutes from '../routes/admin/quarterlyCycles.js';
+// HUB-1781 (S8 of HUB-1773) — external-app connection mode toggle (Stripe today)
+import adminConnectionsRoutes from '../routes/admin/connections.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -109,6 +111,8 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminGrandfatherRoutes);
     // HUB-1767 (E-V2-PP-5 S8): quarterly cycle preview endpoint
     await scope.register(quarterlyCycleRoutes);
+    // HUB-1781 (S8 of HUB-1773): Stripe connection mode toggle
+    await scope.register(adminConnectionsRoutes);
   });
 };
 

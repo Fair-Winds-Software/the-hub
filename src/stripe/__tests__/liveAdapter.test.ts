@@ -5,7 +5,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type Stripe from 'stripe';
 import { LiveStripeAdapter } from '../liveAdapter.js';
-import { AppError } from '../../errors/AppError.js';
 
 // Deep-mocked Stripe client. Each facet method is a vi.fn() we control per test.
 function makeSdkMock(): Stripe {
@@ -150,30 +149,29 @@ describe('LiveStripeAdapter — delegation + idempotencyKey pass-through', () =>
   });
 });
 
-describe('LiveStripeAdapter — error mapping', () => {
-  it('maps StripeInvalidRequestError to AppError(400)', async () => {
-    const sdk = makeSdkMock();
-    const adapter = new LiveStripeAdapter(sdk);
-    // Use the actual Stripe error class from the SDK so mapStripeError instanceof check works.
-    const { default: RealStripe } = await import('stripe');
-    (sdk.customers.create as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new RealStripe.errors.StripeInvalidRequestError({ message: 'bad param' }),
-    );
-    await expect(adapter.customers.create({ email: 'x' })).rejects.toBeInstanceOf(AppError);
-    await expect(adapter.customers.create({ email: 'x' })).rejects.toMatchObject({ statusCode: 400 });
-  });
-
-  it('maps StripeRateLimitError to AppError(429)', async () => {
+describe('LiveStripeAdapter — SDK errors propagate through unchanged', () => {
+  // Adapter no longer wraps SDK errors via mapStripeError — that mapping happens at the
+  // service-layer outer try/catch (which existed pre-adapter and remains). Adapter's job
+  // is to expose the shape contract + timeout wrap; error classification is caller-owned.
+  it('propagates StripeInvalidRequestError as-is', async () => {
     const sdk = makeSdkMock();
     const adapter = new LiveStripeAdapter(sdk);
     const { default: RealStripe } = await import('stripe');
-    (sdk.subscriptions.cancel as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new RealStripe.errors.StripeRateLimitError({ message: 'slow down' }),
-    );
-    await expect(adapter.subscriptions.cancel('sub_test')).rejects.toMatchObject({ statusCode: 429 });
+    const err = new RealStripe.errors.StripeInvalidRequestError({ message: 'bad param' });
+    (sdk.customers.create as ReturnType<typeof vi.fn>).mockRejectedValue(err);
+    await expect(adapter.customers.create({ email: 'x' })).rejects.toBe(err);
   });
 
-  it('re-throws non-Stripe errors unchanged', async () => {
+  it('propagates StripeRateLimitError as-is', async () => {
+    const sdk = makeSdkMock();
+    const adapter = new LiveStripeAdapter(sdk);
+    const { default: RealStripe } = await import('stripe');
+    const err = new RealStripe.errors.StripeRateLimitError({ message: 'slow down' });
+    (sdk.subscriptions.cancel as ReturnType<typeof vi.fn>).mockRejectedValue(err);
+    await expect(adapter.subscriptions.cancel('sub_test')).rejects.toBe(err);
+  });
+
+  it('propagates non-Stripe errors as-is', async () => {
     const sdk = makeSdkMock();
     const adapter = new LiveStripeAdapter(sdk);
     (sdk.balance.retrieve as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('network dead'));
@@ -182,15 +180,29 @@ describe('LiveStripeAdapter — error mapping', () => {
 });
 
 describe('LiveStripeAdapter — schema drift detection', () => {
-  it('throws AppError(502) when SDK returns malformed response', async () => {
+  it('throws AppError(502) when SDK returns malformed response (production only)', async () => {
+    const original = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const sdk = makeSdkMock();
+      const adapter = new LiveStripeAdapter(sdk);
+      // Missing required fields: no `id`, no `object`.
+      (sdk.customers.create as ReturnType<typeof vi.fn>).mockResolvedValue({ email: 'a@b.co' });
+      await expect(adapter.customers.create({ email: 'a@b.co' })).rejects.toMatchObject({
+        statusCode: 502,
+        message: expect.stringContaining('Stripe response schema drift') as unknown as string,
+      });
+    } finally {
+      process.env.NODE_ENV = original;
+    }
+  });
+
+  it('non-production silently returns raw when SDK returns malformed response', async () => {
     const sdk = makeSdkMock();
     const adapter = new LiveStripeAdapter(sdk);
-    // Missing required fields: no `id`, no `object`.
     (sdk.customers.create as ReturnType<typeof vi.fn>).mockResolvedValue({ email: 'a@b.co' });
-    await expect(adapter.customers.create({ email: 'a@b.co' })).rejects.toMatchObject({
-      statusCode: 502,
-      message: expect.stringContaining('Stripe response schema drift') as unknown as string,
-    });
+    const result = await adapter.customers.create({ email: 'a@b.co' });
+    expect(result).toEqual({ email: 'a@b.co' });
   });
 
   it('drops unknown fields silently (Zod default behavior — not passthrough)', async () => {

@@ -12,10 +12,22 @@
 // INVARIANT: Plans with billing_mode='credit' MUST NOT produce any Stripe SDK calls. Verified by
 // __tests__/billingMode.guard.integration.test.ts asserting zero mock invocations on the Stripe SDK
 // for credit-mode createSubscription/cancelSubscription.
+// HUB-1781 (S8 of HUB-1773): SDK access routed through StripeConnection registry —
+// getStripeConnection() returns Live or Mock adapter based on operator-set mode. The
+// adapter internally applies withStripeTimeout + mapStripeError + Zod validation, so
+// the try/catch blocks below wrapping mapStripeError are now no-ops in success paths
+// (adapter throws AppError directly); they remain for narrower diff / defensive parity
+// with pre-migration behavior.
+// HUB-1781 (S8): retained `import type Stripe from 'stripe'` for the webhook handler
+// paths below that parse stored raw_event JSON — those payloads have Stripe SDK shape
+// by construction (captured verbatim at receive time). Type-only imports are permitted
+// everywhere per scripts/lint-stripe-boundary.mjs; they erase at runtime.
 import type Stripe from 'stripe';
 import crypto from 'crypto';
 import { getPool } from '../db/pool.js';
-import { getStripe, stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
+import { stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
+import { getStripeConnection } from '../stripe/registry.js';
+import type { Customer, Subscription } from '../stripe/schemas.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../lib/logger.js';
 import { getPlanById } from './planCatalogService.js';
@@ -105,8 +117,8 @@ export async function ensureStripeCustomer(tenantId: string, email: string): Pro
 
   if (rows[0]) return rows[0].stripe_customer_id;
 
-  const stripe = getStripe();
-  let customer: Stripe.Customer;
+  const stripe = getStripeConnection();
+  let customer: Customer;
   try {
     customer = await stripe.customers.create(
       { email, metadata: { tenant_id: tenantId } },
@@ -175,9 +187,9 @@ export async function createSubscription(
 
   const priceId = plan.stripe_price_id;
   const customerId = await ensureStripeCustomer(tenantId, email);
-  const stripe = getStripe();
+  const stripe = getStripeConnection();
 
-  let sub: Stripe.Subscription;
+  let sub: Subscription;
   try {
     sub = await stripe.subscriptions.create(
       {
@@ -264,7 +276,7 @@ export async function cancelSubscription(
     return updated[0]!;
   }
 
-  const stripe = getStripe();
+  const stripe = getStripeConnection();
   if (immediate) {
     try {
       await stripe.subscriptions.cancel(rows[0].stripe_subscription_id);
@@ -412,7 +424,7 @@ export async function handleSubscriptionDeleted(eventId: string): Promise<void> 
 export async function retryInvoicePayment(
   stripeInvoiceId: string,
 ): Promise<{ status: string; amountPaid: number }> {
-  const stripe = getStripe();
+  const stripe = getStripeConnection();
   try {
     const invoice = await stripe.invoices.pay(stripeInvoiceId);
     return {

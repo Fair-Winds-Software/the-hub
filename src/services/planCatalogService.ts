@@ -8,7 +8,8 @@
 //   match the post-flip mode). Audit row written; isCreditMode cache invalidated.
 import type Stripe from 'stripe';
 import { getPool } from '../db/pool.js';
-import { getStripe, stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
+import { stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
+import { getStripeConnection } from '../stripe/registry.js';
 import { AppError } from '../errors/AppError.js';
 import { clearCreditModeCacheEntry } from './stripeService.js';
 import { writeAuditEntry } from './auditLogService.js';
@@ -127,8 +128,8 @@ async function resolveOrCreateStripeProduct(productId: string): Promise<string> 
   if (!rows[0]) throw new AppError(404, 'Product not found');
   if (rows[0].stripe_product_id) return rows[0].stripe_product_id;
 
-  const stripe = getStripe();
-  let stripeProduct: Stripe.Product;
+  const stripe = getStripeConnection();
+  let stripeProduct: import('../stripe/schemas.js').Product;
   try {
     stripeProduct = await withStripeTimeout(() =>
       stripe.products.create(
@@ -168,13 +169,14 @@ export async function createPlan(productId: string, planDef: PlanDef): Promise<P
     stripeProductId,
   );
 
-  const stripe = getStripe();
-  let stripePrice: Stripe.Price;
+  const stripe = getStripeConnection();
+  let stripePrice: import('../stripe/schemas.js').Price;
   try {
     stripePrice = await withStripeTimeout(() =>
-      stripe.prices.create(priceParams, {
-        idempotencyKey: stripeIdempotencyKey('create-price', productId, planDef.key),
-      }),
+      stripe.prices.create(
+        priceParams as unknown as import('../stripe/connection.js').CreatePriceInput,
+        { idempotencyKey: stripeIdempotencyKey('create-price', productId, planDef.key) },
+      ),
     );
   } catch (err) {
     mapStripeError(err);

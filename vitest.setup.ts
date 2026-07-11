@@ -23,3 +23,8 @@ process.env.OPERATOR_JWT_SECRET = process.env.OPERATOR_JWT_SECRET ?? 'test-opera
 // Authorized by HUB-1771 Phase 4 — PORTAL_JWT_SECRET is not in config/env.ts REQUIRED
 // (used only by portal/auth.ts) but the route throws 500 without it. Fallback here.
 process.env.PORTAL_JWT_SECRET = process.env.PORTAL_JWT_SECRET ?? 'test-portal-jwt-secret-vitest-fallback';
+// HUB-1781 (S8 of HUB-1773) — REDIS_URL / DATABASE_URL fallbacks so buildApp()'s
+// validateEnv doesn't reject in tests. Pre-existing gap surfaced when the S8 refactor
+// exercised more test files than prior runs did.
+process.env.REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
+process.env.DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://hub:hub@localhost:5432/hub_dev';

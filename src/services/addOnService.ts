@@ -7,7 +7,8 @@
 //   with audit_log emission and a soft-archive path guarded by tenant_add_ons.status='active'
 //   references. Mirrors the HUB-1651 plans extension for shape + audit contract.
 import { getPool } from '../db/pool.js';
-import { getStripe, stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
+import { stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
+import { getStripeConnection } from '../stripe/registry.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../lib/logger.js';
 import { writeAuditEntry } from './auditLogService.js';
@@ -100,7 +101,7 @@ export async function createAddOn(productId: string, addOnDef: AddOnDef): Promis
   if (existing[0]) return existing[0];
 
   const stripeProductId = await resolveStripeProduct(productId);
-  const stripe = getStripe();
+  const stripe = getStripeConnection();
 
   const priceParams =
     addOnDef.billingType === 'one_time'
@@ -223,8 +224,8 @@ export async function activateAddOn(
   );
   if (existing[0]) return existing[0];
 
-  const stripe = getStripe();
-  let updatedSub: import('stripe').default.Subscription;
+  const stripe = getStripeConnection();
+  let updatedSub: import('../stripe/schemas.js').Subscription;
   try {
     updatedSub = await withStripeTimeout(() =>
       stripe.subscriptions.update(
@@ -282,7 +283,7 @@ export async function deactivateAddOn(
   );
 
   if (subs[0] && row.stripe_subscription_item_id) {
-    const stripe = getStripe();
+    const stripe = getStripeConnection();
     try {
       await withStripeTimeout(() =>
         stripe.subscriptions.update(subs[0]!.stripe_subscription_id, {

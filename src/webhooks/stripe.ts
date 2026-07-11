@@ -5,7 +5,7 @@
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { Readable } from 'stream';
-import { getStripeClient } from '../stripe/client.js';
+import { getStripeConnection } from '../stripe/registry.js';
 import { getQueueForEventType, isRecognizedEventType, getDlqQueue } from '../queues/index.js';
 import { getPool } from '../db/pool.js';
 import logger from '../lib/logger.js';
@@ -53,7 +53,7 @@ const stripeWebhookPlugin: FastifyPluginAsync = async (fastify) => {
 
       let event;
       try {
-        const stripe = getStripeClient();
+        const stripe = getStripeConnection();
         event = stripe.webhooks.constructEvent(
           request.rawBody,
           Array.isArray(sig) ? sig[0] : sig,

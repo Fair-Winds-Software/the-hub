@@ -1,6 +1,7 @@
 // Authorized by HUB-1482 — grantCredit(): Stripe customer balance transaction + immutable ledger INSERT
 import { getPool } from '../db/pool.js';
-import { getStripe, mapStripeError } from '../stripe/client.js';
+import { mapStripeError } from '../stripe/client.js';
+import { getStripeConnection } from '../stripe/registry.js';
 import { AppError } from '../errors/AppError.js';
 
 export interface CreditDef {
@@ -57,7 +58,7 @@ export async function grantCredit(
   if (!custRows[0]) throw new AppError(400, 'No Stripe customer for tenant');
   const customerId = custRows[0].stripe_customer_id;
 
-  const stripe = getStripe();
+  const stripe = getStripeConnection();
   let stripeTxnId: string;
   try {
     const txn = await withStripeTimeout(() =>

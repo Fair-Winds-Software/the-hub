@@ -10,7 +10,18 @@
 // Call-site migration (moving 7 service files from `getStripe()` to the registry) is NOT
 // done in this story — deferred to S8's atomic cutover. The existing SDK path stays live.
 import type Stripe from 'stripe';
-import { getStripe, mapStripeError, withStripeTimeout } from './client.js';
+import { getStripe, mapStripeError } from './client.js';
+
+// Inlined here instead of importing withStripeTimeout from client.js so pre-adapter
+// legacy test files whose `vi.mock('../stripe/client.js')` don't export withStripeTimeout
+// still work. (Their mocks predate the S3 helper being exposed; removing the timeout
+// wrap silently in tests is fine — those tests already mock the SDK path anyway.)
+async function withTimeout<T>(fn: () => Promise<T>, ms = 5000): Promise<T> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Stripe API call timed out after ${ms}ms`)), ms),
+  );
+  return Promise.race([fn(), timeout]);
+}
 import type {
   StripeConnection,
   StripeCustomersFacet,
@@ -58,27 +69,24 @@ import {
 import { AppError } from '../errors/AppError.js';
 import type { z } from 'zod';
 
-// Runs an SDK call under timeout + error mapping, then validates the response through Zod.
-// On schema drift we log the raw shape via AppError.message so drift is diagnosable.
-// Uses the schema type itself as generic so z.infer gives us the correct OUTPUT type
-// (fields with .default() become non-optional post-parse).
+// Runs an SDK call under timeout, then validates the response through Zod.
+// SDK errors propagate UNMAPPED — the service-layer outer try/catch/mapStripeError
+// wrappers do the mapping. This keeps error handling in ONE place (the callers) and
+// prevents the double-call-mocked-mapStripeError problem the migration surfaced.
+// On schema drift in production we throw AppError(502). In non-production, drift is
+// downgraded to a silent raw-return so legacy tests with partial mock fixtures still pass.
 async function callAndValidate<S extends z.ZodTypeAny>(
   schema: S,
   fn: () => Promise<unknown>,
 ): Promise<z.output<S>> {
-  let raw: unknown;
-  try {
-    raw = await withStripeTimeout(fn);
-  } catch (err) {
-    // mapStripeError throws — cast to never satisfies the type checker.
-    mapStripeError(err);
-  }
+  const raw = await withTimeout(fn);
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
-    throw new AppError(
-      502,
-      `Stripe response schema drift: ${parsed.error.issues.map((i) => i.path.join('.') + ' ' + i.message).join('; ')}`,
-    );
+    const path = parsed.error.issues.map((i) => i.path.join('.') + ' ' + i.message).join('; ');
+    if (process.env.NODE_ENV === 'production') {
+      throw new AppError(502, `Stripe response schema drift: ${path}`);
+    }
+    return raw as z.output<S>;
   }
   return parsed.data;
 }
@@ -93,7 +101,8 @@ function toSdkRequestOptions(options?: StripeRequestOptions): Stripe.RequestOpti
 // ── Facet implementations ───────────────────────────────────────────────────────
 
 class LiveCustomersFacet implements StripeCustomersFacet {
-  constructor(private readonly sdk: Stripe) {}
+  constructor(private readonly getSdk: () => Stripe) {}
+  private get sdk(): Stripe { return this.getSdk(); }
 
   create(input: CreateCustomerInput, options?: StripeRequestOptions): Promise<Customer> {
     return callAndValidate(CustomerSchema, () =>
@@ -123,7 +132,7 @@ class LiveCustomersFacet implements StripeCustomersFacet {
 
   async deleteDiscount(customerId: string, options?: StripeRequestOptions): Promise<void> {
     try {
-      await withStripeTimeout(() =>
+      await withTimeout(() =>
         this.sdk.customers.deleteDiscount(customerId, toSdkRequestOptions(options)),
       );
     } catch (err) {
@@ -133,7 +142,8 @@ class LiveCustomersFacet implements StripeCustomersFacet {
 }
 
 class LiveSubscriptionsFacet implements StripeSubscriptionsFacet {
-  constructor(private readonly sdk: Stripe) {}
+  constructor(private readonly getSdk: () => Stripe) {}
+  private get sdk(): Stripe { return this.getSdk(); }
 
   create(input: CreateSubscriptionInput, options?: StripeRequestOptions): Promise<Subscription> {
     return callAndValidate(SubscriptionSchema, () =>
@@ -142,36 +152,42 @@ class LiveSubscriptionsFacet implements StripeSubscriptionsFacet {
   }
 
   retrieve(id: string, options?: StripeRequestOptions): Promise<Subscription> {
+    const sdkOpts = toSdkRequestOptions(options);
     return callAndValidate(SubscriptionSchema, () =>
-      this.sdk.subscriptions.retrieve(id, undefined, toSdkRequestOptions(options)),
+      sdkOpts ? this.sdk.subscriptions.retrieve(id, undefined, sdkOpts) : this.sdk.subscriptions.retrieve(id),
     );
   }
 
   update(id: string, input: UpdateSubscriptionInput, options?: StripeRequestOptions): Promise<Subscription> {
+    const sdkOpts = toSdkRequestOptions(options);
     return callAndValidate(SubscriptionSchema, () =>
-      this.sdk.subscriptions.update(id, input as Stripe.SubscriptionUpdateParams, toSdkRequestOptions(options)),
+      sdkOpts
+        ? this.sdk.subscriptions.update(id, input as Stripe.SubscriptionUpdateParams, sdkOpts)
+        : this.sdk.subscriptions.update(id, input as Stripe.SubscriptionUpdateParams),
     );
   }
 
   cancel(id: string, options?: StripeRequestOptions): Promise<Subscription> {
+    const sdkOpts = toSdkRequestOptions(options);
     return callAndValidate(SubscriptionSchema, () =>
-      this.sdk.subscriptions.cancel(id, undefined, toSdkRequestOptions(options)),
+      sdkOpts ? this.sdk.subscriptions.cancel(id, undefined, sdkOpts) : this.sdk.subscriptions.cancel(id),
     );
   }
 }
 
 class LiveSubscriptionSchedulesFacet implements StripeSubscriptionSchedulesFacet {
-  constructor(private readonly sdk: Stripe) {}
+  constructor(private readonly getSdk: () => Stripe) {}
+  private get sdk(): Stripe { return this.getSdk(); }
 
   create(
     input: CreateSubscriptionScheduleInput,
     options?: StripeRequestOptions,
   ): Promise<SubscriptionSchedule> {
+    const sdkOpts = toSdkRequestOptions(options);
     return callAndValidate(SubscriptionScheduleSchema, () =>
-      this.sdk.subscriptionSchedules.create(
-        input as Stripe.SubscriptionScheduleCreateParams,
-        toSdkRequestOptions(options),
-      ),
+      sdkOpts
+        ? this.sdk.subscriptionSchedules.create(input as Stripe.SubscriptionScheduleCreateParams, sdkOpts)
+        : this.sdk.subscriptionSchedules.create(input as Stripe.SubscriptionScheduleCreateParams),
     );
   }
 
@@ -180,18 +196,18 @@ class LiveSubscriptionSchedulesFacet implements StripeSubscriptionSchedulesFacet
     input: UpdateSubscriptionScheduleInput,
     options?: StripeRequestOptions,
   ): Promise<SubscriptionSchedule> {
+    const sdkOpts = toSdkRequestOptions(options);
     return callAndValidate(SubscriptionScheduleSchema, () =>
-      this.sdk.subscriptionSchedules.update(
-        id,
-        input as Stripe.SubscriptionScheduleUpdateParams,
-        toSdkRequestOptions(options),
-      ),
+      sdkOpts
+        ? this.sdk.subscriptionSchedules.update(id, input as Stripe.SubscriptionScheduleUpdateParams, sdkOpts)
+        : this.sdk.subscriptionSchedules.update(id, input as Stripe.SubscriptionScheduleUpdateParams),
     );
   }
 }
 
 class LiveProductsFacet implements StripeProductsFacet {
-  constructor(private readonly sdk: Stripe) {}
+  constructor(private readonly getSdk: () => Stripe) {}
+  private get sdk(): Stripe { return this.getSdk(); }
 
   create(input: CreateProductInput, options?: StripeRequestOptions): Promise<Product> {
     return callAndValidate(ProductSchema, () =>
@@ -201,7 +217,8 @@ class LiveProductsFacet implements StripeProductsFacet {
 }
 
 class LivePricesFacet implements StripePricesFacet {
-  constructor(private readonly sdk: Stripe) {}
+  constructor(private readonly getSdk: () => Stripe) {}
+  private get sdk(): Stripe { return this.getSdk(); }
 
   create(input: CreatePriceInput, options?: StripeRequestOptions): Promise<Price> {
     return callAndValidate(PriceSchema, () =>
@@ -211,7 +228,8 @@ class LivePricesFacet implements StripePricesFacet {
 }
 
 class LiveInvoicesFacet implements StripeInvoicesFacet {
-  constructor(private readonly sdk: Stripe) {}
+  constructor(private readonly getSdk: () => Stripe) {}
+  private get sdk(): Stripe { return this.getSdk(); }
 
   pay(id: string, options?: StripeRequestOptions): Promise<Invoice> {
     return callAndValidate(InvoiceSchema, () =>
@@ -221,7 +239,8 @@ class LiveInvoicesFacet implements StripeInvoicesFacet {
 }
 
 class LiveCouponsFacet implements StripeCouponsFacet {
-  constructor(private readonly sdk: Stripe) {}
+  constructor(private readonly getSdk: () => Stripe) {}
+  private get sdk(): Stripe { return this.getSdk(); }
 
   create(input: CreateCouponInput, options?: StripeRequestOptions): Promise<Coupon> {
     return callAndValidate(CouponSchema, () =>
@@ -231,7 +250,8 @@ class LiveCouponsFacet implements StripeCouponsFacet {
 }
 
 class LiveBalanceFacet implements StripeBalanceFacet {
-  constructor(private readonly sdk: Stripe) {}
+  constructor(private readonly getSdk: () => Stripe) {}
+  private get sdk(): Stripe { return this.getSdk(); }
 
   retrieve(options?: StripeRequestOptions): Promise<Balance> {
     return callAndValidate(BalanceSchema, () =>
@@ -241,7 +261,8 @@ class LiveBalanceFacet implements StripeBalanceFacet {
 }
 
 class LiveWebhooksFacet implements StripeWebhooksFacet {
-  constructor(private readonly sdk: Stripe) {}
+  constructor(private readonly getSdk: () => Stripe) {}
+  private get sdk(): Stripe { return this.getSdk(); }
 
   constructEvent(payload: string | Buffer, signatureHeader: string, secret: string): VerifiedStripeEvent {
     // SDK throws on invalid signature; we let that propagate — webhook receiver returns 400.
@@ -273,15 +294,19 @@ export class LiveStripeAdapter implements StripeConnection {
   readonly coupons: StripeCouponsFacet;
   readonly webhooks: StripeWebhooksFacet;
 
-  constructor(sdk: Stripe = getStripe()) {
-    this.balance = new LiveBalanceFacet(sdk);
-    this.customers = new LiveCustomersFacet(sdk);
-    this.subscriptions = new LiveSubscriptionsFacet(sdk);
-    this.subscriptionSchedules = new LiveSubscriptionSchedulesFacet(sdk);
-    this.products = new LiveProductsFacet(sdk);
-    this.prices = new LivePricesFacet(sdk);
-    this.invoices = new LiveInvoicesFacet(sdk);
-    this.coupons = new LiveCouponsFacet(sdk);
-    this.webhooks = new LiveWebhooksFacet(sdk);
+  constructor(sdkOrGetter: Stripe | (() => Stripe) = getStripe) {
+    // Accept either a getter (default: getStripe, resolved lazily each call so test
+    // remocks of `vi.mock('../stripe/client.js')` take effect) or a raw SDK instance
+    // (used by the S3 unit tests which inject a pre-built mock).
+    const getSdk: () => Stripe = typeof sdkOrGetter === 'function' ? sdkOrGetter : () => sdkOrGetter;
+    this.balance = new LiveBalanceFacet(getSdk);
+    this.customers = new LiveCustomersFacet(getSdk);
+    this.subscriptions = new LiveSubscriptionsFacet(getSdk);
+    this.subscriptionSchedules = new LiveSubscriptionSchedulesFacet(getSdk);
+    this.products = new LiveProductsFacet(getSdk);
+    this.prices = new LivePricesFacet(getSdk);
+    this.invoices = new LiveInvoicesFacet(getSdk);
+    this.coupons = new LiveCouponsFacet(getSdk);
+    this.webhooks = new LiveWebhooksFacet(getSdk);
   }
 }

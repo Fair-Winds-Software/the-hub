@@ -7,7 +7,8 @@
 import type Stripe from 'stripe';
 import { isCreditMode } from './stripeService.js';
 import { getPool } from '../db/pool.js';
-import { getStripe, mapStripeError } from '../stripe/client.js';
+import { mapStripeError } from '../stripe/client.js';
+import { getStripeConnection } from '../stripe/registry.js';
 import { getCurrentOverride } from './priceOverrideService.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../lib/logger.js';
@@ -131,7 +132,7 @@ export async function schedulePlanChange(
   );
   const couponId = discountRows[0]?.stripe_coupon_id ?? null;
 
-  const stripe = getStripe();
+  const stripe = getStripeConnection();
   let stripeScheduleId: string | null = null;
   let appliedAt: Date | null = null;
 
@@ -202,7 +203,7 @@ export async function schedulePlanChange(
         phases: [
           { items: phase1Items, end_date: periodEndTs },
           phase2,
-        ],
+        ] as unknown as import('../stripe/connection.js').UpdateSubscriptionScheduleInput['phases'],
       });
     }
   } catch (err) {

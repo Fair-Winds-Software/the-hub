@@ -99,10 +99,15 @@ export interface CreateSubscriptionScheduleInput {
   customer?: string;
   start_date?: number | 'now';
   end_behavior?: 'release' | 'cancel';
-  phases: Array<{
-    items: Array<{ price: string; quantity?: number }>;
+  // Phases is optional when from_subscription is provided — Stripe infers phases
+  // from the source subscription. Callers pass phases explicitly on greenfield creates.
+  phases?: Array<{
+    items: Array<{ price?: string; quantity?: number }>;
     iterations?: number;
     proration_behavior?: 'create_prorations' | 'none' | 'always_invoice';
+    // Additional per-phase params (start_date, end_date, coupon, price_data, etc.)
+    // pass through as unknown; adapter forwards them to the SDK verbatim.
+    [key: string]: unknown;
   }>;
   metadata?: Record<string, string>;
 }

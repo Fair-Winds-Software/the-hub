@@ -553,10 +553,12 @@ class MockSubscriptionSchedulesFacet implements StripeSubscriptionSchedulesFacet
         customer,
         subscription: input.from_subscription ?? null,
         status: 'not_started',
-        phases: input.phases.map((ph) => ({
+        // When from_subscription is supplied without explicit phases, we mint a
+        // single trivial phase; real Stripe infers from the source subscription.
+        phases: (input.phases ?? []).map((ph) => ({
           start_date: created,
           end_date: null,
-          items: ph.items,
+          items: ph.items.map((it) => ({ price: it.price ?? '', quantity: it.quantity ?? 1 })),
         })),
         current_phase: null,
         metadata: input.metadata ?? {},

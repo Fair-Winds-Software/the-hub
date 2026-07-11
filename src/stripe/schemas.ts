@@ -136,6 +136,12 @@ export const SubscriptionItemSchema = z.object({
   object: z.literal('subscription_item'),
   price: PriceSchema,
   quantity: z.number().int().positive().default(1),
+  // API 2026-05-27.dahlia moved current_period_start/end to items. Existing HUB
+  // call sites read `item?.current_period_start` (see stripeService.ts), so we
+  // preserve it here even though it's optional at the schema level so older Stripe
+  // versions that emit it at subscription-level still validate.
+  current_period_start: StripeTimestamp.nullable().optional(),
+  current_period_end: StripeTimestamp.nullable().optional(),
 });
 
 export const SubscriptionSchema = z.object({

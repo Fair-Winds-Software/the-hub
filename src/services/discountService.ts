@@ -1,7 +1,8 @@
 // Authorized by HUB-1480 — createDiscount(): named discount catalog backed by Stripe coupons
 // Authorized by HUB-1481 — applyDiscount() + removeDiscount(): per-tenant discount operations
 import { getPool } from '../db/pool.js';
-import { getStripe, stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
+import { stripeIdempotencyKey, mapStripeError } from '../stripe/client.js';
+import { getStripeConnection } from '../stripe/registry.js';
 import { AppError } from '../errors/AppError.js';
 
 export interface DiscountDef {
@@ -70,7 +71,7 @@ export async function createDiscount(productId: string, def: DiscountDef): Promi
     if (pct < 1 || pct > 100) throw new AppError(400, 'percent_off must be 1–100');
   }
 
-  const stripe = getStripe();
+  const stripe = getStripeConnection();
   const couponParams: Record<string, unknown> = {
     name: def.name,
     duration: def.duration,
@@ -87,7 +88,7 @@ export async function createDiscount(productId: string, def: DiscountDef): Promi
   let stripeCouponId: string;
   try {
     const coupon = await withStripeTimeout(() =>
-      stripe.coupons.create(couponParams as Parameters<typeof stripe.coupons.create>[0], {
+      stripe.coupons.create(couponParams as unknown as Parameters<typeof stripe.coupons.create>[0], {
         idempotencyKey: stripeIdempotencyKey('create-discount', productId, def.name),
       }),
     );
@@ -171,7 +172,7 @@ export async function applyDiscount(
   if (!custRows[0]) throw new AppError(400, 'No Stripe customer for tenant');
   const customerId = custRows[0].stripe_customer_id;
 
-  const stripe = getStripe();
+  const stripe = getStripeConnection();
   try {
     // Stripe SDK typings omit `coupon` from CustomerUpdateParams in some versions;
     // the REST API accepts it and the double-cast bypasses excess property checking.
@@ -215,7 +216,7 @@ export async function removeDiscount(
   if (!custRows[0]) throw new AppError(400, 'No Stripe customer for tenant');
   const customerId = custRows[0].stripe_customer_id;
 
-  const stripe = getStripe();
+  const stripe = getStripeConnection();
   try {
     await withStripeTimeout(() => stripe.customers.deleteDiscount(customerId));
   } catch (err) {
