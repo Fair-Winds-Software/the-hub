@@ -184,6 +184,9 @@ const PolicyRegister = lazy(() => import('./routes/PolicyRegister'));
 // HUB-1795 (S6 of HUB-1783) — Connections admin panel. super_admin only per S6 AC#2:
 // mode toggles mutate LIVE↔MOCK state and each flip is an audited billing-plane event.
 const Connections = lazy(() => import('./routes/Connections'));
+// HUB-1799 (S3 of HUB-1784) — Mock Data admin panel. super_admin only per S3 AC#1:
+// seed/wipe operations mutate the mock store; mock-only guard on backend is the real check.
+const MockData = lazy(() => import('./routes/MockData'));
 
 export function App() {
   useEffect(() => {
@@ -477,6 +480,15 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="super_admin">
                   <Connections />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1799 (S3 of HUB-1784) — Mock Data admin panel. */}
+            <Route
+              path="/console/mock-data"
+              element={
+                <GuardedRoute requiredRole="super_admin">
+                  <MockData />
                 </GuardedRoute>
               }
             />

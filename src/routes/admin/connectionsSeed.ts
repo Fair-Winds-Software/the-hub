@@ -111,6 +111,19 @@ const adminConnectionsSeedRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // ── HUB-1799 (S3 of HUB-1784) — snapshot (read-only row counts) ─────────────
+  // Safe to call regardless of mode: this is a read-only inspection of the mock schema.
+  // The MockData admin panel calls this to render its snapshot grid and to compute
+  // pre-delete counts for the S5 confirm modal.
+  fastify.get<{ Params: { name: string } }>(
+    '/api/v1/admin/connections/:name/seed/snapshot',
+    async (req) => {
+      assertStripeName(req.params.name);
+      const counts = await seed.snapshot();
+      return { counts };
+    },
+  );
+
   fastify.post<{ Params: { name: string }; Body: PresetBody }>(
     '/api/v1/admin/connections/:name/seed/preset',
     async (req, reply) => {

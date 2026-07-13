@@ -6,7 +6,10 @@
 // HUB-1795 (S6 of HUB-1783) — Connections admin panel entry added; super_admin gated
 // because the mode toggle mutates HUB↔external state (Stripe mode = billing-plane
 // consequence). Icon is `Plug` from lucide.
-import { LayoutDashboard, Plug, ScrollText, Settings, type LucideIcon } from 'lucide-react';
+// HUB-1799 (S3 of HUB-1784) — Mock Data admin panel entry added; super_admin gated
+// because seed/wipe operations mutate the mock store (mock-only guard on backend).
+// Icon is `Database` from lucide.
+import { Database, LayoutDashboard, Plug, ScrollText, Settings, type LucideIcon } from 'lucide-react';
 import type { OperatorRole } from '../stores/sessionStore';
 
 export interface NavItem {
@@ -42,6 +45,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     route: '/console/connections',
     requiredRole: 'super_admin',
     icon: Plug,
+  },
+  {
+    id: 'mock-data',
+    label: 'Mock Data',
+    route: '/console/mock-data',
+    requiredRole: 'super_admin',
+    icon: Database,
   },
   {
     id: 'settings',

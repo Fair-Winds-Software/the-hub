@@ -270,6 +270,32 @@ describe('POST /api/v1/admin/connections/stripe/seed/preset', () => {
   });
 });
 
+describe('GET /api/v1/admin/connections/stripe/seed/snapshot', () => {
+  it('returns row counts from the seed façade', async () => {
+    const app = await buildHarness();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/connections/stripe/seed/snapshot',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { counts: Record<string, number> };
+    expect(body.counts.customers).toBe(7);
+    expect(body.counts.subscriptions).toBe(7);
+    expect(mockSnapshot).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it('returns 404 for an unsupported connection name', async () => {
+    const app = await buildHarness();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/connections/ga/seed/snapshot',
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
 describe('DELETE /api/v1/admin/connections/stripe/seed', () => {
   it('wipes the mock store, returns rows_deleted from the pre-reset snapshot', async () => {
     const app = await buildHarness();
