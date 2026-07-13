@@ -6,6 +6,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import MockData from '../MockData';
 
+// SeedControls fetches presets on mount via apiClient; stub the client to keep
+// this shell-level test focused on the S3 concerns (slots + mode-aware disable).
+vi.mock('../../lib/api', () => ({
+  apiClient: {
+    get: vi.fn().mockResolvedValue({ presets: [] }),
+    post: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 afterEach(() => {
   cleanup();
 });
@@ -53,7 +62,8 @@ describe('MockData — mode=mock (enabled)', () => {
     });
     expect(screen.getByTestId('mock-data-snapshot-customers')).toHaveTextContent('3');
     expect(screen.getByTestId('mock-data-snapshot-subscriptions')).toHaveTextContent('3');
-    expect(screen.getByTestId('mock-data-seed-slot')).toBeInTheDocument();
+    // S4 SeedControls now fills the seed slot; S5 placeholder remains until that story lands.
+    expect(screen.getByTestId('mock-data-seed-controls')).toBeInTheDocument();
     expect(screen.getByTestId('mock-data-delete-slot')).toBeInTheDocument();
     expect(screen.queryByTestId('mock-data-live-disabled')).not.toBeInTheDocument();
   });
@@ -76,7 +86,7 @@ describe('MockData — mode=live (disabled)', () => {
     });
     expect(screen.getByRole('alert').textContent).toContain('unavailable while Stripe is in LIVE mode');
     expect(screen.queryByTestId('mock-data-snapshot')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('mock-data-seed-slot')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mock-data-seed-controls')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mock-data-delete-slot')).not.toBeInTheDocument();
   });
 
