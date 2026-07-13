@@ -11,6 +11,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../lib/api';
 // HUB-1800 (S4 of HUB-1784) — SeedControls fills the S3 shell's seed slot.
 import { SeedControls } from './mockData/SeedControls';
+// HUB-1801 (S5 of HUB-1784) — DeleteAllControls fills the S3 shell's delete slot.
+import { DeleteAllControls } from './mockData/DeleteAllControls';
 
 const PAGE_TITLE = 'Mock Data | HUB Console';
 const CONNECTIONS_LIST_PATH = '/api/v1/admin/connections';
@@ -49,17 +51,6 @@ interface Props {
   };
 }
 
-// HUB-1801 (S5 of HUB-1784) — placeholder for the delete-all slot until S5 lands.
-function DeleteAllControlsSlot({ snapshot: _snapshot, refresh: _refresh }: { snapshot: SeedSnapshot; refresh: () => void }): React.ReactElement {
-  return (
-    <section
-      data-testid="mock-data-delete-slot"
-      className="rounded-md border border-dashed border-sailcloth/40 p-4 text-sm text-deep-charcoal/60"
-    >
-      Delete-all controls will render here (S5).
-    </section>
-  );
-}
 
 export default function MockData({ fetchers }: Props = {}): React.ReactElement {
   if (typeof document !== 'undefined' && document.title !== PAGE_TITLE) {
@@ -210,7 +201,7 @@ export default function MockData({ fetchers }: Props = {}): React.ReactElement {
           </section>
 
           <SeedControls snapshot={snapshot} refresh={() => void refreshSnapshot()} />
-          <DeleteAllControlsSlot snapshot={snapshot} refresh={() => void refreshSnapshot()} />
+          <DeleteAllControls snapshot={snapshot} refresh={() => void refreshSnapshot()} />
         </>
       )}
     </div>

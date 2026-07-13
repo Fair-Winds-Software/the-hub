@@ -62,9 +62,9 @@ describe('MockData — mode=mock (enabled)', () => {
     });
     expect(screen.getByTestId('mock-data-snapshot-customers')).toHaveTextContent('3');
     expect(screen.getByTestId('mock-data-snapshot-subscriptions')).toHaveTextContent('3');
-    // S4 SeedControls now fills the seed slot; S5 placeholder remains until that story lands.
+    // S4 SeedControls and S5 DeleteAllControls both slotted into the shell.
     expect(screen.getByTestId('mock-data-seed-controls')).toBeInTheDocument();
-    expect(screen.getByTestId('mock-data-delete-slot')).toBeInTheDocument();
+    expect(screen.getByTestId('mock-data-delete-controls')).toBeInTheDocument();
     expect(screen.queryByTestId('mock-data-live-disabled')).not.toBeInTheDocument();
   });
 
@@ -87,7 +87,7 @@ describe('MockData — mode=live (disabled)', () => {
     expect(screen.getByRole('alert').textContent).toContain('unavailable while Stripe is in LIVE mode');
     expect(screen.queryByTestId('mock-data-snapshot')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mock-data-seed-controls')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('mock-data-delete-slot')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mock-data-delete-controls')).not.toBeInTheDocument();
   });
 
   it('marks the page with data-connection-mode="live"', async () => {
