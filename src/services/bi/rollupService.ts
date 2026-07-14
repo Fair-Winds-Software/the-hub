@@ -19,7 +19,7 @@
 //   enum metrics       → value_str (LAST semantic — take the most-recent bucket value)
 import { getPool } from '../../db/pool.js';
 import logger from '../../lib/logger.js';
-import { getCatalogEntry, listCatalog, type RollupSemantic } from './metricCatalog.js';
+import { listCatalog, type RollupSemantic } from './metricCatalog.js';
 
 export type RollupWindow = 'hourly' | 'daily' | 'monthly';
 
