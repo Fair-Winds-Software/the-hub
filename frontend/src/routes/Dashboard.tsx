@@ -32,6 +32,8 @@ import { PortfolioSummaryWidget } from './dashboard/PortfolioSummaryWidget';
 import { ProductGridWidget } from './dashboard/ProductGridWidget';
 import { DashboardSidebar } from './dashboard/DashboardSidebar';
 import { WidgetErrorBoundary } from './dashboard/WidgetErrorBoundary';
+// HUB-1809 (S7 of HUB-1785) — Business Intelligence tile cluster (MRR/DAU/Churn).
+import { BiTileCluster } from './dashboard/BiTileCluster';
 // HUB-1782 (S9 of HUB-1773) — Stripe connection status indicator + mode toggle
 // mounted in the header so operators can see connection health at a glance.
 // HUB-1795 (S6 of HUB-1783) — generalized from StripeConnectionStatus to
@@ -71,6 +73,20 @@ export default function Dashboard(): React.ReactElement {
           <ConnectionStatus name="stripe" />
         </div>
       </header>
+
+      {/* HUB-1809 (S7 of HUB-1785) — BI tile cluster (portfolio MRR/DAU/Churn).
+          Silently hidden for product_admin operators (endpoint returns 403). */}
+      <section
+        aria-labelledby="dashboard-region-bi-heading"
+        data-testid="dashboard-region-bi"
+      >
+        <h2 id="dashboard-region-bi-heading" className="sr-only">
+          Portfolio business intelligence
+        </h2>
+        <WidgetErrorBoundary widgetLabel="bi-tile-cluster">
+          <BiTileCluster />
+        </WidgetErrorBoundary>
+      </section>
 
       <section
         aria-labelledby="dashboard-region-portfolio-summary-heading"
