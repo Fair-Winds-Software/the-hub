@@ -67,6 +67,8 @@ import quarterlyCycleRoutes from '../routes/admin/quarterlyCycles.js';
 import adminConnectionsRoutes from '../routes/admin/connections.js';
 // HUB-1797 (S1 of HUB-1784) — LLM prompt → mock-store seed endpoint
 import adminConnectionsSeedRoutes from '../routes/admin/connectionsSeed.js';
+// HUB-1805 (S3 of HUB-1785) — BI metric ingestion endpoint
+import adminBiMetricsRoutes from '../routes/admin/biMetrics.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -117,6 +119,8 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminConnectionsRoutes);
     // HUB-1797 (S1 of HUB-1784): LLM prompt → seed plan endpoint
     await scope.register(adminConnectionsSeedRoutes);
+    // HUB-1805 (S3 of HUB-1785): BI metric ingestion endpoint
+    await scope.register(adminBiMetricsRoutes);
   });
 };
 
