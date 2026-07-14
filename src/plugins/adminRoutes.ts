@@ -69,6 +69,8 @@ import adminConnectionsRoutes from '../routes/admin/connections.js';
 import adminConnectionsSeedRoutes from '../routes/admin/connectionsSeed.js';
 // HUB-1805 (S3 of HUB-1785) — BI metric ingestion endpoint
 import adminBiMetricsRoutes from '../routes/admin/biMetrics.js';
+// HUB-1807 (S5 of HUB-1785) — BI portfolio summary endpoint
+import adminBiPortfolioRoutes from '../routes/admin/biPortfolio.js';
 
 const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
   // Auth routes are public — registered without the RBAC onRequest hook
@@ -121,6 +123,8 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminConnectionsSeedRoutes);
     // HUB-1805 (S3 of HUB-1785): BI metric ingestion endpoint
     await scope.register(adminBiMetricsRoutes);
+    // HUB-1807 (S5 of HUB-1785): BI portfolio summary endpoint
+    await scope.register(adminBiPortfolioRoutes);
   });
 };
 
