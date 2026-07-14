@@ -555,6 +555,25 @@ export function getRetentionMonthlyQueue(connection?: ConnectionOptions): Queue 
   return getOrCreateQueue(RETENTION_MONTHLY_DEF.name, connection);
 }
 
+// Authorized by HUB-1806 (S4 of HUB-1785) — BI rollup queue. One queue, three job
+// names (bi_rollup_hourly / bi_rollup_daily / bi_rollup_monthly). The processor
+// dispatches to runRollup() via the biRollupJob wrapper.
+const BI_ROLLUP_DEF: QueueDefinition = {
+  name: 'bi-rollup',
+  concurrency: 1,
+  maxAttempts: 3,
+  backoff: { type: 'exponential', delay: 5000 },
+  deadLetterQueue: DLQ_QUEUE_NAME,
+  processor: async (job: Job) => {
+    const { runBiRollupJob } = await import('./biRollupJob.js');
+    await runBiRollupJob(job);
+  },
+};
+
+export function getBiRollupQueue(connection?: ConnectionOptions): Queue {
+  return getOrCreateQueue(BI_ROLLUP_DEF.name, connection);
+}
+
 // Register concrete queues — worker scaffold discovers these at startup via getAllQueueDefinitions()
 registerQueue(STRIPE_EVENT_DEF);
 registerQueue(BATCH_SWEEP_DEF);
@@ -600,5 +619,7 @@ registerQueue(BILLING_JOBS_DEF);
 registerQueue(RETENTION_MONTHLY_DEF);
 // HUB-1707 role-rename compat window auto-flip (5-min tick, self-removing on flip)
 registerQueue(ROLE_RENAME_COMPAT_FLIP_DEF);
+// HUB-1806 (S4 of HUB-1785) BI rollup queue (hourly / daily / monthly job names)
+registerQueue(BI_ROLLUP_DEF);
 // DLQ registered last; processor-less sentinel — worker skips it, ops investigate manually
 registerQueue(DLQ_DEF);
