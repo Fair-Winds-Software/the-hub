@@ -130,14 +130,16 @@ describe('Dashboard shell (HUB-1644)', () => {
   });
 
   describe('AC#1 — heading order h1 → h2 (no skipped levels)', () => {
-    it('renders exactly one h1 and three h2 section headings', () => {
+    it('renders exactly one h1 and four h2 section headings (BI region added by HUB-1809)', () => {
       renderDashboard();
       const headings = screen.getAllByRole('heading', { hidden: true });
       const levels = headings.map(
         (h) => h.tagName.toLowerCase(),
       );
       expect(levels.filter((l) => l === 'h1').length).toBe(1);
-      expect(levels.filter((l) => l === 'h2').length).toBe(3);
+      // HUB-1809 (S7 of HUB-1785) added the 'Portfolio business intelligence'
+      // region above portfolio-summary, so h2 count went from 3 → 4.
+      expect(levels.filter((l) => l === 'h2').length).toBe(4);
     });
   });
 

@@ -187,6 +187,8 @@ const Connections = lazy(() => import('./routes/Connections'));
 // HUB-1799 (S3 of HUB-1784) — Mock Data admin panel. super_admin only per S3 AC#1:
 // seed/wipe operations mutate the mock store; mock-only guard on backend is the real check.
 const MockData = lazy(() => import('./routes/MockData'));
+// HUB-1810 (S8 of HUB-1785) — Per-product BI drill-in page.
+const ProductBiPage = lazy(() => import('./routes/productDetail/ProductBiPage'));
 
 export function App() {
   useEffect(() => {
@@ -244,6 +246,15 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="super_admin">
                   <PricingModelEditor />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1810 (S8 of HUB-1785) — Per-product BI drill-in page. */}
+            <Route
+              path="/console/products/:productId/bi"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <ProductBiPage />
                 </GuardedRoute>
               }
             />
