@@ -28,10 +28,20 @@ const mockRevokeProduct = vi.hoisted(() =>
   })),
 );
 
+const mockBuildOnboardingPrompt = vi.hoisted(() =>
+  vi.fn(async () => ({
+    prompt: '# Wire this codebase to HUB',
+    checksum: 'a'.repeat(64),
+  })),
+);
+
 vi.mock('../../../services/onboardingService.js', () => ({
   registerProduct: mockRegisterProduct,
   rotateCredential: mockRotateCredential,
   revokeProduct: mockRevokeProduct,
+}));
+vi.mock('../../../services/onboardingPromptService.js', () => ({
+  buildOnboardingPrompt: mockBuildOnboardingPrompt,
 }));
 
 async function buildHarness(role?: 'super_admin' | 'product_admin') {
@@ -219,6 +229,77 @@ describe('POST /admin/onboarding/:productId/rotate-credential', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(mockRotateCredential).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('POST /admin/onboarding/:productId/prompt', () => {
+  it('403 without operator', async () => {
+    const app = await buildHarness();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/prompt`,
+      payload: { client_id: 'x', client_secret: 'y' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockBuildOnboardingPrompt).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('403 for product_admin', async () => {
+    const app = await buildHarness('product_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/prompt`,
+      payload: { client_id: 'x', client_secret: 'y' },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('200 for super_admin — returns prompt + checksum', async () => {
+    const app = await buildHarness('super_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/prompt`,
+      payload: { client_id: 'cid-42', client_secret: 'sec-42', hub_url: 'https://h' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { prompt: string; checksum: string };
+    expect(body.checksum).toMatch(/^[a-f0-9]{64}$/);
+    const call = mockBuildOnboardingPrompt.mock.calls[0]![0] as {
+      product_id: string;
+      client_id: string;
+      client_secret: string;
+      hub_url: string;
+    };
+    expect(call.product_id).toBe(PRODUCT_URL_ID);
+    expect(call.client_id).toBe('cid-42');
+    expect(call.client_secret).toBe('sec-42');
+    expect(call.hub_url).toBe('https://h');
+    await app.close();
+  });
+
+  it('400 when client_id missing', async () => {
+    const app = await buildHarness('super_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/prompt`,
+      payload: { client_secret: 'y' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockBuildOnboardingPrompt).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('400 when client_secret missing', async () => {
+    const app = await buildHarness('super_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/prompt`,
+      payload: { client_id: 'x' },
+    });
+    expect(res.statusCode).toBe(400);
     await app.close();
   });
 });
