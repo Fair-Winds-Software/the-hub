@@ -9,7 +9,7 @@ import { useToastStore } from '../../stores/toastStore';
 const TENANT_A = '00000000-0000-4000-8000-00000000eeaa';
 const PRODUCT_ID = '00000000-0000-4000-8000-000000000aaa';
 
-function makeFetchers(overrides: Partial<React.ComponentProps<typeof Onboarding>['fetchers']> = {}) {
+function makeFetchers(overrides: Record<string, unknown> = {}) {
   return {
     listTenants: vi.fn().mockResolvedValue({
       tenants: [{ id: TENANT_A, name: 'Maverick Launch' }],
