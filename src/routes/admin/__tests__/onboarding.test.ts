@@ -54,7 +54,7 @@ async function buildHarness(role?: 'super_admin' | 'product_admin') {
   });
   if (role) {
     app.addHook('onRequest', async (req) => {
-      (req as unknown as { operator: { role: string; operator_id: string } }).operator = {
+      (req as unknown as { operatorUser: { role: string; operator_id: string } }).operatorUser = {
         role,
         operator_id: 'op-1',
       };

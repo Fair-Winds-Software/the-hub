@@ -27,7 +27,7 @@ async function buildHarness(role?: 'super_admin' | 'product_admin') {
   });
   if (role) {
     app.addHook('onRequest', async (req) => {
-      (req as unknown as { operator: { role: string } }).operator = { role };
+      (req as unknown as { operatorUser: { role: string } }).operatorUser = { role };
     });
   }
   await app.register(routes);

@@ -52,8 +52,8 @@ async function buildHarness(
   if (role) {
     app.addHook('onRequest', async (req) => {
       (req as unknown as {
-        operator: { role: string; operator_id: string; tenant_id?: string | null };
-      }).operator = {
+        operatorUser: { role: string; operator_id: string; tenant_id?: string | null };
+      }).operatorUser = {
         role,
         operator_id: 'op-1',
         tenant_id: tenant_id ?? null,

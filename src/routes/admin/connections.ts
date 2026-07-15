@@ -36,7 +36,7 @@ interface OperatorAuth {
 }
 
 function operatorFromRequest(req: FastifyRequest): OperatorAuth {
-  const op = (req as unknown as { operator?: OperatorAuth }).operator;
+  const op = (req as unknown as { operatorUser?: OperatorAuth }).operatorUser;
   return op ?? {};
 }
 

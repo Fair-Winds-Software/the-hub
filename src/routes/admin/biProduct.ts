@@ -25,7 +25,7 @@ interface OperatorAuth {
 }
 
 function operatorFromRequest(req: FastifyRequest): OperatorAuth {
-  return (req as unknown as { operator?: OperatorAuth }).operator ?? {};
+  return (req as unknown as { operatorUser?: OperatorAuth }).operatorUser ?? {};
 }
 
 const VALID_WINDOWS: RollupWindow[] = ['hourly', 'daily', 'monthly'];
