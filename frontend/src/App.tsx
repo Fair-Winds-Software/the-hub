@@ -189,6 +189,8 @@ const Connections = lazy(() => import('./routes/Connections'));
 const MockData = lazy(() => import('./routes/MockData'));
 // HUB-1810 (S8 of HUB-1785) — Per-product BI drill-in page.
 const ProductBiPage = lazy(() => import('./routes/productDetail/ProductBiPage'));
+// HUB-1822 (S5 of HUB-1787) — Onboarding wizard page.
+const Onboarding = lazy(() => import('./routes/Onboarding'));
 
 export function App() {
   useEffect(() => {
@@ -500,6 +502,15 @@ export function App() {
               element={
                 <GuardedRoute requiredRole="super_admin">
                   <MockData />
+                </GuardedRoute>
+              }
+            />
+            {/* HUB-1822 (S5 of HUB-1787) — Onboarding wizard. */}
+            <Route
+              path="/console/onboarding"
+              element={
+                <GuardedRoute requiredRole="super_admin">
+                  <Onboarding />
                 </GuardedRoute>
               }
             />

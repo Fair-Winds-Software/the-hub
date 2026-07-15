@@ -180,7 +180,7 @@ describe('ConsoleShell (HUB-1577)', () => {
   });
 
   describe('HUB-1578 sidebar role filter (AC#1, AC#5)', () => {
-    it('AC#5: super_admin sees all nav items (Dashboard, Audit, Connections, Mock Data, Settings)', () => {
+    it('AC#5: super_admin sees all nav items (Dashboard, Audit, Connections, Mock Data, Onboarding, Settings)', () => {
       setSession(SUPER);
       renderShellAt('/console/dashboard', <div>X</div>);
       expect(screen.getByTestId('nav-dashboard')).toBeInTheDocument();
@@ -189,16 +189,19 @@ describe('ConsoleShell (HUB-1577)', () => {
       expect(screen.getByTestId('nav-connections')).toBeInTheDocument();
       // HUB-1799 (S3 of HUB-1784) — Mock Data entry added.
       expect(screen.getByTestId('nav-mock-data')).toBeInTheDocument();
+      // HUB-1822 (S5 of HUB-1787) — Onboarding entry added.
+      expect(screen.getByTestId('nav-onboarding')).toBeInTheDocument();
       expect(screen.getByTestId('nav-settings')).toBeInTheDocument();
     });
 
-    it('AC#1: product_admin sees ONLY Dashboard (audit + connections + mock-data + settings filtered out)', () => {
+    it('AC#1: product_admin sees ONLY Dashboard (audit + connections + mock-data + onboarding + settings filtered out)', () => {
       setSession(PRODUCT);
       renderShellAt('/console/dashboard', <div>X</div>);
       expect(screen.getByTestId('nav-dashboard')).toBeInTheDocument();
       expect(screen.queryByTestId('nav-audit')).toBeNull();
       expect(screen.queryByTestId('nav-connections')).toBeNull();
       expect(screen.queryByTestId('nav-mock-data')).toBeNull();
+      expect(screen.queryByTestId('nav-onboarding')).toBeNull();
       expect(screen.queryByTestId('nav-settings')).toBeNull();
     });
   });

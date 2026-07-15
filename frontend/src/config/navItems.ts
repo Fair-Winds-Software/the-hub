@@ -9,7 +9,9 @@
 // HUB-1799 (S3 of HUB-1784) — Mock Data admin panel entry added; super_admin gated
 // because seed/wipe operations mutate the mock store (mock-only guard on backend).
 // Icon is `Database` from lucide.
-import { Database, LayoutDashboard, Plug, ScrollText, Settings, type LucideIcon } from 'lucide-react';
+// HUB-1822 (S5 of HUB-1787) — Onboarding wizard entry added; super_admin gated because
+// registration mints new products + credentials. Icon is `UserPlus` from lucide.
+import { Database, LayoutDashboard, Plug, ScrollText, Settings, UserPlus, type LucideIcon } from 'lucide-react';
 import type { OperatorRole } from '../stores/sessionStore';
 
 export interface NavItem {
@@ -52,6 +54,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     route: '/console/mock-data',
     requiredRole: 'super_admin',
     icon: Database,
+  },
+  {
+    id: 'onboarding',
+    label: 'Onboarding',
+    route: '/console/onboarding',
+    requiredRole: 'super_admin',
+    icon: UserPlus,
   },
   {
     id: 'settings',
