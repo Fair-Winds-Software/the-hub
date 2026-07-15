@@ -36,10 +36,12 @@ let refreshPromise: Promise<void> | null = null;
  *      consumer at app bootstrap (no store side effects from this raw call).
  */
 async function fetchRefresh(): Promise<SessionPayload> {
+  // Refresh reads its token from an httpOnly cookie — no body sent. Do NOT set
+  // Content-Type: application/json here or Fastify's JSON body parser will demand
+  // a non-empty body and throw FastifyError 'Body cannot be empty …'.
   const res = await fetch(REFRESH_PATH, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
   });
   if (!res.ok) {
     throw new SessionExpiredError(res.status, 'Refresh failed');
