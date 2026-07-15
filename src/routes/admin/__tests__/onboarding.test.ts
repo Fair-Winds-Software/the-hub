@@ -1,0 +1,148 @@
+// Authorized by HUB-1818 (S1 of HUB-1787) — route tests for POST /admin/onboarding/register.
+// Service is mocked; verifies RBAC + validation + delegation + 201 shape.
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+const mockRegisterProduct = vi.hoisted(() =>
+  vi.fn(async () => ({
+    product_id: '00000000-0000-4000-8000-000000000aaa',
+    slug: 'contenthelm',
+    name: 'ContentHelm',
+    client_id: '00000000-0000-4000-8000-000000000ccc',
+    client_secret: 'plaintext-secret-returned-once',
+  })),
+);
+
+vi.mock('../../../services/onboardingService.js', () => ({
+  registerProduct: mockRegisterProduct,
+}));
+
+async function buildHarness(role?: 'super_admin' | 'product_admin') {
+  const Fastify = (await import('fastify')).default;
+  const routes = (await import('../onboarding.js')).default;
+  const app = Fastify();
+  app.setErrorHandler((err, _req, reply) => {
+    const status = (err as { statusCode?: number }).statusCode ?? 500;
+    return reply.status(status).send({ error: err.message });
+  });
+  if (role) {
+    app.addHook('onRequest', async (req) => {
+      (req as unknown as { operator: { role: string; operator_id: string } }).operator = {
+        role,
+        operator_id: 'op-1',
+      };
+    });
+  }
+  await app.register(routes);
+  return app;
+}
+
+const VALID_BODY = {
+  tenant_id: '00000000-0000-4000-8000-00000000eeaa',
+  name: 'ContentHelm',
+  slug: 'contenthelm',
+  product_type: 'saas',
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('POST /api/v1/admin/onboarding/register — RBAC', () => {
+  it('403 without operator', async () => {
+    const app = await buildHarness();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/onboarding/register',
+      payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockRegisterProduct).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('403 for product_admin', async () => {
+    const app = await buildHarness('product_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/onboarding/register',
+      payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('201 for super_admin', async () => {
+    const app = await buildHarness('super_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/onboarding/register',
+      payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(201);
+    const body = JSON.parse(res.body) as { product_id: string; client_id: string; client_secret: string };
+    expect(body.client_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(body.client_secret).toBe('plaintext-secret-returned-once');
+    await app.close();
+  });
+});
+
+describe('POST /api/v1/admin/onboarding/register — request validation', () => {
+  it('400 when tenant_id missing', async () => {
+    const app = await buildHarness('super_admin');
+    const { tenant_id: _t, ...rest } = VALID_BODY;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/onboarding/register',
+      payload: rest,
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('400 when name missing', async () => {
+    const app = await buildHarness('super_admin');
+    const { name: _n, ...rest } = VALID_BODY;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/onboarding/register',
+      payload: rest,
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('400 when slug missing', async () => {
+    const app = await buildHarness('super_admin');
+    const { slug: _s, ...rest } = VALID_BODY;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/onboarding/register',
+      payload: rest,
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('400 when product_type is not a string', async () => {
+    const app = await buildHarness('super_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/onboarding/register',
+      payload: { ...VALID_BODY, product_type: 42 },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('passes actor_operator_id from the request operator context', async () => {
+    const app = await buildHarness('super_admin');
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/onboarding/register',
+      payload: VALID_BODY,
+    });
+    const call = mockRegisterProduct.mock.calls[0]![0] as { actor_operator_id: string };
+    expect(call.actor_operator_id).toBe('op-1');
+    await app.close();
+  });
+});
