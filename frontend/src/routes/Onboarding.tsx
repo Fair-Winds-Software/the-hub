@@ -9,6 +9,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../lib/api';
 import { ConfirmDestructive } from '../components/ConfirmDestructive';
 import { useToastStore } from '../stores/toastStore';
+// HUB-1823 (S6 of HUB-1787) — copy-ready Claude Code prompt panel.
+import { CopyablePromptPanel } from './onboarding/CopyablePromptPanel';
 
 const PAGE_TITLE = 'Onboarding | HUB Console';
 const TENANTS_PATH = '/api/v1/admin/tenants';
@@ -356,6 +358,11 @@ function CredentialReveal(props: {
       <p className="mt-2 text-xs text-emerald-800">
         Store these in the target app's <code>.env.local</code>. Do NOT commit to git.
       </p>
+      <CopyablePromptPanel
+        productId={props.result.product_id}
+        clientId={props.result.client_id}
+        clientSecret={props.result.client_secret}
+      />
       <div className="mt-2 flex gap-2">
         <button
           type="button"
@@ -514,6 +521,11 @@ function ManagePanel(props: {
             <dt className="font-semibold">client_secret</dt>
             <dd data-testid="onboarding-rotate-secret"><code>{rotateResult.client_secret}</code></dd>
           </dl>
+          <CopyablePromptPanel
+            productId={rotateResult.product_id}
+            clientId={rotateResult.client_id}
+            clientSecret={rotateResult.client_secret}
+          />
           <button
             type="button"
             data-testid="onboarding-rotate-dismiss"
