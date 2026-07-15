@@ -3,7 +3,7 @@
 // Vertical list of nav items; active item highlight; viewport-responsive auto-collapse
 // at 1024-1280px (Tailwind xl breakpoint); user toggle via uiStore (Zustand).
 // Items the operator cannot access are filtered OUT entirely (no greyed-out state per AC#1).
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSidebarCollapsed, useUIStore } from '../../stores/uiStore';
 import { NAV_ITEMS, type NavItem } from '../../config/navItems';
@@ -48,8 +48,8 @@ export function Sidebar(): React.ReactElement {
           const isActive = location.pathname === item.route;
           return (
             <li key={item.id}>
-              <a
-                href={item.route}
+              <Link
+                to={item.route}
                 aria-current={isActive ? 'page' : undefined}
                 data-testid={`nav-${item.id}`}
                 className={`flex items-center gap-3 px-4 py-2 mx-2 my-0.5 rounded-md font-body text-sm motion-reduce:transition-none transition-colors duration-100 hover:bg-sailcloth/10 focus:outline-none focus:ring-2 focus:ring-sailcloth ${
@@ -60,7 +60,7 @@ export function Sidebar(): React.ReactElement {
               >
                 <Icon size={20} aria-hidden={true} />
                 <span className={showLabelsClass}>{item.label}</span>
-              </a>
+              </Link>
             </li>
           );
         })}

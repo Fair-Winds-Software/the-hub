@@ -191,6 +191,7 @@ const MockData = lazy(() => import('./routes/MockData'));
 const ProductBiPage = lazy(() => import('./routes/productDetail/ProductBiPage'));
 // HUB-1822 (S5 of HUB-1787) — Onboarding wizard page.
 const Onboarding = lazy(() => import('./routes/Onboarding'));
+const NotFound = lazy(() => import('./routes/NotFound'));
 
 export function App() {
   useEffect(() => {
@@ -532,6 +533,17 @@ export function App() {
               <Route path="escalation" element={<EscalationManager />} />
               <Route path="hooks" element={<WorkflowHooksManager />} />
             </Route>
+            {/* Console-shell catch-all: renders a placeholder inside the shell
+                for any /console/* path that no other route matched. Keeps the
+                sidebar visible instead of bouncing to /login. */}
+            <Route
+              path="/console/*"
+              element={
+                <GuardedRoute requiredRole="product_admin">
+                  <NotFound />
+                </GuardedRoute>
+              }
+            />
           </Route>
           <Route path="*" element={<Navigate to="/console/login" replace />} />
         </Routes>
