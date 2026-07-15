@@ -7,7 +7,7 @@
 //   3. If not allowed for requiredRole → render `fallback`
 //      (default: redirect to /console/dashboard) (AC#3).
 //   4. Else render children.
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useIsHydrating } from '../stores/sessionStore';
 import { useRBACGuard } from '../lib/rbac';
@@ -39,12 +39,29 @@ export function RBACRoute({
   const { allowed, role } = useRBACGuard(requiredRole);
   const location = useLocation();
 
+  // HUB-1574 fix: onDenied MUST fire from useEffect, not during render. Firing
+  // during render triggers a Zustand setState (toast add) that re-renders every
+  // subscriber, which re-runs this component, which fires onDenied again — an
+  // infinite render loop bounded only by React's setState-in-render warning and
+  // Chrome's navigation throttler. Symptom: dozens of "Please log in" toasts +
+  // "Throttling navigation to prevent the browser from hanging" console error.
+  const denyReason: 'unauthenticated' | 'insufficient_role' | null = isHydrating
+    ? null
+    : role === null
+      ? 'unauthenticated'
+      : !allowed
+        ? 'insufficient_role'
+        : null;
+
+  useEffect(() => {
+    if (denyReason) onDenied?.(denyReason);
+  }, [denyReason, onDenied]);
+
   if (isHydrating) {
     return <HydrationPlaceholder />;
   }
 
   if (role === null) {
-    onDenied?.('unauthenticated');
     return (
       <Navigate
         to="/console/login"
@@ -55,7 +72,6 @@ export function RBACRoute({
   }
 
   if (!allowed) {
-    onDenied?.('insufficient_role');
     return fallback ?? <Navigate to="/console/dashboard" replace />;
   }
 
