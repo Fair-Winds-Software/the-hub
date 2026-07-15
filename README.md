@@ -29,12 +29,26 @@ Canonical SSoT for everything this project depends on. Maintained by `/infra-aud
 docker-compose up -d         # Start postgres + redis + adminer
 npm install
 cp .env.example .env         # Dev defaults filled in — no edits needed for local Docker stack
-npm run migrate              # Apply all 45 SQL migrations
-                             # (seeds the Maverick Launch internal tenant via migration 001 INSERT)
+npm run migrate              # Apply all SQL migrations
+                             # (seeds Maverick Launch internal tenant via 001
+                             #  AND dev-default super_admin via 084 — see below)
 npm start                    # Boot the API (validateEnv() enforces all required env vars at startup)
 ```
 
 Open Adminer at http://localhost:8080 (system: PostgreSQL, server: postgres, user: hub, password: hub, database: hub_dev).
+
+### First login (dev)
+
+Migration `084_bootstrap_super_admin.sql` seeds a well-known super_admin so a fresh boot is immediately usable via the Console at `/console/login`:
+
+| Field | Value |
+|---|---|
+| Email | `sammy@fairwindssoftware.com` |
+| Password | `hub-dev-password` |
+
+**DEV ONLY.** This is a well-known fixture — the bcrypt hash is committed in the migration so every dev sees the same first-run credentials. Before deploying to prod, either seed a real super_admin ahead of running migrations (084 becomes a no-op via `ON CONFLICT DO NOTHING`) OR rotate the password in `operator_accounts` after first boot and delete this seed row.
+
+**First-run demo walkthrough:** log in → visit `/console/mock-data` → apply the `active-customers-500` preset → the Dashboard, Products, Customer Health, and BI tile cluster populate with demo data. Stripe defaults to MOCK mode; flip to LIVE via `/console/connections` only after configuring real `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SIGNING_SECRET`.
 
 **Required env vars** (enforced by `validateEnv()` at startup — all pre-filled with dev defaults in `.env.example` per HUB-1548):
 
