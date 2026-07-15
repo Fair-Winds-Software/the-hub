@@ -110,6 +110,8 @@ import planChangeRoutes from "./routes/billing/plan-change.routes.js";
 import sdkRoutes from "./routes/sdk.js";
 import leasesRoutes from "./routes/leases.js";
 import usageRoutes from "./routes/usageRoutes.js";
+// HUB-1820 (S3 of HUB-1787) — SDK-facing BI metric ingestion endpoint.
+import biMetricsRoutes from "./routes/biMetrics.js";
 import pricingActiveModelRoutes from "./routes/pricingActiveModelRoutes.js";
 import businessOperatorRoutesPlugin from "./plugins/businessOperatorRoutes.js";
 import adminRoutesPlugin from "./plugins/adminRoutes.js";
@@ -158,6 +160,8 @@ export async function buildApp(dest?: DestinationStream) {
   await fastify.register(sdkRoutes);
   await fastify.register(leasesRoutes);
   await fastify.register(usageRoutes);
+  // HUB-1820 (S3 of HUB-1787) — SDK-facing BI metric ingestion (auth via HUB-98 JWT).
+  await fastify.register(biMetricsRoutes);
   await fastify.register(pricingActiveModelRoutes);
   await fastify.register(businessOperatorRoutesPlugin);
   await fastify.register(adminRoutesPlugin);
