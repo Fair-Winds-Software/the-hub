@@ -7,7 +7,7 @@
 //   3. If not allowed for requiredRole → render `fallback`
 //      (default: redirect to /console/dashboard) (AC#3).
 //   4. Else render children.
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useIsHydrating } from '../stores/sessionStore';
 import { useRBACGuard } from '../lib/rbac';
@@ -39,12 +39,18 @@ export function RBACRoute({
   const { allowed, role } = useRBACGuard(requiredRole);
   const location = useLocation();
 
-  // HUB-1574 fix: onDenied MUST fire from useEffect, not during render. Firing
-  // during render triggers a Zustand setState (toast add) that re-renders every
-  // subscriber, which re-runs this component, which fires onDenied again — an
-  // infinite render loop bounded only by React's setState-in-render warning and
-  // Chrome's navigation throttler. Symptom: dozens of "Please log in" toasts +
-  // "Throttling navigation to prevent the browser from hanging" console error.
+  // HUB-1574 fix: onDenied MUST fire from useEffect, not during render (setState-
+  // in-render loop). AND onDenied must be a ref, not a useEffect dep — GuardedRoute
+  // inlines `onDenied={(r) => addToast(...)}` on every render, so a fresh function
+  // ref each time; if we used [denyReason, onDenied] as deps, the effect would fire
+  // every render (via the onDenied identity churn), causing the same loop we tried
+  // to escape — just relocated to the effect. Ref keeps the callback pointer stable
+  // in the effect body while always invoking the latest closure.
+  const onDeniedRef = useRef(onDenied);
+  useEffect(() => {
+    onDeniedRef.current = onDenied;
+  });
+
   const denyReason: 'unauthenticated' | 'insufficient_role' | null = isHydrating
     ? null
     : role === null
@@ -54,8 +60,8 @@ export function RBACRoute({
         : null;
 
   useEffect(() => {
-    if (denyReason) onDenied?.(denyReason);
-  }, [denyReason, onDenied]);
+    if (denyReason) onDeniedRef.current?.(denyReason);
+  }, [denyReason]);
 
   if (isHydrating) {
     return <HydrationPlaceholder />;
