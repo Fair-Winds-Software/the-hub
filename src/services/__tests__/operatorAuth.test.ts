@@ -132,7 +132,7 @@ describe('refreshOperatorToken()', () => {
   it('rotates token and returns new pair on valid refresh token', async () => {
     mockPoolQuery
       .mockResolvedValueOnce({ rows: [{ id: 'token-uuid-1', operator_id: 'op-uuid-1', token_hash: 'stored-hash' }] })
-      .mockResolvedValueOnce({ rows: [{ id: 'op-uuid-1', role: 'super_admin', tenant_id: null }] });
+      .mockResolvedValueOnce({ rows: [{ id: 'op-uuid-1', email: 'admin@example.com', role: 'super_admin', tenant_id: null }] });
     mockBcryptCompare.mockResolvedValueOnce(true);
     mockClientQuery
       .mockResolvedValueOnce(undefined)                             // BEGIN
@@ -185,7 +185,7 @@ describe('refreshOperatorToken()', () => {
     const dbError = new Error('DB failure');
     mockPoolQuery
       .mockResolvedValueOnce({ rows: [{ id: 'token-uuid-1', operator_id: 'op-uuid-1', token_hash: 'hash' }] })
-      .mockResolvedValueOnce({ rows: [{ id: 'op-uuid-1', role: 'super_admin', tenant_id: null }] });
+      .mockResolvedValueOnce({ rows: [{ id: 'op-uuid-1', email: 'admin@example.com', role: 'super_admin', tenant_id: null }] });
     mockBcryptCompare.mockResolvedValueOnce(true);
     mockClientQuery
       .mockResolvedValueOnce(undefined)  // BEGIN

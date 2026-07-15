@@ -24,10 +24,27 @@ const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // seed row is required. The sentinel mnemonic "0...0a1" = "auth internal" (a1 → "auth 1").
 const HUB_INTERNAL_TENANT_ID = '00000000-0000-0000-0000-0000000000a1';
 
+interface OperatorIdentity {
+  id: string;
+  email: string;
+  name: string;
+  role: 'super_admin' | 'product_admin';
+}
+
 interface LoginResult {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
+  operator: OperatorIdentity;
+}
+
+function displayNameFromEmail(email: string): string {
+  const local = email.split('@')[0] ?? email;
+  return local
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(' ');
 }
 
 interface OperatorRow {
@@ -100,14 +117,23 @@ export async function loginOperator(
     trace_id: audit_context.trace_id ?? null,
   });
 
-  return issueTokenPair(row.id, row.role, row.tenant_id);
+  const tokens = await issueTokenPair(row.id, row.role, row.tenant_id);
+  return {
+    ...tokens,
+    operator: {
+      id: row.id,
+      email,
+      name: displayNameFromEmail(email),
+      role: row.role,
+    },
+  };
 }
 
 async function issueTokenPair(
   operatorId: string,
   role: 'super_admin' | 'product_admin',
   tenantId: string | null,
-): Promise<LoginResult> {
+): Promise<Omit<LoginResult, 'operator'>> {
   const pool = getPool();
   const secret = process.env.OPERATOR_JWT_SECRET!;
   const ttl = parseInt(process.env.OPERATOR_JWT_TTL_SECONDS ?? '900', 10);
@@ -160,10 +186,11 @@ export async function refreshOperatorToken(
   // Reload current claims — role may have changed since original login
   const { rows: opRows } = await pool.query<{
     id: string;
+    email: string;
     role: 'super_admin' | 'product_admin';
     tenant_id: string | null;
   }>(
-    `SELECT id, role, tenant_id FROM operator_accounts WHERE id = $1 AND active = true`,
+    `SELECT id, email, role, tenant_id FROM operator_accounts WHERE id = $1 AND active = true`,
     [tokenRow.operator_id],
   );
   const op = opRows[0];
@@ -208,7 +235,17 @@ export async function refreshOperatorToken(
       { expiresIn: ttl },
     );
     const newTokenId = newRows[0]!.id;
-    return { accessToken, refreshToken: `${newTokenId}.${rawNew}`, expiresIn: ttl };
+    return {
+      accessToken,
+      refreshToken: `${newTokenId}.${rawNew}`,
+      expiresIn: ttl,
+      operator: {
+        id: op.id,
+        email: op.email,
+        name: displayNameFromEmail(op.email),
+        role: op.role,
+      },
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

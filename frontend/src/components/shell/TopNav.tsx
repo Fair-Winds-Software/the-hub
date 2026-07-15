@@ -29,10 +29,7 @@ export function TopNav(): React.ReactElement {
   return (
     <header className="h-14 flex items-center justify-between px-6 bg-primary-navy text-sailcloth shadow-md">
       <div>
-        <span className="font-heading text-lg tracking-wide">Maverick Launch</span>
-        <span className="font-body text-xs ml-2 text-sailcloth/70 hidden sm:inline">
-          HUB Operator Console
-        </span>
+        <span className="font-heading text-lg tracking-wide">The HUB</span>
       </div>
       {operator && (
         <div className="flex items-center gap-3">

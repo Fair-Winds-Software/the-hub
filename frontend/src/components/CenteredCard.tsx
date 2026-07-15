@@ -14,12 +14,12 @@ export function CenteredCard({ children, className = '' }: CenteredCardProps): R
         className={`w-full max-w-[400px] rounded-lg bg-sailcloth p-6 shadow-md ${className}`}
       >
         <header className="mb-6 text-center">
-          <h1 className="font-heading text-3xl text-primary-navy tracking-wide">
-            Maverick Launch
-          </h1>
-          <p className="font-body text-sm text-deep-charcoal mt-1">
-            HUB Operator Console
+          <p className="font-body text-sm text-deep-charcoal">
+            Maverick Launch's
           </p>
+          <h1 className="font-heading text-4xl text-primary-navy tracking-wide leading-tight">
+            The HUB
+          </h1>
         </header>
         {children}
       </div>
