@@ -72,6 +72,172 @@ function generateClientSecret(): string {
   return crypto.randomBytes(32).toString('base64url');
 }
 
+// ── Rotation + revocation (HUB-1819 / S2 of HUB-1787) ─────────────────────────
+// HUB uses OAuth2 client-credentials (HUB-98): apps hold (client_id, client_secret) and
+// exchange them at POST /api/v1/auth/token for short-lived JWTs (default TTL 900s = 15min).
+// Rotation therefore does NOT need a revoked_service_jwts table — outstanding JWTs die
+// naturally within the TTL. What we do:
+//
+//   rotateCredential  = mint a new plaintext secret; replace the bcrypt hash; return the
+//                       plaintext ONCE. client_id stays stable so downstream config only
+//                       needs the secret replaced. The old secret stops working the
+//                       moment the hash is overwritten.
+//   revokeProduct     = flip products.active=false. The auth plugin's POST /auth/token
+//                       query filters on p.active=true, so no new JWTs can be minted for
+//                       a revoked product. Existing JWTs still work until they expire
+//                       (≤15min); that's an acceptable window for most revocation use
+//                       cases. A follow-up story could add a hard-revoke JWT list if a
+//                       specific compliance case demands it.
+
+export interface RotateCredentialInput {
+  product_id: string;
+  actor_operator_id: string;
+  actor_ip?: string | null;
+  actor_trace_id?: string | null;
+  reason?: string;
+}
+
+export interface RotateCredentialResult {
+  product_id: string;
+  slug: string;
+  client_id: string;
+  /** Plaintext — returned ONCE. */
+  client_secret: string;
+}
+
+export async function rotateCredential(input: RotateCredentialInput): Promise<RotateCredentialResult> {
+  assertActor(input.actor_operator_id);
+  const pool = getPool();
+
+  const { rows: prodRows } = await pool.query<{ id: string; slug: string; tenant_id: string }>(
+    `SELECT p.id::text, p.slug, p.tenant_id::text
+       FROM products p WHERE p.id = $1::uuid`,
+    [input.product_id],
+  );
+  if (prodRows.length === 0) {
+    throw new AppError(404, `Unknown product '${input.product_id}'`);
+  }
+  const product = prodRows[0]!;
+
+  const { rows: regRows } = await pool.query<{ id: string; client_id: string }>(
+    `SELECT id::text, client_id::text FROM product_registrations WHERE product_id = $1::uuid
+      ORDER BY created_at DESC LIMIT 1`,
+    [input.product_id],
+  );
+  if (regRows.length === 0) {
+    throw new AppError(
+      404,
+      `Product '${product.slug}' has no registration row — cannot rotate a credential that was never issued`,
+    );
+  }
+  const registration = regRows[0]!;
+
+  const newSecret = generateClientSecret();
+  const newHash = await bcrypt.hash(newSecret, BCRYPT_COST);
+
+  const { rowCount } = await pool.query(
+    `UPDATE product_registrations
+        SET client_secret_hash = $1
+      WHERE id = $2::uuid`,
+    [newHash, registration.id],
+  );
+  if (rowCount === 0) {
+    throw new AppError(500, 'Credential rotation UPDATE affected zero rows');
+  }
+
+  await writeAuditEntry({
+    tenant_id: product.tenant_id,
+    product_id: product.id,
+    actor_id: input.actor_operator_id,
+    actor_type: 'operator',
+    operation: 'UPDATE',
+    table_name: 'product_registrations',
+    record_id: registration.id,
+    new_values: {
+      action: 'product.onboarding.rotate_credential',
+      slug: product.slug,
+      client_id: registration.client_id,
+      reason: input.reason ?? null,
+    },
+    ip_address: input.actor_ip ?? null,
+    trace_id: input.actor_trace_id ?? null,
+  });
+
+  return {
+    product_id: product.id,
+    slug: product.slug,
+    client_id: registration.client_id,
+    client_secret: newSecret,
+  };
+}
+
+export interface RevokeProductInput {
+  product_id: string;
+  actor_operator_id: string;
+  actor_ip?: string | null;
+  actor_trace_id?: string | null;
+  reason?: string;
+}
+
+export interface RevokeProductResult {
+  product_id: string;
+  slug: string;
+  active: false;
+  /**
+   * Maximum window before all previously-issued JWTs expire and hard revocation is
+   * effective. Matches the JWT_EXPIRES_IN default of 900s (15min); real value read
+   * from env for defense-in-depth. Communicated to the caller so downstream UX can
+   * warn the operator ("access ends by <deadline>").
+   */
+  effective_hard_revoke_at: string;
+}
+
+export async function revokeProduct(input: RevokeProductInput): Promise<RevokeProductResult> {
+  assertActor(input.actor_operator_id);
+  const pool = getPool();
+
+  const { rows } = await pool.query<{ id: string; slug: string; tenant_id: string; active: boolean }>(
+    `UPDATE products SET active = false
+      WHERE id = $1::uuid
+      RETURNING id::text, slug, tenant_id::text, active`,
+    [input.product_id],
+  );
+  if (rows.length === 0) {
+    throw new AppError(404, `Unknown product '${input.product_id}'`);
+  }
+  const product = rows[0]!;
+
+  const jwtTtlSec = Number.parseInt(process.env['JWT_EXPIRES_IN'] ?? '900', 10);
+  const hardRevokeAt = new Date(Date.now() + jwtTtlSec * 1000).toISOString();
+
+  await writeAuditEntry({
+    tenant_id: product.tenant_id,
+    product_id: product.id,
+    actor_id: input.actor_operator_id,
+    actor_type: 'operator',
+    operation: 'UPDATE',
+    table_name: 'products',
+    record_id: product.id,
+    new_values: {
+      action: 'product.onboarding.revoke',
+      slug: product.slug,
+      reason: input.reason ?? null,
+      effective_hard_revoke_at: hardRevokeAt,
+    },
+    ip_address: input.actor_ip ?? null,
+    trace_id: input.actor_trace_id ?? null,
+  });
+
+  return {
+    product_id: product.id,
+    slug: product.slug,
+    active: false,
+    effective_hard_revoke_at: hardRevokeAt,
+  };
+}
+
+// ── Registration (HUB-1818 / S1 of HUB-1787) ───────────────────────────────────
+
 export async function registerProduct(input: RegisterProductInput): Promise<RegisterProductResult> {
   assertActor(input.actor_operator_id);
   assertName(input.name);

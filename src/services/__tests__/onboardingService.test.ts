@@ -18,7 +18,7 @@ const mockWriteAuditEntry = vi.hoisted(() =>
 vi.mock('../../db/pool.js', () => ({ getPool: () => mockPool }));
 vi.mock('../auditLogService.js', () => ({ writeAuditEntry: mockWriteAuditEntry }));
 
-const { registerProduct } = await import('../onboardingService.js');
+const { registerProduct, rotateCredential, revokeProduct } = await import('../onboardingService.js');
 
 const TENANT_A = '00000000-0000-4000-8000-00000000eeaa';
 const PRODUCT_A = '00000000-0000-4000-8000-000000000aaa';
@@ -235,5 +235,168 @@ describe('registerProduct — transaction rollback', () => {
     const sqls = mockClient.query.mock.calls.map((c) => String(c[0]));
     expect(sqls).toContain('ROLLBACK');
     expect(mockWriteAuditEntry).not.toHaveBeenCalled();
+  });
+});
+
+// ── HUB-1819 (S2 of HUB-1787) — rotateCredential + revokeProduct ─────────────
+
+function primeRotationPool(opts: {
+  productExists?: boolean;
+  registrationExists?: boolean;
+  updateRowCount?: number;
+} = {}): void {
+  const productExists = opts.productExists ?? true;
+  const registrationExists = opts.registrationExists ?? true;
+  const updateRowCount = opts.updateRowCount ?? 1;
+  mockPool.query.mockImplementation(async (sql: unknown) => {
+    const s = String(sql);
+    if (s.includes('FROM products p WHERE p.id')) {
+      return {
+        rows: productExists
+          ? [{ id: PRODUCT_A, slug: 'contenthelm', tenant_id: TENANT_A }]
+          : [],
+      };
+    }
+    if (s.includes('FROM product_registrations WHERE product_id')) {
+      return {
+        rows: registrationExists
+          ? [{ id: 'reg-1', client_id: '00000000-0000-4000-8000-000000000ccc' }]
+          : [],
+      };
+    }
+    if (s.startsWith('UPDATE product_registrations')) {
+      return { rows: [], rowCount: updateRowCount };
+    }
+    return { rows: [], rowCount: 0 };
+  });
+}
+
+describe('rotateCredential — happy path', () => {
+  it('mints a new client_secret, replaces the hash, keeps client_id stable', async () => {
+    primeRotationPool();
+    const result = await rotateCredential({
+      product_id: PRODUCT_A,
+      actor_operator_id: 'op-1',
+      reason: 'scheduled rotation',
+    });
+    expect(result.product_id).toBe(PRODUCT_A);
+    expect(result.slug).toBe('contenthelm');
+    expect(result.client_id).toBe('00000000-0000-4000-8000-000000000ccc');
+    expect(result.client_secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    // Verify UPDATE fired with a bcrypt hash.
+    const updateCall = mockPool.query.mock.calls.find(
+      (c) => String(c[0]).startsWith('UPDATE product_registrations'),
+    );
+    const params = updateCall![1] as unknown[];
+    expect(params[0]).toMatch(/^\$2[aby]\$12\$/);
+  });
+
+  it('writes a rotate_credential audit entry with client_id + reason', async () => {
+    primeRotationPool();
+    await rotateCredential({
+      product_id: PRODUCT_A,
+      actor_operator_id: 'op-1',
+      reason: 'quarterly',
+    });
+    expect(mockWriteAuditEntry).toHaveBeenCalledOnce();
+    const entry = mockWriteAuditEntry.mock.calls[0]![0] as {
+      new_values: { action: string; client_id: string; reason: string };
+    };
+    expect(entry.new_values.action).toBe('product.onboarding.rotate_credential');
+    expect(entry.new_values.reason).toBe('quarterly');
+  });
+});
+
+describe('rotateCredential — failure paths', () => {
+  it('404 when product_id does not exist', async () => {
+    primeRotationPool({ productExists: false });
+    await expect(
+      rotateCredential({
+        product_id: PRODUCT_A,
+        actor_operator_id: 'op-1',
+      }),
+    ).rejects.toMatchObject({ statusCode: 404 });
+    expect(mockWriteAuditEntry).not.toHaveBeenCalled();
+  });
+
+  it('404 when product exists but has no registration row', async () => {
+    primeRotationPool({ registrationExists: false });
+    await expect(
+      rotateCredential({
+        product_id: PRODUCT_A,
+        actor_operator_id: 'op-1',
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      message: expect.stringContaining('no registration'),
+    });
+  });
+
+  it('400 when actor_operator_id is empty', async () => {
+    primeRotationPool();
+    await expect(
+      rotateCredential({ product_id: PRODUCT_A, actor_operator_id: '' }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+});
+
+describe('revokeProduct — happy path', () => {
+  it('flips products.active=false, returns hard-revoke deadline, audits', async () => {
+    mockPool.query.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.startsWith('UPDATE products SET active = false')) {
+        return {
+          rows: [{ id: PRODUCT_A, slug: 'contenthelm', tenant_id: TENANT_A, active: false }],
+        };
+      }
+      return { rows: [] };
+    });
+    const result = await revokeProduct({
+      product_id: PRODUCT_A,
+      actor_operator_id: 'op-1',
+      reason: 'billing lapse',
+    });
+    expect(result.product_id).toBe(PRODUCT_A);
+    expect(result.slug).toBe('contenthelm');
+    expect(result.active).toBe(false);
+    expect(result.effective_hard_revoke_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    expect(mockWriteAuditEntry).toHaveBeenCalledOnce();
+    const entry = mockWriteAuditEntry.mock.calls[0]![0] as {
+      new_values: { action: string; reason: string; effective_hard_revoke_at: string };
+    };
+    expect(entry.new_values.action).toBe('product.onboarding.revoke');
+    expect(entry.new_values.reason).toBe('billing lapse');
+  });
+
+  it('respects JWT_EXPIRES_IN env var when computing hard_revoke_at', async () => {
+    mockPool.query.mockImplementation(async () => ({
+      rows: [{ id: PRODUCT_A, slug: 'x', tenant_id: TENANT_A, active: false }],
+    }));
+    process.env['JWT_EXPIRES_IN'] = '60';
+    const before = Date.now();
+    const result = await revokeProduct({
+      product_id: PRODUCT_A,
+      actor_operator_id: 'op-1',
+    });
+    const deadline = new Date(result.effective_hard_revoke_at).getTime();
+    expect(deadline - before).toBeGreaterThanOrEqual(59 * 1000);
+    expect(deadline - before).toBeLessThan(120 * 1000);
+    delete process.env['JWT_EXPIRES_IN'];
+  });
+});
+
+describe('revokeProduct — failure paths', () => {
+  it('404 when product does not exist', async () => {
+    mockPool.query.mockImplementation(async () => ({ rows: [] }));
+    await expect(
+      revokeProduct({ product_id: PRODUCT_A, actor_operator_id: 'op-1' }),
+    ).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('400 when actor_operator_id is empty', async () => {
+    await expect(
+      revokeProduct({ product_id: PRODUCT_A, actor_operator_id: '' }),
+    ).rejects.toMatchObject({ statusCode: 400 });
   });
 });

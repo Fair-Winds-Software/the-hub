@@ -11,9 +11,27 @@ const mockRegisterProduct = vi.hoisted(() =>
     client_secret: 'plaintext-secret-returned-once',
   })),
 );
+const mockRotateCredential = vi.hoisted(() =>
+  vi.fn(async () => ({
+    product_id: '00000000-0000-4000-8000-000000000aaa',
+    slug: 'contenthelm',
+    client_id: '00000000-0000-4000-8000-000000000ccc',
+    client_secret: 'new-plaintext-secret',
+  })),
+);
+const mockRevokeProduct = vi.hoisted(() =>
+  vi.fn(async () => ({
+    product_id: '00000000-0000-4000-8000-000000000aaa',
+    slug: 'contenthelm',
+    active: false as const,
+    effective_hard_revoke_at: '2026-07-15T21:00:00.000Z',
+  })),
+);
 
 vi.mock('../../../services/onboardingService.js', () => ({
   registerProduct: mockRegisterProduct,
+  rotateCredential: mockRotateCredential,
+  revokeProduct: mockRevokeProduct,
 }));
 
 async function buildHarness(role?: 'super_admin' | 'product_admin') {
@@ -143,6 +161,107 @@ describe('POST /api/v1/admin/onboarding/register — request validation', () => 
     });
     const call = mockRegisterProduct.mock.calls[0]![0] as { actor_operator_id: string };
     expect(call.actor_operator_id).toBe('op-1');
+    await app.close();
+  });
+});
+
+// ── HUB-1819 (S2 of HUB-1787) — rotate + revoke route tests ──────────────────
+
+const PRODUCT_URL_ID = '00000000-0000-4000-8000-000000000aaa';
+
+describe('POST /admin/onboarding/:productId/rotate-credential', () => {
+  it('403 without operator', async () => {
+    const app = await buildHarness();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/rotate-credential`,
+      payload: { reason: 'x' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockRotateCredential).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('403 for product_admin', async () => {
+    const app = await buildHarness('product_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/rotate-credential`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('200 for super_admin — returns new plaintext client_secret', async () => {
+    const app = await buildHarness('super_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/rotate-credential`,
+      payload: { reason: 'quarterly' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { client_id: string; client_secret: string };
+    expect(body.client_secret).toBe('new-plaintext-secret');
+    expect(mockRotateCredential).toHaveBeenCalledOnce();
+    const call = mockRotateCredential.mock.calls[0]![0] as { product_id: string; reason?: string };
+    expect(call.product_id).toBe(PRODUCT_URL_ID);
+    expect(call.reason).toBe('quarterly');
+    await app.close();
+  });
+
+  it('400 when reason is not a string', async () => {
+    const app = await buildHarness('super_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/rotate-credential`,
+      payload: { reason: 42 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockRotateCredential).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('POST /admin/onboarding/:productId/revoke', () => {
+  it('403 without operator', async () => {
+    const app = await buildHarness();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/revoke`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockRevokeProduct).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('200 for super_admin — returns hard-revoke deadline', async () => {
+    const app = await buildHarness('super_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/revoke`,
+      payload: { reason: 'billing lapse' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { active: boolean; effective_hard_revoke_at: string };
+    expect(body.active).toBe(false);
+    expect(body.effective_hard_revoke_at).toBeTypeOf('string');
+    expect(mockRevokeProduct).toHaveBeenCalledOnce();
+    const call = mockRevokeProduct.mock.calls[0]![0] as { product_id: string; reason?: string };
+    expect(call.product_id).toBe(PRODUCT_URL_ID);
+    expect(call.reason).toBe('billing lapse');
+    await app.close();
+  });
+
+  it('400 when reason is not a string', async () => {
+    const app = await buildHarness('super_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/revoke`,
+      payload: { reason: { nested: true } },
+    });
+    expect(res.statusCode).toBe(400);
     await app.close();
   });
 });
