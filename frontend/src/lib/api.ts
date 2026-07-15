@@ -36,12 +36,23 @@ let refreshPromise: Promise<void> | null = null;
  *      consumer at app bootstrap (no store side effects from this raw call).
  */
 async function fetchRefresh(): Promise<SessionPayload> {
-  // Refresh reads its token from an httpOnly cookie — no body sent. Do NOT set
-  // Content-Type: application/json here or Fastify's JSON body parser will demand
-  // a non-empty body and throw FastifyError 'Body cannot be empty …'.
+  // /auth/refresh (see src/routes/admin/auth.ts) REQUIRES { refreshToken } in the
+  // body — the token is not stored in a cookie. Prior HUB-1573 implementation
+  // shipped without sending it, which meant every refresh silently 400'd and
+  // (in the 401-retry path) clobbered the session → operator bounced to login
+  // after the first API 401. Read the current refreshToken from sessionStore.
+  const currentRefreshToken = useSessionStore.getState().refreshToken;
+  if (!currentRefreshToken) {
+    // No refresh token in store yet — surface as SessionExpired so
+    // hydrateFromRefresh treats this as "not authenticated" without clobbering
+    // a session that hasn't been set yet.
+    throw new SessionExpiredError(401, 'No refresh token available');
+  }
   const res = await fetch(REFRESH_PATH, {
     method: 'POST',
     credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken: currentRefreshToken }),
   });
   if (!res.ok) {
     throw new SessionExpiredError(res.status, 'Refresh failed');

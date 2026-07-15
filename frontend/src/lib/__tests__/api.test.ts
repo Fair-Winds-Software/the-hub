@@ -206,7 +206,16 @@ describe('apiClient (HUB-1573)', () => {
 
   describe('apiClient.refresh() standalone (HUB-1572 bootstrap consumer)', () => {
     it('returns SessionPayload WITHOUT mutating the session store', async () => {
-      resetStore(false); // start unauthenticated to detect any unwanted mutation
+      // Seed a refresh token so fetchRefresh has something to send. The test's
+      // intent is to verify no MUTATION of session state — put the store in a
+      // stale-tokened state, invoke, and confirm the store is untouched.
+      useSessionStore.setState({
+        accessToken: null,
+        refreshToken: 'stale-refresh-token',
+        operator: null,
+        isAuthenticated: false,
+        isHydrating: false,
+      });
       fetchMock.mockResolvedValueOnce(mockResponse(200, REFRESHED_PAYLOAD));
 
       const payload = await apiClient.refresh();
@@ -217,7 +226,13 @@ describe('apiClient (HUB-1573)', () => {
     });
 
     it('throws SessionExpiredError on refresh 401 WITHOUT mutating the store', async () => {
-      resetStore(false);
+      useSessionStore.setState({
+        accessToken: null,
+        refreshToken: 'stale-refresh-token',
+        operator: null,
+        isAuthenticated: false,
+        isHydrating: false,
+      });
       fetchMock.mockResolvedValueOnce(mockResponse(401, {}));
 
       await expect(apiClient.refresh()).rejects.toBeInstanceOf(SessionExpiredError);
