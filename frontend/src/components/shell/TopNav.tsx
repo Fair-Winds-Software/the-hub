@@ -28,7 +28,13 @@ export function TopNav(): React.ReactElement {
 
   return (
     <header className="h-14 flex items-center justify-between px-6 bg-primary-navy text-sailcloth shadow-md">
-      <div>
+      <div className="flex items-center gap-2">
+        <img
+          src="/favicon.ico"
+          alt=""
+          aria-hidden="true"
+          className="h-8 w-8"
+        />
         <span className="font-heading text-lg tracking-wide">The HUB</span>
       </div>
       {operator && (
