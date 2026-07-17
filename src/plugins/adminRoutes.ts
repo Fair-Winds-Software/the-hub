@@ -73,6 +73,8 @@ import adminBiMetricsRoutes from '../routes/admin/biMetrics.js';
 import adminBiPortfolioRoutes from '../routes/admin/biPortfolio.js';
 // HUB-1808 (S6 of HUB-1785) — per-product BI trends + health + catalog endpoints
 import adminBiProductRoutes from '../routes/admin/biProduct.js';
+// Dev-only synthetic BI rollup seeder for the Mock Data panel.
+import adminBiMockRollupsRoutes from '../routes/admin/biMockRollups.js';
 // HUB-1818 (S1 of HUB-1787) — product onboarding registration endpoint
 import adminOnboardingRoutes from '../routes/admin/onboarding.js';
 
@@ -131,6 +133,8 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminBiPortfolioRoutes);
     // HUB-1808 (S6 of HUB-1785): per-product BI endpoints
     await scope.register(adminBiProductRoutes);
+    // Dev-only BI rollup seeder (super_admin-only inline check)
+    await scope.register(adminBiMockRollupsRoutes);
     // HUB-1818 (S1 of HUB-1787): product onboarding registration
     await scope.register(adminOnboardingRoutes);
   });

@@ -13,6 +13,9 @@ import { apiClient } from '../lib/api';
 import { SeedControls } from './mockData/SeedControls';
 // HUB-1801 (S5 of HUB-1784) — DeleteAllControls fills the S3 shell's delete slot.
 import { DeleteAllControls } from './mockData/DeleteAllControls';
+// Dev-only BI rollup seeder — lights up the Dashboard's Tier-1 tiles without
+// needing real products to push metric events.
+import { BiSeedControls } from './mockData/BiSeedControls';
 
 const PAGE_TITLE = 'Mock Data | HUB Console';
 const CONNECTIONS_LIST_PATH = '/api/v1/admin/connections';
@@ -202,6 +205,7 @@ export default function MockData({ fetchers }: Props = {}): React.ReactElement {
 
           <SeedControls snapshot={snapshot} refresh={() => void refreshSnapshot()} />
           <DeleteAllControls snapshot={snapshot} refresh={() => void refreshSnapshot()} />
+          <BiSeedControls />
         </>
       )}
     </div>
