@@ -28,7 +28,6 @@
 // visually-hidden h2 keyed off the region's aria-label so screen readers
 // can navigate section-by-section. Widget children (added in S2/S3/S5) can
 // use h3+ inside their region without breaking heading order.
-import { PortfolioSummaryWidget } from './dashboard/PortfolioSummaryWidget';
 import { ProductGridWidget } from './dashboard/ProductGridWidget';
 import { DashboardSidebar } from './dashboard/DashboardSidebar';
 import { WidgetErrorBoundary } from './dashboard/WidgetErrorBoundary';
@@ -85,21 +84,6 @@ export default function Dashboard(): React.ReactElement {
         </h2>
         <WidgetErrorBoundary widgetLabel="bi-tile-cluster">
           <BiTileCluster />
-        </WidgetErrorBoundary>
-      </section>
-
-      <section
-        aria-labelledby="dashboard-region-portfolio-summary-heading"
-        data-testid="dashboard-region-portfolio-summary"
-      >
-        <h2
-          id="dashboard-region-portfolio-summary-heading"
-          className="sr-only"
-        >
-          Portfolio summary
-        </h2>
-        <WidgetErrorBoundary widgetLabel="portfolio-summary">
-          <PortfolioSummaryWidget />
         </WidgetErrorBoundary>
       </section>
 

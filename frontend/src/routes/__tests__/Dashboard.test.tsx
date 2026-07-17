@@ -27,18 +27,18 @@ vi.mock('../../lib/api', () => ({
 beforeEach(() => {
   apiGetMock.mockReset();
   apiGetMock.mockImplementation((path: string) => {
-    if (path.startsWith('/api/v1/admin/advisor/portfolio/summary')) {
+    if (path.startsWith('/api/v1/admin/bi/portfolio/summary')) {
       return Promise.resolve({
-        total_products: 0,
-        open_recommendations: 0,
-        upgrade_count: 0,
-        downgrade_count: 0,
-        switch_to_annual_count: 0,
-        stay_count: 0,
-        high_confidence_count: 0,
-        product_cards: [],
-        churn_risk: [],
-        margin_health: [],
+        as_of: new Date().toISOString(),
+        mrr_cents: null,
+        arr_cents: null,
+        arpa_cents: null,
+        clv_cents: null,
+        revenue_growth_pct: null,
+        active_customers: null,
+        daily_active_users: null,
+        churn_rate: null,
+        per_product: [],
       });
     }
     if (path.startsWith('/api/v1/admin/portfolio/products')) {
@@ -47,7 +47,6 @@ beforeEach(() => {
     if (path.startsWith('/api/v1/admin/console/audit-log')) {
       return Promise.resolve({ data: [], total: 0 });
     }
-    // /portfolio-margin: simulate the endpoint not yet built (HUB-1556).
     return Promise.reject(new Error('unavailable'));
   });
 });
@@ -76,36 +75,23 @@ describe('Dashboard shell (HUB-1644)', () => {
       ).toMatch(/dashboard/i);
     });
 
-    it('renders three <section> regions keyed by aria-labelledby', () => {
+    it('renders three <section> regions keyed by aria-labelledby (BI + product grid + sidebar)', () => {
       renderDashboard();
-      const portfolio = screen.getByTestId(
-        'dashboard-region-portfolio-summary',
-      );
+      const bi = screen.getByTestId('dashboard-region-bi');
       const productGrid = screen.getByTestId(
         'dashboard-region-product-grid',
       );
       const sidebar = screen.getByTestId('dashboard-region-sidebar');
-      expect(portfolio.tagName).toBe('SECTION');
+      expect(bi.tagName).toBe('SECTION');
       expect(productGrid.tagName).toBe('SECTION');
       expect(sidebar.tagName).toBe('SECTION');
-      // Each region references a heading via aria-labelledby (semantic
-      // region landmark for assistive tech).
-      expect(
-        portfolio.getAttribute('aria-labelledby'),
-      ).toBeTruthy();
-      expect(
-        productGrid.getAttribute('aria-labelledby'),
-      ).toBeTruthy();
+      expect(bi.getAttribute('aria-labelledby')).toBeTruthy();
+      expect(productGrid.getAttribute('aria-labelledby')).toBeTruthy();
       expect(sidebar.getAttribute('aria-labelledby')).toBeTruthy();
     });
 
-    it('all three regions host their real widgets after S1..S5 (portfolio summary + product grid + sidebar)', async () => {
+    it('regions host their real widgets (BI + product grid + sidebar)', async () => {
       renderDashboard();
-      await waitFor(() => {
-        expect(
-          screen.getByTestId('portfolio-summary-widget-tiles-skeleton'),
-        ).toBeInTheDocument();
-      });
       await waitFor(() => {
         expect(
           screen.getByTestId('product-grid-widget-empty'),
@@ -116,30 +102,19 @@ describe('Dashboard shell (HUB-1644)', () => {
           screen.getByTestId('dashboard-quick-actions'),
         ).toBeInTheDocument();
       });
-      // No S1 placeholders left.
-      expect(
-        screen.queryByTestId('dashboard-portfolio-summary-placeholder'),
-      ).toBeNull();
-      expect(
-        screen.queryByTestId('dashboard-product-grid-placeholder'),
-      ).toBeNull();
-      expect(
-        screen.queryByTestId('dashboard-sidebar-placeholder'),
-      ).toBeNull();
     });
   });
 
   describe('AC#1 — heading order h1 → h2 (no skipped levels)', () => {
-    it('renders exactly one h1 and four h2 section headings (BI region added by HUB-1809)', () => {
+    it('renders exactly one h1 and three h2 section headings', () => {
       renderDashboard();
       const headings = screen.getAllByRole('heading', { hidden: true });
       const levels = headings.map(
         (h) => h.tagName.toLowerCase(),
       );
       expect(levels.filter((l) => l === 'h1').length).toBe(1);
-      // HUB-1809 (S7 of HUB-1785) added the 'Portfolio business intelligence'
-      // region above portfolio-summary, so h2 count went from 3 → 4.
-      expect(levels.filter((l) => l === 'h2').length).toBe(4);
+      // BI region + product grid + sidebar = 3 h2 landmarks.
+      expect(levels.filter((l) => l === 'h2').length).toBe(3);
     });
   });
 

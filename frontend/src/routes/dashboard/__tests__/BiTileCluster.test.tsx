@@ -12,10 +12,15 @@ afterEach(() => {
 });
 
 describe('BiTileCluster — happy path', () => {
-  it('renders three tiles + as_of footer with populated values', async () => {
+  it('renders Tier-1 tiles + as_of footer with populated values', async () => {
     const fetcher = vi.fn().mockResolvedValue({
       as_of: '2026-07-13T00:00:00Z',
       mrr_cents: 3_500_000,
+      arr_cents: 3_500_000 * 12,
+      arpa_cents: 5_000_00,
+      clv_cents: 60_000_00,
+      revenue_growth_pct: 0.12,
+      active_customers: 700,
       daily_active_users: 2000,
       churn_rate: 0.0425,
       per_product: [],
@@ -25,13 +30,18 @@ describe('BiTileCluster — happy path', () => {
       expect(screen.getByTestId('bi-tile-cluster')).toBeInTheDocument();
     });
     expect(screen.getByTestId('bi-tile-mrr')).toBeInTheDocument();
+    expect(screen.getByTestId('bi-tile-arr')).toBeInTheDocument();
+    expect(screen.getByTestId('bi-tile-arpa')).toBeInTheDocument();
+    expect(screen.getByTestId('bi-tile-clv')).toBeInTheDocument();
+    expect(screen.getByTestId('bi-tile-revenue-growth')).toBeInTheDocument();
+    expect(screen.getByTestId('bi-tile-active-customers')).toBeInTheDocument();
     expect(screen.getByTestId('bi-tile-dau')).toBeInTheDocument();
     expect(screen.getByTestId('bi-tile-churn')).toBeInTheDocument();
-    // Values reach the tiles (formatted).
     expect(screen.getByTestId('bi-tile-dau').textContent).toContain('2,000');
     expect(screen.getByTestId('bi-tile-churn').textContent).toContain('4.25%');
-    // MRR renders formatted dollars — accept common formats.
     expect(screen.getByTestId('bi-tile-mrr').textContent).toMatch(/35,?000/);
+    expect(screen.getByTestId('bi-tile-revenue-growth').textContent).toContain('12.00%');
+    expect(screen.getByTestId('bi-tile-active-customers').textContent).toContain('700');
     expect(screen.getByTestId('bi-tile-cluster-asof')).toBeInTheDocument();
   });
 });
@@ -41,6 +51,11 @@ describe('BiTileCluster — null / empty values', () => {
     const fetcher = vi.fn().mockResolvedValue({
       as_of: '2026-07-13T00:00:00Z',
       mrr_cents: null,
+      arr_cents: null,
+      arpa_cents: null,
+      clv_cents: null,
+      revenue_growth_pct: null,
+      active_customers: null,
       daily_active_users: null,
       churn_rate: null,
       per_product: [],
@@ -49,8 +64,12 @@ describe('BiTileCluster — null / empty values', () => {
     await waitFor(() => {
       expect(screen.getByTestId('bi-tile-cluster')).toBeInTheDocument();
     });
-    // MetricTile's empty renderer shows "—" (em-dash).
     expect(screen.getByTestId('bi-tile-mrr').textContent).toContain('—');
+    expect(screen.getByTestId('bi-tile-arr').textContent).toContain('—');
+    expect(screen.getByTestId('bi-tile-arpa').textContent).toContain('—');
+    expect(screen.getByTestId('bi-tile-clv').textContent).toContain('—');
+    expect(screen.getByTestId('bi-tile-revenue-growth').textContent).toContain('—');
+    expect(screen.getByTestId('bi-tile-active-customers').textContent).toContain('—');
     expect(screen.getByTestId('bi-tile-dau').textContent).toContain('—');
     expect(screen.getByTestId('bi-tile-churn').textContent).toContain('—');
   });

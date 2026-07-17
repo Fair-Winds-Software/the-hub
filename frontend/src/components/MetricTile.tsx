@@ -11,6 +11,7 @@
 // Empty value renders "—" with aria-label="No data" so screen readers don't
 // read out the em-dash as punctuation noise.
 import type { KeyboardEvent, ReactNode } from 'react';
+import { MetricInfoPopover, type MetricInfoContent } from './MetricInfoPopover';
 
 export type MetricVerdict = 'success' | 'warning' | 'error' | 'neutral';
 export type MetricDrift = 'up' | 'down' | 'flat';
@@ -40,6 +41,12 @@ export interface MetricTileProps {
    * "{title}: {value} {unit}, {verdict label}".
    */
   ariaLabel?: string;
+  /**
+   * When provided, an Info icon appears next to the title. Clicking it opens a
+   * popover with definition / formula / source / verdict legend so operators
+   * can inspect what a metric actually measures.
+   */
+  info?: MetricInfoContent;
 }
 
 const VERDICT_LABELS: Record<MetricVerdict, string> = {
@@ -209,6 +216,7 @@ export function MetricTile({
   driftLabel,
   loading = false,
   ariaLabel,
+  info,
 }: MetricTileProps): React.ReactElement {
   const clickable = !!onClick;
 
@@ -268,6 +276,7 @@ export function MetricTile({
         >
           {title}
         </h3>
+        {info && <MetricInfoPopover title={title} content={info} />}
       </div>
       <div className="mt-2 flex items-baseline gap-1">
         {empty ? (

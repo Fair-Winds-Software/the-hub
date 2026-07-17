@@ -58,6 +58,14 @@ const CATALOG: readonly MetricCatalogEntry[] = [
     description: 'Fraction of paying customers who churned in the period. Range [0, 1].',
   },
   {
+    name: 'active_customers',
+    type: 'int',
+    rollup: 'last',
+    dimensions: [],
+    description:
+      'Count of paying customers at the end of the bucket. Portfolio total = SUM across products. Denominator for ARPA (MRR / active_customers).',
+  },
+  {
     name: 'feature_adoption',
     type: 'float',
     rollup: 'avg',
