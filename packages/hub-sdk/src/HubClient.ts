@@ -97,6 +97,25 @@ export class HubClient {
     }
   }
 
+  /**
+   * Get the current access token, refreshing if it's expired or unset.
+   *
+   * Authorized by HUB-1867 (S2 of HUB-1865) — public accessor so consumers
+   * (e.g. LaunchKit's @launchkit/components HubResolver overload — LK-5034)
+   * don't reach into the private `token` field with an unsafe cast.
+   *
+   * Idempotent + refresh-aware: safe to call before or after connect().
+   * Throws HubAuthError if the refresh flow completed but no token was set
+   * (defensive — should never happen in practice).
+   */
+  async getToken(): Promise<string> {
+    await this.ensureFreshToken();
+    if (this.token === null) {
+      throw new HubAuthError('getToken(): token unavailable after refresh', 401);
+    }
+    return this.token;
+  }
+
   trackUsage(
     tenantId: string,
     productId: string,

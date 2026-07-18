@@ -220,3 +220,46 @@ describe('requestWithRetry — 401 auto-retry', () => {
     expect(expiryAtReauth).toBeNull();
   });
 });
+
+// ── HUB-1867 (S2 of HUB-1865) — getToken() public accessor ────────────────────
+
+describe('HubClient.getToken()', () => {
+  it('returns a non-empty string after successful connect()', async () => {
+    resolveToken('bearer-abc', 3_600_000);
+    const client = new HubClient(CONFIG);
+    await client.connect();
+    const token = await client.getToken();
+    expect(token).toBe('bearer-abc');
+  });
+
+  it('calls acquireToken() when the client has not been connected yet', async () => {
+    resolveToken('bearer-fresh');
+    const client = new HubClient(CONFIG);
+    // Note: no client.connect() call before getToken().
+    const token = await client.getToken();
+    expect(token).toBe('bearer-fresh');
+    expect(mockAcquireToken).toHaveBeenCalledOnce();
+  });
+
+  it('propagates acquireToken() errors instead of swallowing them', async () => {
+    mockAcquireToken.mockRejectedValueOnce(
+      new HubAuthError('auth endpoint down', 401),
+    );
+    const client = new HubClient(CONFIG);
+    await expect(client.getToken()).rejects.toThrow(HubAuthError);
+  });
+
+  it('is refresh-aware — returns the new token after expiry', async () => {
+    resolveToken('bearer-first', 100_000); // 100s
+    const client = new HubClient(CONFIG);
+    const first = await client.getToken();
+    expect(first).toBe('bearer-first');
+
+    // Move past expiry (past the refresh threshold — 60s before expiry).
+    vi.setSystemTime(Date.now() + 90_000);
+    resolveToken('bearer-second', 3_600_000);
+    const second = await client.getToken();
+    expect(second).toBe('bearer-second');
+    expect(mockAcquireToken).toHaveBeenCalledTimes(2);
+  });
+});
