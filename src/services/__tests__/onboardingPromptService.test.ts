@@ -168,6 +168,56 @@ describe('buildOnboardingPrompt — metric subset per product_type', () => {
   });
 });
 
+describe('buildOnboardingPrompt — codebase_state selector', () => {
+  it('defaults to greenfield when codebase_state is omitted', async () => {
+    stubProduct({ name: 'X', slug: 'x-svc', product_type: 'saas' });
+    const result = await buildOnboardingPrompt({
+      product_id: PRODUCT_A,
+      client_id: 'x',
+      client_secret: 'x',
+      hub_url: 'https://h',
+    });
+    expect(result.codebase_state).toBe('greenfield');
+    expect(result.prompt).toMatch(/GREENFIELD path/);
+  });
+
+  it('renders the retrofit template when codebase_state is retrofit', async () => {
+    stubProduct({ name: 'X', slug: 'x-svc', product_type: 'saas' });
+    const result = await buildOnboardingPrompt({
+      product_id: PRODUCT_A,
+      client_id: 'x',
+      client_secret: 'x',
+      hub_url: 'https://h',
+      codebase_state: 'retrofit',
+    });
+    expect(result.codebase_state).toBe('retrofit');
+    expect(result.prompt).toMatch(/RETROFIT path/);
+    // Retrofit-specific content invariants.
+    expect(result.prompt).toMatch(/PAUSE/);
+    expect(result.prompt).toMatch(/Reconciliation checklist/);
+  });
+
+  it('retrofit + greenfield produce DIFFERENT prompts + checksums', async () => {
+    stubProduct({ name: 'X', slug: 'x-svc', product_type: 'saas' });
+    const input = {
+      product_id: PRODUCT_A,
+      client_id: 'x',
+      client_secret: 'x',
+      hub_url: 'https://h',
+    };
+    const greenfield = await buildOnboardingPrompt({
+      ...input,
+      codebase_state: 'greenfield',
+    });
+    const retrofit = await buildOnboardingPrompt({
+      ...input,
+      codebase_state: 'retrofit',
+    });
+    expect(greenfield.prompt).not.toBe(retrofit.prompt);
+    expect(greenfield.checksum).not.toBe(retrofit.checksum);
+  });
+});
+
 describe('buildOnboardingPrompt — validation failures', () => {
   it('400 when client_id missing', async () => {
     stubProduct({ name: 'X', slug: 'x-svc', product_type: 'saas' });

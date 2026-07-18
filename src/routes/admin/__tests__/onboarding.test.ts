@@ -302,6 +302,37 @@ describe('POST /admin/onboarding/:productId/prompt', () => {
     expect(res.statusCode).toBe(400);
     await app.close();
   });
+
+  it('400 when codebase_state is not retrofit or greenfield', async () => {
+    const app = await buildHarness('super_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/prompt`,
+      payload: { client_id: 'x', client_secret: 'y', codebase_state: 'bogus' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockBuildOnboardingPrompt).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('passes codebase_state=retrofit through to the service', async () => {
+    const app = await buildHarness('super_admin');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/onboarding/${PRODUCT_URL_ID}/prompt`,
+      payload: {
+        client_id: 'x',
+        client_secret: 'y',
+        codebase_state: 'retrofit',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const call = mockBuildOnboardingPrompt.mock.calls[0]![0] as {
+      codebase_state?: string;
+    };
+    expect(call.codebase_state).toBe('retrofit');
+    await app.close();
+  });
 });
 
 describe('POST /admin/onboarding/:productId/revoke', () => {

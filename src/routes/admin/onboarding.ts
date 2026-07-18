@@ -92,7 +92,12 @@ const adminOnboardingRoutes: FastifyPluginAsync = async (fastify) => {
   // ── HUB-1821 (S4 of HUB-1787) — build Claude Code prompt ──────────────────
   fastify.post<{
     Params: { productId: string };
-    Body: { client_id?: string; client_secret?: string; hub_url?: string };
+    Body: {
+      client_id?: string;
+      client_secret?: string;
+      hub_url?: string;
+      codebase_state?: string;
+    };
   }>('/api/v1/admin/onboarding/:productId/prompt', async (req, reply) => {
     const op = operatorFromRequest(req);
     if (op.role !== 'super_admin') {
@@ -102,6 +107,7 @@ const adminOnboardingRoutes: FastifyPluginAsync = async (fastify) => {
       client_id?: unknown;
       client_secret?: unknown;
       hub_url?: unknown;
+      codebase_state?: unknown;
     };
     if (typeof body.client_id !== 'string' || body.client_id.length === 0) {
       throw new AppError(400, 'client_id (string) is required in the body');
@@ -112,11 +118,22 @@ const adminOnboardingRoutes: FastifyPluginAsync = async (fastify) => {
     if (body.hub_url !== undefined && typeof body.hub_url !== 'string') {
       throw new AppError(400, 'hub_url must be a string when provided');
     }
+    if (
+      body.codebase_state !== undefined &&
+      body.codebase_state !== 'retrofit' &&
+      body.codebase_state !== 'greenfield'
+    ) {
+      throw new AppError(
+        400,
+        "codebase_state must be 'retrofit' or 'greenfield' when provided",
+      );
+    }
     const result = await buildOnboardingPrompt({
       product_id: req.params.productId,
       client_id: body.client_id,
       client_secret: body.client_secret,
       hub_url: body.hub_url,
+      codebase_state: body.codebase_state as 'retrofit' | 'greenfield' | undefined,
     });
     return reply.status(200).send(result);
   });
