@@ -1,23 +1,35 @@
-// Authorized by HUB-1823 (S6 of HUB-1787) — CopyablePromptPanel.
-// Sits inside the S5 credential-reveal blocks. Consumer supplies (productId, clientId,
-// clientSecret); on demand this component fetches the Claude Code prompt from
+// CopyablePromptPanel — sits inside the credential-reveal blocks (Register + Rotate).
+// Consumer supplies (productId, clientId, clientSecret). Operator picks retrofit vs
+// greenfield, then this component fetches the Claude Code prompt from
 // POST /admin/onboarding/:productId/prompt, verifies the server-supplied SHA-256
 // checksum matches a client-side re-hash of the received bytes (defense-in-depth
 // against network tampering), renders the prompt in a readonly textarea, and offers
 // a Copy button.
 //
-// Checksum verification is optional-strict: mismatch → do NOT render the prompt; show
-// an error banner instead. Genuine tampering is unlikely inside a same-origin admin
-// endpoint but the check is cheap and lets us claim "what you copy is what the server
-// generated." If crypto.subtle is unavailable (rare — some ancient JSDOM), we skip the
-// verification and log a console warning; the UX degrades gracefully.
+// codebase_state selector (retrofit | greenfield) is per HUB integration docs at
+// docs/hub-integration/{RETROFIT,GREENFIELD}.md — the backend picks the right
+// template. Toggling the choice clears the previously-fetched prompt so the
+// operator sees they need to refetch.
+//
+// Checksum verification is optional-strict: mismatch → do NOT render the prompt;
+// show an error banner instead.
 import { useCallback, useMemo, useState } from 'react';
 import { apiClient } from '../../lib/api';
 import { useToastStore } from '../../stores/toastStore';
 
+type CodebaseState = 'greenfield' | 'retrofit';
+
 interface PromptResult {
   prompt: string;
   checksum: string;
+  codebase_state?: CodebaseState;
+}
+
+interface FetchBody {
+  client_id: string;
+  client_secret: string;
+  hub_url?: string;
+  codebase_state: CodebaseState;
 }
 
 interface Props {
@@ -26,11 +38,7 @@ interface Props {
   clientSecret: string;
   hubUrl?: string;
   /** Test injection — override the fetcher to skip network. */
-  fetcher?: (body: {
-    client_id: string;
-    client_secret: string;
-    hub_url?: string;
-  }) => Promise<PromptResult>;
+  fetcher?: (body: FetchBody) => Promise<PromptResult>;
   /** Test injection — override navigator.clipboard.writeText. */
   copyToClipboard?: (text: string) => Promise<void>;
 }
@@ -57,7 +65,7 @@ export function CopyablePromptPanel({
   const effectiveFetcher = useMemo(
     () =>
       fetcher ??
-      ((body: { client_id: string; client_secret: string; hub_url?: string }) =>
+      ((body: FetchBody) =>
         apiClient.post<PromptResult>(
           `/api/v1/admin/onboarding/${productId}/prompt`,
           body,
@@ -77,10 +85,19 @@ export function CopyablePromptPanel({
     [copyToClipboard],
   );
 
+  const [codebaseState, setCodebaseState] = useState<CodebaseState>('greenfield');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<PromptResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checksumOk, setChecksumOk] = useState<boolean | null>(null);
+
+  const handleCodebaseChange = (next: CodebaseState): void => {
+    setCodebaseState(next);
+    // Clear stale prompt/error so the operator sees they need to refetch.
+    setResult(null);
+    setError(null);
+    setChecksumOk(null);
+  };
 
   const fetchPrompt = useCallback(async () => {
     setBusy(true);
@@ -92,6 +109,7 @@ export function CopyablePromptPanel({
         client_id: clientId,
         client_secret: clientSecret,
         ...(hubUrl ? { hub_url: hubUrl } : {}),
+        codebase_state: codebaseState,
       });
       const clientHash = await sha256Hex(res.prompt);
       if (clientHash === null) {
@@ -116,7 +134,7 @@ export function CopyablePromptPanel({
     } finally {
       setBusy(false);
     }
-  }, [effectiveFetcher, clientId, clientSecret, hubUrl]);
+  }, [effectiveFetcher, clientId, clientSecret, hubUrl, codebaseState]);
 
   const copy = useCallback(async () => {
     if (!result) return;
@@ -128,12 +146,51 @@ export function CopyablePromptPanel({
     }
   }, [effectiveCopy, result, addToast]);
 
+  const renderedTemplate = result?.codebase_state ?? codebaseState;
+
   return (
     <section
       data-testid="onboarding-prompt-panel"
       aria-label="Claude Code onboarding prompt"
       className="mt-3 rounded-md border border-sailcloth/40 bg-white p-3"
     >
+      <fieldset
+        data-testid="onboarding-prompt-codebase-state"
+        className="mb-3 flex flex-col gap-1 border-0 p-0"
+      >
+        <legend className="text-xs font-semibold text-deep-charcoal/70">
+          Target codebase
+        </legend>
+        <div className="flex flex-wrap gap-3 text-xs">
+          <label className="inline-flex items-center gap-1">
+            <input
+              type="radio"
+              name={`codebase-state-${productId}`}
+              value="greenfield"
+              checked={codebaseState === 'greenfield'}
+              onChange={() => handleCodebaseChange('greenfield')}
+              data-testid="onboarding-prompt-codebase-greenfield"
+            />
+            <span>
+              <strong>Greenfield</strong> — fresh LaunchKit scaffold
+            </span>
+          </label>
+          <label className="inline-flex items-center gap-1">
+            <input
+              type="radio"
+              name={`codebase-state-${productId}`}
+              value="retrofit"
+              checked={codebaseState === 'retrofit'}
+              onChange={() => handleCodebaseChange('retrofit')}
+              data-testid="onboarding-prompt-codebase-retrofit"
+            />
+            <span>
+              <strong>Retrofit</strong> — existing codebase with hand-rolled code
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
       {!result && !error ? (
         <div className="flex items-center gap-3">
           <p className="text-sm text-deep-charcoal/70">
@@ -166,10 +223,10 @@ export function CopyablePromptPanel({
               className={`text-xs ${checksumOk ? 'text-emerald-700' : 'text-deep-charcoal/60'}`}
             >
               {checksumOk === true
-                ? `✓ Checksum verified (${result.checksum.slice(0, 8)}…)`
+                ? `✓ Checksum verified (${result.checksum.slice(0, 8)}…) · ${renderedTemplate}`
                 : checksumOk === false
                   ? `✗ Checksum mismatch`
-                  : `Checksum verification skipped`}
+                  : `Checksum verification skipped · ${renderedTemplate}`}
             </span>
             <button
               type="button"

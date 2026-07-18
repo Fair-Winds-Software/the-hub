@@ -48,7 +48,11 @@ describe('CopyablePromptPanel — happy path', () => {
     expect(screen.getByTestId('onboarding-prompt-checksum-status').textContent).toContain(
       'Checksum verified',
     );
-    expect(fetcher).toHaveBeenCalledWith({ client_id: 'c-id', client_secret: 'c-secret' });
+    expect(fetcher).toHaveBeenCalledWith({
+      client_id: 'c-id',
+      client_secret: 'c-secret',
+      codebase_state: 'greenfield',
+    });
   });
 
   it('copy button calls the copy function + fires success toast', async () => {
@@ -100,6 +104,88 @@ describe('CopyablePromptPanel — checksum mismatch', () => {
       );
     });
     expect(screen.queryByTestId('onboarding-prompt-textarea')).not.toBeInTheDocument();
+  });
+});
+
+describe('CopyablePromptPanel — codebase_state selector', () => {
+  it('defaults to greenfield in the fetch body', async () => {
+    const good = await computeSampleChecksum(SAMPLE_PROMPT);
+    const fetcher = vi.fn().mockResolvedValue({
+      prompt: SAMPLE_PROMPT,
+      checksum: good,
+      codebase_state: 'greenfield',
+    });
+    render(
+      <CopyablePromptPanel
+        productId="p-1"
+        clientId="c-id"
+        clientSecret="c-secret"
+        fetcher={fetcher}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('onboarding-prompt-fetch'));
+    });
+    await waitFor(() => screen.getByTestId('onboarding-prompt-textarea'));
+    expect(fetcher).toHaveBeenCalledWith(
+      expect.objectContaining({ codebase_state: 'greenfield' }),
+    );
+    expect(screen.getByTestId('onboarding-prompt-checksum-status').textContent).toMatch(
+      /greenfield/,
+    );
+  });
+
+  it('sends codebase_state=retrofit after the operator switches the radio', async () => {
+    const good = await computeSampleChecksum(SAMPLE_PROMPT);
+    const fetcher = vi.fn().mockResolvedValue({
+      prompt: SAMPLE_PROMPT,
+      checksum: good,
+      codebase_state: 'retrofit',
+    });
+    render(
+      <CopyablePromptPanel
+        productId="p-1"
+        clientId="c-id"
+        clientSecret="c-secret"
+        fetcher={fetcher}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('onboarding-prompt-codebase-retrofit'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('onboarding-prompt-fetch'));
+    });
+    await waitFor(() => screen.getByTestId('onboarding-prompt-textarea'));
+    expect(fetcher).toHaveBeenCalledWith(
+      expect.objectContaining({ codebase_state: 'retrofit' }),
+    );
+  });
+
+  it('clears the rendered prompt when the operator flips the toggle', async () => {
+    const good = await computeSampleChecksum(SAMPLE_PROMPT);
+    const fetcher = vi.fn().mockResolvedValue({
+      prompt: SAMPLE_PROMPT,
+      checksum: good,
+      codebase_state: 'greenfield',
+    });
+    render(
+      <CopyablePromptPanel
+        productId="p-1"
+        clientId="c-id"
+        clientSecret="c-secret"
+        fetcher={fetcher}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('onboarding-prompt-fetch'));
+    });
+    await waitFor(() => screen.getByTestId('onboarding-prompt-textarea'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('onboarding-prompt-codebase-retrofit'));
+    });
+    expect(screen.queryByTestId('onboarding-prompt-textarea')).not.toBeInTheDocument();
+    expect(screen.getByTestId('onboarding-prompt-fetch')).toBeInTheDocument();
   });
 });
 
