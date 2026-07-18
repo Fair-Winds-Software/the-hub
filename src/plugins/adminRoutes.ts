@@ -75,6 +75,8 @@ import adminBiPortfolioRoutes from '../routes/admin/biPortfolio.js';
 import adminBiProductRoutes from '../routes/admin/biProduct.js';
 // Dev-only synthetic BI rollup seeder for the Mock Data panel.
 import adminBiMockRollupsRoutes from '../routes/admin/biMockRollups.js';
+// HUB-1866 (S1 of HUB-1865) — tenant entitlement endpoint for LK's HubResolver.
+import adminPricingEntitlementRoutes from '../routes/admin/pricingEntitlement.js';
 // HUB-1818 (S1 of HUB-1787) — product onboarding registration endpoint
 import adminOnboardingRoutes from '../routes/admin/onboarding.js';
 
@@ -135,6 +137,8 @@ const adminRoutesPlugin: FastifyPluginAsync = async (fastify) => {
     await scope.register(adminBiProductRoutes);
     // Dev-only BI rollup seeder (super_admin-only inline check)
     await scope.register(adminBiMockRollupsRoutes);
+    // HUB-1866 (S1 of HUB-1865): tenant entitlement endpoint (LK EntitlementGate)
+    await scope.register(adminPricingEntitlementRoutes);
     // HUB-1818 (S1 of HUB-1787): product onboarding registration
     await scope.register(adminOnboardingRoutes);
   });
